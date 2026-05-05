@@ -17,6 +17,7 @@ const NAV_GROUPS = [
     links: [
       { href: '/charts',     label: 'OI Charts' },
       { href: '/oihistory',  label: 'OI History' },
+      { href: '/oipulse',    label: 'OI Pulse' },
       { href: '/eod',        label: 'EOD Analysis' },
       { href: '/spikes',     label: 'OI Spikes' },
       { href: '/pcr',        label: 'PCR Trend' },

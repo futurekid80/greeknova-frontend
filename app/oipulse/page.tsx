@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { RefreshCw, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 
@@ -22,13 +22,8 @@ function fmtOI(n: number) {
 }
 
 const SIGNAL_ICONS: Record<string, string> = {
-  LONG_BUILDUP:   '🐂',
-  SHORT_BUILDUP:  '🐻',
-  SHORT_COVERING: '🔄',
-  LONG_UNWINDING: '⚠️',
-  NEUTRAL:        '➖',
+  LONG_BUILDUP: '🐂', SHORT_BUILDUP: '🐻', SHORT_COVERING: '🔄', LONG_UNWINDING: '⚠️', NEUTRAL: '➖',
 }
-
 const SIGNAL_DESC: Record<string, string> = {
   LONG_BUILDUP:   'OI ↑ · Price ↑ — Fresh longs added',
   SHORT_BUILDUP:  'OI ↑ · Price ↓ — Fresh shorts added',
@@ -52,8 +47,8 @@ function OICard({ item }: { item: Item }) {
           </p>
         </div>
         <div className="text-right">
-          {item.ltp && <p className="text-sm font-black text-white">₹{item.ltp.toLocaleString()}</p>}
-          {item.ltp && (
+          {item.ltp != null && <p className="text-sm font-black text-white">₹{item.ltp.toLocaleString()}</p>}
+          {item.ltp != null && (
             <p className={`text-xs font-bold flex items-center justify-end gap-0.5 ${item.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               {item.price_chg_pct >= 0 ? <ArrowUpRight size={11}/> : <ArrowDownRight size={11}/>}
               {item.price_chg_pct > 0 ? '+' : ''}{item.price_chg_pct}%
@@ -61,7 +56,6 @@ function OICard({ item }: { item: Item }) {
           )}
         </div>
       </div>
-
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-gray-500">OI Change</p>
@@ -80,16 +74,15 @@ function OICard({ item }: { item: Item }) {
           <p className="text-sm font-bold text-gray-300">{fmtOI(item.oi_now)}</p>
         </div>
       </div>
-
       <p className="text-[10px] text-gray-600 mt-2">{SIGNAL_DESC[item.signal]}</p>
     </a>
   )
 }
 
 export default function OIPulse() {
-  const [data, setData]       = useState<Data | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter]   = useState<'all'|'index'|'stocks'>('all')
+  const [data, setData]           = useState<Data | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [filter, setFilter]       = useState<'all'|'index'|'stocks'>('all')
   const [sigFilter, setSigFilter] = useState<string>('all')
 
   const fetchData = useCallback(async () => {
@@ -105,24 +98,20 @@ export default function OIPulse() {
   useEffect(() => { fetchData() }, [filter])
   const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5*60*1000, true)
 
-  const filtered = sigFilter === 'all'
-    ? items
-    : items.filter(i => i.signal === sigFilter)
-
-  const items = items
+  const allItems = data?.items ?? []
   const counts = {
-    LONG_BUILDUP:   items.filter(i => i.signal === 'LONG_BUILDUP').length,
-    SHORT_BUILDUP:  items.filter(i => i.signal === 'SHORT_BUILDUP').length,
-    SHORT_COVERING: items.filter(i => i.signal === 'SHORT_COVERING').length,
-    LONG_UNWINDING: items.filter(i => i.signal === 'LONG_UNWINDING').length,
+    LONG_BUILDUP:   allItems.filter(i => i.signal === 'LONG_BUILDUP').length,
+    SHORT_BUILDUP:  allItems.filter(i => i.signal === 'SHORT_BUILDUP').length,
+    SHORT_COVERING: allItems.filter(i => i.signal === 'SHORT_COVERING').length,
+    LONG_UNWINDING: allItems.filter(i => i.signal === 'LONG_UNWINDING').length,
   }
+  const filtered = sigFilter === 'all' ? allItems : allItems.filter(i => i.signal === sigFilter)
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/oipulse" />
       <div className="max-w-7xl mx-auto px-6 py-8">
 
-        {/* Header */}
         <div className="flex items-end justify-between mb-6">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">OI Pulse</h1>
@@ -140,8 +129,7 @@ export default function OIPulse() {
           </div>
         </div>
 
-        {/* Summary cards */}
-        {data?.items.length ? (
+        {allItems.length > 0 && (
           <div className="grid grid-cols-4 gap-3 mb-6">
             {[
               { sig: 'LONG_BUILDUP',   label: 'Long Buildup',   color: 'text-emerald-400', bg: 'bg-emerald-950/20', border: 'border-emerald-800/40', icon: '🐂' },
@@ -149,43 +137,39 @@ export default function OIPulse() {
               { sig: 'SHORT_COVERING', label: 'Short Covering', color: 'text-cyan-400',    bg: 'bg-cyan-950/20',    border: 'border-cyan-800/40',    icon: '🔄' },
               { sig: 'LONG_UNWINDING', label: 'Long Unwinding', color: 'text-orange-400',  bg: 'bg-orange-950/20',  border: 'border-orange-800/40',  icon: '⚠️' },
             ].map(s => (
-              <button key={s.sig} onClick={() => setSigFilter(f => f===s.sig ? 'all' : s.sig)}
-                className={`rounded-xl p-4 border text-left transition-all ${sigFilter===s.sig ? s.bg+' '+s.border : 'bg-gray-900/30 border-gray-800'} hover:${s.border}`}>
+              <button key={s.sig} onClick={() => setSigFilter(f => f === s.sig ? 'all' : s.sig)}
+                className={`rounded-xl p-4 border text-left transition-all ${sigFilter === s.sig ? `${s.bg} ${s.border}` : 'bg-gray-900/30 border-gray-800'}`}>
                 <p className="text-2xl mb-1">{s.icon}</p>
                 <p className={`text-2xl font-black ${s.color}`}>{counts[s.sig as keyof typeof counts]}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
               </button>
             ))}
           </div>
-        ) : null}
+        )}
 
-        {/* Filters */}
         <div className="flex items-center gap-3 mb-6">
           {(['all','index','stocks'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all capitalize ${filter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${filter === f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {f === 'all' ? 'All' : f === 'index' ? 'Indices' : 'Stocks'}
             </button>
           ))}
           {sigFilter !== 'all' && (
-            <button onClick={() => setSigFilter('all')} className="ml-auto text-xs text-gray-500 hover:text-white transition-colors">
+            <button onClick={() => setSigFilter('all')} className="text-xs text-gray-500 hover:text-white transition-colors">
               Clear filter ✕
             </button>
           )}
           <span className="ml-auto text-xs text-gray-600">{filtered.length} symbols</span>
         </div>
 
-        {/* Content */}
         {loading ? (
           <div className="h-64 flex items-center justify-center">
             <RefreshCw size={24} className="text-gray-600 animate-spin"/>
           </div>
-        ) : !filtered.length ? (
+        ) : filtered.length === 0 ? (
           <div className="h-64 flex items-center justify-center flex-col gap-3">
             <div className="text-4xl">📡</div>
-            <p className="text-gray-500 text-sm">
-              {data?.message || 'Need 2+ snapshots to classify OI activity'}
-            </p>
+            <p className="text-gray-500 text-sm">{data?.message || 'Need 2+ snapshots to classify OI activity'}</p>
             <p className="text-gray-600 text-xs">Data builds up during market hours · Check back tomorrow morning</p>
           </div>
         ) : (
@@ -194,7 +178,6 @@ export default function OIPulse() {
           </div>
         )}
 
-        {/* Legend */}
         <div className="mt-8 bg-gray-900/30 border border-gray-800 rounded-xl p-4">
           <p className="text-xs font-bold text-gray-400 mb-3">How to read OI Pulse</p>
           <div className="grid grid-cols-2 gap-3 text-xs text-gray-500">

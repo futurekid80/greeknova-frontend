@@ -1,4 +1,5 @@
 'use client'
+export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Plus, X, Star } from 'lucide-react'
 import { supabase } from '@/lib/supabase'

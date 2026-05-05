@@ -1,4 +1,5 @@
 'use client'
+export const dynamic = 'force-dynamic'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'

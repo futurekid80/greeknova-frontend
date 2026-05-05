@@ -61,7 +61,7 @@ function playSound() {
 }
 
 async function checkOISpikes() {
-  const res = await fetch(`http://localhost:8000/oi-spikes?threshold=${spikeThreshold}`)
+  const res = await fetch(`https://greeknova-backend-production.up.railway.app/oi-spikes?threshold=${spikeThreshold}`)
   const json = await res.json()
   if (!json.spikes) return
   for (const spike of json.spikes) {
@@ -83,7 +83,7 @@ async function checkOISpikes() {
 }
 
 async function checkVolumeSpikes() {
-  const res = await fetch(`http://localhost:8000/volume-spikes?threshold=${spikeThreshold}`)
+  const res = await fetch(`https://greeknova-backend-production.up.railway.app/volume-spikes?threshold=${spikeThreshold}`)
   const json = await res.json()
   if (!json.spikes) return
   for (const spike of json.spikes) {

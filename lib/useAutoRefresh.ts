@@ -11,7 +11,6 @@ export function useAutoRefresh(
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
   const callbackRef = useRef(callback)
-  const startedRef = useRef(false)
   callbackRef.current = callback
 
   const stop = useCallback(() => {
@@ -23,8 +22,8 @@ export function useAutoRefresh(
   const start = useCallback(() => {
     setEnabled(true)
     setCountdown(intervalMs / 1000)
-    if (intervalRef.current) clearInterval(intervalRef.current)
-    if (countdownRef.current) clearInterval(countdownRef.current)
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
     intervalRef.current = setInterval(() => {
       callbackRef.current()
       setCountdown(intervalMs / 1000)
@@ -39,15 +38,11 @@ export function useAutoRefresh(
     else start()
   }, [enabled, start, stop])
 
-  // Auto-start on mount when autoStart is true
   useEffect(() => {
-    if (autoStart && !startedRef.current) {
-      startedRef.current = true
-      start()
-    }
+    if (autoStart) start()
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-      if (countdownRef.current) clearInterval(countdownRef.current)
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+      if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
     }
   }, [autoStart, start])
 

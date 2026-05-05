@@ -1,4 +1,5 @@
 'use client'
+import Navbar from '@/components/Navbar'
 export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -284,35 +285,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
-      <nav className="sticky top-0 z-50 border-b border-gray-800/50 bg-[#07070e]/90 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center shadow-lg shadow-emerald-900/30">
-              <span className="text-xs font-black text-white">GN</span>
-            </div>
-            <span className="font-black text-white text-base tracking-tight">GreekNova</span>
-            <span className="ml-1 text-xs font-medium px-1.5 py-0.5 bg-emerald-950 text-emerald-500 border border-emerald-800/50 rounded-md">BETA</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <a href="/" className="text-sm font-semibold text-white border-b border-emerald-500 pb-0.5">Dashboard</a>
-            <a href="/premarket" className="text-sm text-gray-400 hover:text-white transition-colors">Pre-Market</a>
-            <a href="/watchlist" className="text-sm text-gray-400 hover:text-white transition-colors">Watchlist</a>
-            <a href="/scanners" className="text-sm text-gray-400 hover:text-white transition-colors">Scanners</a>
-            <a href="/charts" className="text-sm text-gray-400 hover:text-white transition-colors">OI Charts</a>
-            <a href="/pcr" className="text-sm text-gray-400 hover:text-white transition-colors">PCR Trend</a>
-            <a href="/spikes" className="text-sm text-gray-400 hover:text-white transition-colors">OI Spikes</a>
-            <a href="/volume" className="text-sm text-gray-400 hover:text-white transition-colors">Vol Spikes</a>
-            <a href="/uoa" className="text-sm text-gray-400 hover:text-white transition-colors">UOA</a>
-            <a href="/confluence" className="text-sm text-gray-400 hover:text-white transition-colors">Confluence</a>
-            <a href="/maxpain" className="text-sm text-gray-400 hover:text-white transition-colors">Max Pain</a>
-            <a href="/alerts" className="text-sm text-gray-400 hover:text-white transition-colors">Alerts</a>
-            <div className={`flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border ${isMarketOpen()?'bg-emerald-950/60 text-emerald-400 border-emerald-800/60':'bg-gray-900 text-gray-500 border-gray-800'}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${isMarketOpen()?'bg-emerald-400 animate-pulse':'bg-gray-600'}`}/>
-              {isMarketOpen()?'Live':'Closed'}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar active="/" />
 
       {/* Live Ticker Bar */}
       <div className="bg-gray-950 border-b border-gray-800/50 overflow-hidden">

@@ -1,4 +1,5 @@
 'use client'
+import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
@@ -54,26 +55,7 @@ export default function OptionChain() {
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       {/* Nav */}
-      <nav className="sticky top-0 z-50 border-b border-gray-800/50 bg-[#07070e]/90 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center">
-              <span className="text-xs font-black text-white">GN</span>
-            </div>
-            <span className="font-black text-white text-base">GreekNova</span>
-            <span className="ml-1 text-xs font-medium px-1.5 py-0.5 bg-emerald-950 text-emerald-500 border border-emerald-800/50 rounded-md">BETA</span>
-          </div>
-          <div className="flex items-center gap-4 text-sm">
-            <a href="/"            className="text-gray-400 hover:text-white transition-colors">Dashboard</a>
-            <a href="/charts"      className="text-gray-400 hover:text-white transition-colors">OI Charts</a>
-            <a href="/optionchain" className="font-semibold text-white border-b border-emerald-500 pb-0.5">Option Chain</a>
-            <a href="/pcr"         className="text-gray-400 hover:text-white transition-colors">PCR Trend</a>
-            <a href="/spikes"      className="text-gray-400 hover:text-white transition-colors">OI Spikes</a>
-            <a href="/maxpain"     className="text-gray-400 hover:text-white transition-colors">Max Pain</a>
-            <a href="/alerts"      className="text-gray-400 hover:text-white transition-colors">Alerts</a>
-          </div>
-        </div>
-      </nav>
+      <Navbar active="/optionchain" />
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}

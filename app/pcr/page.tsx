@@ -63,7 +63,7 @@ export default function PCRTrend() {
 
   useEffect(() => { fetchExpiries(symbol) }, [symbol, fetchExpiries])
   useEffect(() => { fetchData() }, [fetchData])
-  const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)
+  const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, true)
 
   const latest = data?.points[data.points.length - 1]
   const first = data?.points[0]

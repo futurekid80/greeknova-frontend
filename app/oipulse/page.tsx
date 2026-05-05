@@ -106,14 +106,15 @@ export default function OIPulse() {
   const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5*60*1000, true)
 
   const filtered = sigFilter === 'all'
-    ? data?.items || []
-    : data?.items.filter(i => i.signal === sigFilter) || []
+    ? items
+    : items.filter(i => i.signal === sigFilter)
 
+  const items = items
   const counts = {
-    LONG_BUILDUP:   （data?.items || []).filter(i => i.signal==='LONG_BUILDUP').length   || 0,
-    SHORT_BUILDUP:  （data?.items || []).filter(i => i.signal==='SHORT_BUILDUP').length  || 0,
-    SHORT_COVERING: （data?.items || []).filter(i => i.signal==='SHORT_COVERING').length || 0,
-    LONG_UNWINDING: （data?.items || []).filter(i => i.signal==='LONG_UNWINDING').length || 0,
+    LONG_BUILDUP:   items.filter(i => i.signal === 'LONG_BUILDUP').length,
+    SHORT_BUILDUP:  items.filter(i => i.signal === 'SHORT_BUILDUP').length,
+    SHORT_COVERING: items.filter(i => i.signal === 'SHORT_COVERING').length,
+    LONG_UNWINDING: items.filter(i => i.signal === 'LONG_UNWINDING').length,
   }
 
   return (

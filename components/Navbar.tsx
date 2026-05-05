@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: '/watchlist',   label: 'Watchlist' },
   { href: '/scanners',    label: 'Scanners' },
   { href: '/charts',      label: 'OI Charts' },
+  { href: '/oihistory',   label: 'OI History' },
   { href: '/optionchain', label: 'Option Chain' },
   { href: '/pcr',         label: 'PCR Trend' },
   { href: '/spikes',      label: 'OI Spikes' },

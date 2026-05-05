@@ -60,7 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
     // Check OI spikes
     try {
-      const res = await fetch(`http://localhost:8000/oi-spikes?threshold=${threshold}`)
+      const res = await fetch(`https://greeknova-backend-production.up.railway.app/oi-spikes?threshold=${threshold}`)
       const json = await res.json()
       for (const spike of (json.spikes || [])) {
         const key = `${spike.tradingsymbol}_${json.ts_new}`
@@ -85,7 +85,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
     // Check volume spikes
     try {
-      const res = await fetch(`http://localhost:8000/volume-spikes?threshold=${threshold}`)
+      const res = await fetch(`https://greeknova-backend-production.up.railway.app/volume-spikes?threshold=${threshold}`)
       const json = await res.json()
       for (const spike of (json.spikes || [])) {
         if (spike.oi_signal !== 'FRESH_BUILD') continue

@@ -59,7 +59,7 @@ export default function Confluence() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('http://localhost:8000/confluence')
+      const res = await fetch('https://greeknova-backend-production.up.railway.app/confluence')
       const json = await res.json()
       setData(json)
       if (json.timestamp) {

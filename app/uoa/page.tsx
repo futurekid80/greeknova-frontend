@@ -50,7 +50,7 @@ export default function UOA() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('http://localhost:8000/uoa')
+      const res = await fetch('https://greeknova-backend-production.up.railway.app/uoa')
       const json = await res.json()
       setData(json)
       if (json.timestamp) setLastUpdate(new Date(json.timestamp).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short', timeZone:'UTC' }))

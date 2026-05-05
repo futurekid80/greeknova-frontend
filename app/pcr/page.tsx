@@ -30,7 +30,7 @@ export default function PCRTrend() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/pcr-trend/${symbol}`)
+      const res = await fetch(`https://greeknova-backend-production.up.railway.app/pcr-trend/${symbol}`)
       const json = await res.json()
       setData(json)
       if (json.points?.length) setLastUpdate(json.points[json.points.length - 1].time)

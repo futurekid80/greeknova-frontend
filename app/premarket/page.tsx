@@ -22,8 +22,8 @@ export default function PreMarket() {
     setLoading(true)
     try {
       const [mpRes, confRes] = await Promise.all([
-        fetch('http://localhost:8000/max-pain'),
-        fetch('http://localhost:8000/confluence'),
+        fetch('https://greeknova-backend-production.up.railway.app/max-pain'),
+        fetch('https://greeknova-backend-production.up.railway.app/confluence'),
       ])
       const [mpData, confData] = await Promise.all([mpRes.json(), confRes.json()])
 

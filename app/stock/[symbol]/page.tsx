@@ -37,18 +37,18 @@ export default function StockDeepDive({ params }: { params: { symbol: string } }
   async function fetchData() {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/stock-oi/${symbol}`)
+      const res = await fetch(`https://greeknova-backend-production.up.railway.app/stock-oi/${symbol}`)
       const json = await res.json()
       setData(json)
     } catch (e) { console.error(e) }
     try {
-      const hres = await fetch(`http://localhost:8000/oi-history/${symbol}`)
+      const hres = await fetch(`https://greeknova-backend-production.up.railway.app/oi-history/${symbol}`)
       const hjson = await hres.json()
       setHistory(hjson)
       if (hjson.strikes?.length) setSelectedStrike(hjson.strikes[Math.floor(hjson.strikes.length/2)].strike)
     } catch (e) { console.error(e) }
     try {
-      const pres = await fetch(`http://localhost:8000/pcr-trend/${symbol}`)
+      const pres = await fetch(`https://greeknova-backend-production.up.railway.app/pcr-trend/${symbol}`)
       const pjson = await pres.json()
       setPcrHistory(pjson.points || [])
     } catch (e) { console.error(e) }

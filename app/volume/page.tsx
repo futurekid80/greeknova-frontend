@@ -42,7 +42,7 @@ export default function VolumeSpikes() {
   const fetchSpikes = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/volume-spikes?threshold=${thresholdRef.current}`)
+      const res = await fetch(`https://greeknova-backend-production.up.railway.app/volume-spikes?threshold=${thresholdRef.current}`)
       const json = await res.json()
       setData(json)
       setLastUpdate(new Date(json.ts_new).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short', timeZone:'UTC' }))

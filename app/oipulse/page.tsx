@@ -110,10 +110,10 @@ export default function OIPulse() {
     : data?.items.filter(i => i.signal === sigFilter) || []
 
   const counts = {
-    LONG_BUILDUP:   data?.items.filter(i => i.signal==='LONG_BUILDUP').length   || 0,
-    SHORT_BUILDUP:  data?.items.filter(i => i.signal==='SHORT_BUILDUP').length  || 0,
-    SHORT_COVERING: data?.items.filter(i => i.signal==='SHORT_COVERING').length || 0,
-    LONG_UNWINDING: data?.items.filter(i => i.signal==='LONG_UNWINDING').length || 0,
+    LONG_BUILDUP:   （data?.items || []).filter(i => i.signal==='LONG_BUILDUP').length   || 0,
+    SHORT_BUILDUP:  （data?.items || []).filter(i => i.signal==='SHORT_BUILDUP').length  || 0,
+    SHORT_COVERING: （data?.items || []).filter(i => i.signal==='SHORT_COVERING').length || 0,
+    LONG_UNWINDING: （data?.items || []).filter(i => i.signal==='LONG_UNWINDING').length || 0,
   }
 
   return (

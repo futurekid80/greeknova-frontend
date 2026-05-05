@@ -35,6 +35,7 @@ const NAV_GROUPS = [
     links: [
       { href: '/scanners',   label: 'Scanners' },
       { href: '/confluence', label: 'Confluence' },
+      { href: '/rs',          label: 'Rel. Strength' },
       { href: '/uoa',        label: 'UOA' },
       { href: '/volume',     label: 'Vol Spikes' },
     ]

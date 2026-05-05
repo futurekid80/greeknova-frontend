@@ -307,7 +307,7 @@ export default function Scanners() {
                     const ceP=Math.round((row.totalCE/(row.totalCE+row.totalPE))*100)
                     return (
                       <tr key={row.symbol} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':'bg-gray-900/20'}`}>
-                        <td className="px-5 py-3.5"><div className="flex items-center gap-2"><span className="text-sm font-black text-white">{row.symbol}</span>{row.isIndex&&<span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}</div></td>
+                        <td className="px-5 py-3.5"><a href={"/stock/" + row.symbol} className="flex items-center gap-2 hover:text-emerald-400 transition-colors"><span className="text-sm font-black text-white hover:text-emerald-400">{row.symbol}</span>{row.isIndex&&<span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}</a></td>
                         <td className="px-4 py-3.5"><span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>{m.label}</span></td>
                         <td className={`px-4 py-3.5 text-right text-sm font-black ${row.pcr>1?'text-emerald-400':'text-red-400'}`}>{row.pcr.toFixed(2)}</td>
                         <td className="px-4 py-3.5 text-right text-sm font-bold text-amber-400">₹{row.cmp.toLocaleString()}</td>

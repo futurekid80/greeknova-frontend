@@ -5,9 +5,10 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContai
 import { RefreshCw, Clock } from 'lucide-react'
 
 interface PCRPoint { time: string; pcr: number; ce_oi: number; pe_oi: number }
-interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number }
+interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number; expiry: string | null }
 
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const API = 'https://greeknova-backend-production.up.railway.app'
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
@@ -22,22 +23,45 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   )
 }
 
+function formatExpiry(expiry: string) {
+  try {
+    const d = new Date(expiry)
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+  } catch { return expiry }
+}
+
 export default function PCRTrend() {
   const [symbol, setSymbol] = useState('NIFTY')
   const [data, setData] = useState<PCRData | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState('')
+  const [expiries, setExpiries] = useState<string[]>([])
+  const [selectedExpiry, setSelectedExpiry] = useState<string>('all')
+
+  const fetchExpiries = useCallback(async (sym: string) => {
+    try {
+      const res = await fetch(`${API}/pcr-expiries/${sym}`)
+      const json = await res.json()
+      setExpiries(json.expiries || [])
+      setSelectedExpiry('all')
+    } catch (e) { console.error(e) }
+  }, [])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`https://greeknova-backend-production.up.railway.app/pcr-trend/${symbol}`)
+      const url = selectedExpiry === 'all'
+        ? `${API}/pcr-trend/${symbol}`
+        : `${API}/pcr-trend/${symbol}?expiry=${selectedExpiry}`
+      const res = await fetch(url)
       const json = await res.json()
       setData(json)
       if (json.points?.length) setLastUpdate(json.points[json.points.length - 1].time)
     } catch (e) { console.error(e) }
     setLoading(false)
-  }, [symbol])
+  }, [symbol, selectedExpiry])
 
+  useEffect(() => { fetchExpiries(symbol) }, [symbol, fetchExpiries])
   useEffect(() => { fetchData() }, [fetchData])
   const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)
 
@@ -93,7 +117,8 @@ export default function PCRTrend() {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-6">
+        {/* Index selector */}
+        <div className="flex gap-2 mb-4">
           {INDICES.map(idx => (
             <button key={idx} onClick={() => setSymbol(idx)}
               className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${symbol === idx ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
@@ -101,6 +126,27 @@ export default function PCRTrend() {
             </button>
           ))}
         </div>
+
+        {/* Expiry filter */}
+        {expiries.length > 0 && (
+          <div className="flex items-center gap-2 mb-6">
+            <span className="text-xs text-gray-500 mr-1">Expiry:</span>
+            <button
+              onClick={() => setSelectedExpiry('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${selectedExpiry === 'all' ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
+              All
+            </button>
+            {expiries.map((exp, i) => (
+              <button key={exp}
+                onClick={() => setSelectedExpiry(exp)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${selectedExpiry === exp ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
+                {formatExpiry(exp)}
+                {i === 0 && <span className="ml-1 text-[9px] text-cyan-600">Weekly</span>}
+                {i === expiries.length - 1 && expiries.length > 1 && <span className="ml-1 text-[9px] text-purple-500">Monthly</span>}
+              </button>
+            ))}
+          </div>
+        )}
 
         {latest && (
           <div className="grid grid-cols-4 gap-3 mb-6">

@@ -1,5 +1,6 @@
 'use client'
 import './globals.css'
+import DisclaimerModal from '@/components/DisclaimerModal'
 import { useEffect, useRef } from 'react'
 
 // Global audio unlock - needs one user interaction

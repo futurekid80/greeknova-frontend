@@ -13,6 +13,7 @@ interface Spike {
 interface SpikeData {
   ts_new: string; ts_old: string; threshold: number
   total_spikes: number; spikes: Spike[]
+  date: string; open_time: string; close_time: string; snapshots: number
 }
 
 export default function OISpikes() {
@@ -21,6 +22,8 @@ export default function OISpikes() {
   const [threshold, setThreshold] = useState(5)
   const [filter, setFilter] = useState<'all'|'BUILD'|'UNWIND'>('all')
   const [typeFilter, setTypeFilter] = useState<'all'|'CE'|'PE'>('all')
+  const [date, setDate] = useState<string>('')
+  const [availDates, setAvailDates] = useState<string[]>([])
   const [lastUpdate, setLastUpdate] = useState('')
   const [autoEnabled, setAutoEnabled] = useState(false)
   const [countdown, setCountdown] = useState(300)
@@ -38,7 +41,7 @@ export default function OISpikes() {
   const fetchSpikes = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`https://greeknova-backend-production.up.railway.app/oi-spikes?threshold=${thresholdRef.current}`)
+      const res = await fetch(`https://greeknova-backend-production.up.railway.app/oi-spikes?threshold=${thresholdRef.current}${date ? '&date='+date : ''}`)
       const json = await res.json()
       setData(json)
       setLastUpdate(new Date(json.ts_new).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short', timeZone:'UTC' }))
@@ -137,6 +140,22 @@ export default function OISpikes() {
                 onChange={e => handleThresholdChange(Number(e.target.value))}
                 className="flex-1 accent-amber-400"/>
               <span className="text-lg font-black text-amber-400 min-w-[3rem] text-right">{threshold}%</span>
+            </div>
+            {availDates.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Date:</span>
+                <select value={date} onChange={e => setDate(e.target.value)}
+                  className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-500">
+                  {availDates.map(d => <option key={d} value={d}>{new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</option>)}
+                </select>
+              </div>
+            )}
+            {data?.open_time && (
+              <div className="text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5">
+                Session: {data.open_time} → {data.close_time} IST · {data.snapshots} snapshots
+              </div>
+            )}
+            <div className="hidden">
             </div>
           </div>
         </div>

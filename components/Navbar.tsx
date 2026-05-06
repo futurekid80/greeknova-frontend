@@ -120,5 +120,12 @@ export default function Navbar({ active }: { active: string }) {
         </div>
       </div>
     </nav>
+    <div className="w-full bg-amber-950/40 border-b border-amber-800/30 px-6 py-1.5 text-center">
+      <p className="text-[11px] text-amber-600/80">
+        ⚠️ GreekNova is for <strong>informational and educational purposes only</strong>. 
+        Not SEBI registered. Not investment advice. Always consult a SEBI-registered advisor before trading.{' '}
+        <a href="/disclaimer" className="underline hover:text-amber-400 transition-colors">Full Disclaimer & Terms</a>
+      </p>
+    </div>
   )
 }

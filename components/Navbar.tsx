@@ -95,6 +95,7 @@ function DropdownMenu({ group, active }: { group: typeof NAV_GROUPS[0], active: 
 
 export default function Navbar({ active }: { active: string }) {
   return (
+    <>
     <nav className="sticky top-0 z-50 border-b border-gray-800/50 bg-[#07070e]/90 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-8">
         <Link href="/" className="flex items-center gap-3 shrink-0">
@@ -127,5 +128,6 @@ export default function Navbar({ active }: { active: string }) {
         <a href="/disclaimer" className="underline hover:text-amber-400 transition-colors">Full Disclaimer & Terms</a>
       </p>
     </div>
+    </>
   )
 }

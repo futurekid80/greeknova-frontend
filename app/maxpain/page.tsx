@@ -14,6 +14,7 @@ export default function MaxPain() {
   const [data, setData] = useState<{ symbols: MPSymbol[]; timestamp: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'index' | 'stocks'>('all')
+  const [dirFilter, setDirFilter] = useState<'all' | 'above' | 'below'>('all')
   const [sortBy, setSortBy] = useState<'dist' | 'expiry' | 'pcr'>('dist')
   const [lastUpdate, setLastUpdate] = useState('')
 
@@ -33,6 +34,7 @@ export default function MaxPain() {
 
   const filtered = (data?.symbols || [])
     .filter(s => filter === 'all' || (filter === 'index' ? s.is_index : !s.is_index))
+    .filter(s => dirFilter === 'all' || (dirFilter === 'above' ? s.direction === 'ABOVE' : s.direction === 'BELOW'))
     .sort((a, b) => {
       if (sortBy === 'dist') return Math.abs(b.dist_from_mp) - Math.abs(a.dist_from_mp)
       if (sortBy === 'expiry') return (a.days_to_expiry || 99) - (b.days_to_expiry || 99)
@@ -42,6 +44,8 @@ export default function MaxPain() {
   const expiryTomorrow = data?.symbols.filter(s => s.days_to_expiry === 1) || []
   const farFromMP = data?.symbols.filter(s => Math.abs(s.dist_from_mp) > 2) || []
   const closeToMP = data?.symbols.filter(s => Math.abs(s.dist_from_mp) <= 0.5) || []
+  const aboveMP = data?.symbols.filter(s => s.direction === 'ABOVE') || []
+  const belowMP = data?.symbols.filter(s => s.direction === 'BELOW') || []
 
   function ExpiryBadge({ days }: { days: number }) {
     const color = days <= 1 ? 'bg-red-950 text-red-400 border-red-800' :
@@ -110,15 +114,31 @@ export default function MaxPain() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex gap-2">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          {/* Left: type + direction filters */}
+          <div className="flex gap-2 flex-wrap">
             {(['all','index','stocks'] as const).map(f => (
               <button key={f} onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${filter === f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
                 {f}
               </button>
             ))}
+            <div className="w-px bg-gray-800 mx-1" />
+            <button onClick={() => setDirFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${dirFilter === 'all' ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              All Directions
+            </button>
+            <button onClick={() => setDirFilter('above')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${dirFilter === 'above' ? 'bg-orange-500 text-white border-orange-400' : 'bg-gray-900/40 text-orange-400 border-orange-800/50 hover:text-white'}`}>
+              ↑ Above MP ({aboveMP.length})
+            </button>
+            <button onClick={() => setDirFilter('below')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${dirFilter === 'below' ? 'bg-blue-500 text-white border-blue-400' : 'bg-gray-900/40 text-blue-400 border-blue-800/50 hover:text-white'}`}>
+              ↓ Below MP ({belowMP.length})
+            </button>
           </div>
+
+          {/* Right: sort */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">Sort by:</span>
             {[
@@ -178,6 +198,9 @@ export default function MaxPain() {
                     </tr>
                   )
                 })}
+                {filtered.length === 0 && (
+                  <tr><td colSpan={8} className="text-center py-12 text-gray-600 text-sm">No symbols match current filters</td></tr>
+                )}
               </tbody>
             </table>
           </div>

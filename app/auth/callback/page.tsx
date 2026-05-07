@@ -10,7 +10,7 @@ function CallbackHandler() {
   useEffect(() => {
     async function handleCallback() {
       const requestToken = searchParams.get('request_token')
-      const email = sessionStorage.getItem('greeknova_pending_email')
+      const email = localStorage.getItem('greeknova_pending_email')
 
       if (!requestToken || !email) {
         router.push('/login?error=missing_token')
@@ -34,7 +34,7 @@ function CallbackHandler() {
 
         const { kite_user_id } = await response.json()
 
-        sessionStorage.removeItem('greeknova_pending_email')
+        localStorage.removeItem('greeknova_pending_email')
         localStorage.setItem('greeknova_user', JSON.stringify({ email, kite_user_id }))
 
         router.push('/dashboard?kite=connected')

@@ -71,14 +71,13 @@ export default function PreMarket() {
       const expiryToday = mpData.symbols?.filter((s: any) => s.days_to_expiry <= 1) || []
       const topConfluence = confData.signals?.slice(0, 8) || []
       const allSymbols = mpData.symbols || []
-
-      let bullish = 0, bearish = 0, neutral = 0
-      allSymbols.forEach((s: any) => {
-        if (s.pcr > 1.2) bullish++
-        else if (s.pcr < 0.8) bearish++
-        else neutral++
-      })
-
+const pulseItems2 = pulseData.items || []
+let bullish = 0, bearish = 0, neutral = 0
+pulseItems2.forEach((s: any) => {
+  if (s.price_chg_pct > 0 && s.oi_chg_pct > 0) bullish++
+  else if (s.price_chg_pct < 0 && s.oi_chg_pct > 0) bearish++
+  else neutral++
+})
       const maxPainFar = mpData.symbols
         ?.filter((s: any) => !s.is_index && Math.abs(s.dist_from_mp) > 2)
         ?.sort((a: any, b: any) => Math.abs(b.dist_from_mp) - Math.abs(a.dist_from_mp))

@@ -42,8 +42,10 @@ export default function LoginPage() {
       setError('Configuration error. Please contact support.')
       return
     }
+    // Store email in sessionStorage before redirecting to Kite
+    sessionStorage.setItem('greeknova_pending_email', email)
     const kiteLoginUrl =
-      `https://kite.zerodha.com/connect/login?api_key=${KITE_API_KEY}&v=3&state=${encodeURIComponent(email)}`
+      `https://kite.zerodha.com/connect/login?api_key=${KITE_API_KEY}&v=3`
     window.location.href = kiteLoginUrl
   }
 

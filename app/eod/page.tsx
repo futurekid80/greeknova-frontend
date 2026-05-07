@@ -9,6 +9,16 @@ import {
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const STOCKS = [
+  'RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BHARTIARTL',
+  'KOTAKBANK','LT','AXISBANK','ASIANPAINT','MARUTI','TITAN','SUNPHARMA','ULTRACEMCO',
+  'BAJFINANCE','WIPRO','HCLTECH','TATACONSUM','TATASTEEL','ADANIENT','POWERGRID','NTPC',
+  'ONGC','JSWSTEEL','COALINDIA','BAJAJFINSV','TECHM','APOLLOHOSP','BAJAJ-AUTO','BPCL',
+  'BRITANNIA','CIPLA','DRREDDY','EICHERMOT','GRASIM','HEROMOTOCO','HINDALCO','HDFCLIFE',
+  'INDUSINDBK','JIOFIN','M&M','NESTLEIND','SBILIFE','SHRIRAMFIN','TRENT','ADANIPORTS',
+  'BANKBARODA','BEL','CANBK','CHOLAFIN','DLF','GAIL','HAVELLS','HAL','INDIGO','PFC',
+  'RECLTD','SAIL','TATAPOWER','VEDL',
+]
 
 function fmtOI(n: number) {
   const abs = Math.abs(n)
@@ -86,6 +96,7 @@ export default function EODAnalysis() {
   useEffect(() => { setDate(''); setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, date, expiry])
 
+  const isStock = STOCKS.includes(symbol)
   const totalCEChg = data?.rows.reduce((s, r) => s + r.ce_chg, 0) || 0
   const totalPEChg = data?.rows.reduce((s, r) => s + r.pe_chg, 0) || 0
   const ceBuilt    = data?.rows.filter(r => r.ce_chg > 0).reduce((s,r) => s+r.ce_chg, 0) || 0
@@ -115,14 +126,22 @@ export default function EODAnalysis() {
           </button>
         </div>
 
-        {/* Index selector */}
-        <div className="flex gap-2 mb-4">
+        {/* Symbol selector */}
+        <div className="flex flex-wrap gap-2 mb-4 items-center">
           {INDICES.map(idx => (
             <button key={idx} onClick={() => setSymbol(idx)}
               className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${symbol===idx ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {idx}
             </button>
           ))}
+          <select
+            value={isStock ? symbol : ''}
+            onChange={e => e.target.value && setSymbol(e.target.value)}
+            className={`rounded-xl text-sm font-bold border transition-all px-4 py-2.5 focus:outline-none focus:border-white
+              ${isStock ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+            <option value="">Stocks ▾</option>
+            {STOCKS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
 
         {/* Controls */}
@@ -165,7 +184,8 @@ export default function EODAnalysis() {
         ) : !data?.rows.length ? (
           <div className="h-64 flex items-center justify-center flex-col gap-3">
             <div className="text-4xl">📈</div>
-            <p className="text-gray-500 text-sm">No intraday data for this date</p>
+            <p className="text-gray-500 text-sm">No intraday data for {symbol} on this date</p>
+            <p className="text-gray-600 text-xs">Data is captured every 5 mins during market hours 9:15–3:30 IST</p>
           </div>
         ) : (
           <>

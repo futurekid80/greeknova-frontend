@@ -20,6 +20,16 @@ const SIGNAL_META: Record<string, { color: string; bg: string; border: string; i
   UNUSUAL_ACTIVITY: { color: 'text-amber-400',   bg: 'bg-amber-950/40',   border: 'border-amber-800/50',   icon: '👁️' },
 }
 
+function toIST(ts: string) {
+  try {
+    const clean = ts.split('+')[0].split('Z')[0]
+    const dt = new Date(clean + 'Z')
+    const ist = dt.getTime() + (5.5 * 60 * 60 * 1000)
+    const d = new Date(ist)
+    return `${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')}`
+  } catch { return '—' }
+}
+
 function ScoreMeter({ score }: { score: number }) {
   return (
     <div className="flex items-center gap-1">
@@ -43,6 +53,7 @@ export default function UOA() {
   const [signalFilter, setSignalFilter] = useState<string>('all')
   const [minScore, setMinScore] = useState(2)
   const [lastUpdate, setLastUpdate] = useState('')
+  const [captureTime, setCaptureTime] = useState('')
   const [autoEnabled, setAutoEnabled] = useState(false)
   const [countdown, setCountdown] = useState(300)
   const intervalRef = useRef<NodeJS.Timeout|null>(null)
@@ -54,7 +65,10 @@ export default function UOA() {
       const res = await fetch('https://greeknova-backend-production.up.railway.app/uoa')
       const json = await res.json()
       setData(json)
-      if (json.timestamp) setLastUpdate(new Date(json.timestamp).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short', timeZone:'UTC' }))
+      if (json.timestamp) {
+        setLastUpdate(new Date(json.timestamp).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short', timeZone:'UTC' }))
+        setCaptureTime(toIST(json.timestamp))
+      }
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [])
@@ -86,6 +100,18 @@ export default function UOA() {
     .filter(s => signalFilter === 'all' || s.signal_type === signalFilter)
     .filter(s => s.score >= minScore)
 
+  // Detect two-way stocks (both CE + PE buyer dominated)
+  const twoWaySymbols = new Set<string>()
+  const allSignals = data?.signals || []
+  const symbolSides: Record<string, Set<string>> = {}
+  allSignals.filter(s => s.signal_type === 'BUYER_DOMINATED').forEach(s => {
+    if (!symbolSides[s.symbol]) symbolSides[s.symbol] = new Set()
+    symbolSides[s.symbol].add(s.option_type)
+  })
+  Object.entries(symbolSides).forEach(([sym, sides]) => {
+    if (sides.has('CE') && sides.has('PE')) twoWaySymbols.add(sym)
+  })
+
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
 
@@ -107,6 +133,11 @@ export default function UOA() {
             <p className="text-gray-500 text-sm">Smart money detection · High vol/OI ratio = buyers · Far OTM activity = directional bets · Score 1-5 conviction</p>
           </div>
           <div className="flex items-center gap-3">
+            {captureTime && (
+              <div className="flex items-center gap-1.5 text-xs bg-emerald-950/30 border border-emerald-800/40 text-emerald-400 rounded-lg px-3 py-2">
+                <Clock size={11}/>Snapshot: {captureTime} IST
+              </div>
+            )}
             {lastUpdate && <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2"><Clock size={11}/>{lastUpdate}</div>}
             <button onClick={() => autoEnabled ? stopAuto() : startAuto()}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
@@ -119,6 +150,17 @@ export default function UOA() {
             </button>
           </div>
         </div>
+
+        {/* Two-way alert banner */}
+        {twoWaySymbols.size > 0 && (
+          <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <span className="text-2xl mt-0.5">⚡</span>
+            <div>
+              <p className="text-sm font-bold text-amber-400 mb-1">Two-Way Activity Detected — {[...twoWaySymbols].join(', ')}</p>
+              <p className="text-xs text-gray-400">Both CE and PE showing Buyer Dominated for these symbols. This means big players are buying <strong>both sides</strong> — market is undecided. Expect a large move in either direction. Good for buying straddles/strangles. Avoid naked selling.</p>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-6">
@@ -184,7 +226,7 @@ export default function UOA() {
           </div>
         </div>
 
-        <p className="text-xs text-gray-600 mb-4">{filtered.length} signals</p>
+        <p className="text-xs text-gray-600 mb-4">{filtered.length} signals · Data as of {captureTime || '—'} IST</p>
 
         {/* Table */}
         {loading ? (
@@ -194,8 +236,8 @@ export default function UOA() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-900/60 border-b border-gray-800">
-                  {['Symbol','Strike','Type','Signal','Conviction','Vol/OI','Volume','OI Δ%','OTM%','LTP'].map((h,i)=>(
-                    <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=3?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5':''}`}>{h}</th>
+                  {['Symbol','Strike','Type','Signal','Direction Read','Conviction','Vol/OI','Volume','OI Δ%','OTM%','LTP'].map((h,i)=>(
+                    <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=4?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===10?'pr-5':''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -203,13 +245,36 @@ export default function UOA() {
                 {filtered.map((sig, i) => {
                   const m = SIGNAL_META[sig.signal_type] || SIGNAL_META.UNUSUAL_ACTIVITY
                   const isCE = sig.option_type === 'CE'
+                  const isTwoWay = twoWaySymbols.has(sig.symbol) && sig.signal_type === 'BUYER_DOMINATED'
+
+                  // Direction read logic
+                  let dirRead = ''
+                  let dirColor = 'text-gray-500'
+                  if (isTwoWay) {
+                    dirRead = '⚡ Two-way — volatility play'
+                    dirColor = 'text-amber-400'
+                  } else if (sig.signal_type === 'BUYER_DOMINATED') {
+                    dirRead = isCE ? '↑ Bullish bet' : '↓ Bearish bet'
+                    dirColor = isCE ? 'text-emerald-400' : 'text-red-400'
+                  } else if (sig.signal_type === 'FRESH_CONVICTION') {
+                    dirRead = isCE ? '↑ Strong bullish' : '↓ Strong bearish'
+                    dirColor = isCE ? 'text-emerald-400' : 'text-red-400'
+                  } else if (sig.signal_type === 'FAR_OTM_ACTIVITY') {
+                    dirRead = isCE ? '↑ Speculative rally bet' : '↓ Hedge / crash bet'
+                    dirColor = isCE ? 'text-violet-400' : 'text-violet-400'
+                  } else {
+                    dirRead = '— Watch closely'
+                    dirColor = 'text-gray-500'
+                  }
+
                   return (
                     <tr key={`${sig.tradingsymbol}-${i}`}
-                      className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':'bg-gray-900/20'}`}>
+                      className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${isTwoWay ? 'bg-amber-950/10' : i%2===0?'':'bg-gray-900/20'}`}>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2">
                           <a href={`/stock/${sig.symbol}`} className="text-sm font-black text-white hover:text-emerald-400 transition-colors">{sig.symbol}</a>
                           {sig.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
+                          {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">2-WAY</span>}
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{sig.cmp.toLocaleString()}</p>
                       </td>
@@ -223,6 +288,9 @@ export default function UOA() {
                           <span>{sig.signal_type.replace(/_/g,' ')}</span>
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5 max-w-[180px]">{sig.signal_desc}</p>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className={`text-xs font-bold ${dirColor}`}>{dirRead}</span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <ScoreMeter score={sig.score}/>

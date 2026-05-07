@@ -3,6 +3,17 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useState } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock } from 'lucide-react'
 
+function isMarketOpen() {
+  const now = new Date()
+  const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+  const day = ist.getDay()
+  if (day === 0 || day === 6) return false
+  const h = ist.getHours(), m = ist.getMinutes()
+  if (h < 9 || (h === 9 && m < 15)) return false
+  if (h > 15 || (h === 15 && m > 30)) return false
+  return true
+}
+
 export default function Alerts() {
   const [enabled, setEnabled] = useState(false)
   const [permission, setPermission] = useState('default')
@@ -10,10 +21,15 @@ export default function Alerts() {
   const [spikeThreshold, setSpikeThreshold] = useState(10)
   const [lastCheck, setLastCheck] = useState('')
   const [alerts, setAlerts] = useState<any[]>([])
+  const [marketOpen, setMarketOpen] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('gn_alerts')
     if (saved) setAlerts(JSON.parse(saved))
+    setSpikeThreshold(Number(localStorage.getItem('gn_spike_threshold') || 10))
+    setMarketOpen(isMarketOpen())
+    const t = setInterval(() => setMarketOpen(isMarketOpen()), 60000)
+    return () => clearInterval(t)
   }, [])
 
   useEffect(() => {
@@ -22,9 +38,20 @@ export default function Alerts() {
       navigator.serviceWorker.register('/sw.js').then(reg => {
         setSwReady(true)
         const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
+        const threshold = Number(localStorage.getItem('gn_spike_threshold') || 10)
         if (wasEnabled && Notification.permission === 'granted') {
           setEnabled(true)
-          reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold: Number(localStorage.getItem('gn_spike_threshold') || 10) } })
+          // ✅ Wait for SW to be active before sending message
+          const sw = reg.active || reg.waiting || reg.installing
+          if (sw) {
+            sw.postMessage({ type: 'ENABLE', data: { spikeThreshold: threshold } })
+          } else {
+            reg.addEventListener('updatefound', () => {
+              reg.installing?.addEventListener('statechange', () => {
+                if (reg.active) reg.active.postMessage({ type: 'ENABLE', data: { spikeThreshold: threshold } })
+              })
+            })
+          }
         }
       }).catch(e => console.error('SW registration failed:', e))
 
@@ -33,7 +60,6 @@ export default function Alerts() {
       })
     }
 
-    // Listen for notifications via BroadcastChannel
     const bc = new BroadcastChannel('gn_alerts')
     bc.onmessage = (e) => {
       setAlerts(prev => {
@@ -46,8 +72,6 @@ export default function Alerts() {
     return () => bc.close()
   }, [])
 
-
-  // Play sound using Web Audio API
   function playAlertSound(type: string = 'spike') {
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
@@ -64,25 +88,28 @@ export default function Alerts() {
     } catch(e) { console.error('Sound failed:', e) }
   }
 
-  // Keep service worker alive with periodic ping + trigger checks
   useEffect(() => {
     if (!enabled) return
     const keepAlive = setInterval(async () => {
       try {
-        // Ping SW to keep it alive
         await fetch('/sw-keepalive')
-        // Tell SW to run checks
         const reg = await navigator.serviceWorker.ready
         reg.active?.postMessage({ type: 'CHECK_NOW', data: {} })
+        setLastCheck(new Date().toLocaleTimeString('en-IN'))
       } catch(e) {}
-    }, 4 * 60 * 1000) // Every 4 minutes (before 30s SW timeout)
-    
-    // Listen for sound requests from SW
+    }, 4 * 60 * 1000)
+
     const handleSWMessage = (e: MessageEvent) => {
       if (e.data.type === 'PLAY_SOUND') playAlertSound(e.data.alert)
     }
     navigator.serviceWorker.addEventListener('message', handleSWMessage)
-    
+
+    // Run an immediate check on enable
+    navigator.serviceWorker.ready.then(reg => {
+      reg.active?.postMessage({ type: 'CHECK_NOW', data: {} })
+      setLastCheck(new Date().toLocaleTimeString('en-IN'))
+    })
+
     return () => {
       clearInterval(keepAlive)
       navigator.serviceWorker.removeEventListener('message', handleSWMessage)
@@ -96,11 +123,22 @@ export default function Alerts() {
     localStorage.setItem('gn_alerts_enabled', 'true')
     localStorage.setItem('gn_spike_threshold', String(spikeThreshold))
     setEnabled(true)
+    // ✅ Actually send ENABLE to the service worker
+    const reg = await navigator.serviceWorker.ready
+    reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold } })
   }
 
-  function disableAlerts() {
+  async function disableAlerts() {
     localStorage.setItem('gn_alerts_enabled', 'false')
     setEnabled(false)
+    const reg = await navigator.serviceWorker.ready
+    reg.active?.postMessage({ type: 'DISABLE' })
+  }
+
+  async function checkNow() {
+    const reg = await navigator.serviceWorker.ready
+    reg.active?.postMessage({ type: 'CHECK_NOW', data: {} })
+    setLastCheck(new Date().toLocaleTimeString('en-IN'))
   }
 
   const SIGNAL_META: Record<string, { color: string; bg: string; border: string; icon: string }> = {
@@ -110,6 +148,14 @@ export default function Alerts() {
     BATTLEGROUND: { color: 'text-violet-400',  bg: 'bg-violet-950/50',  border: 'border-violet-800/50',  icon: '⚔️' },
     OI_SPIKE:     { color: 'text-orange-400',  bg: 'bg-orange-950/50',  border: 'border-orange-800/50',  icon: '🔥' },
     VOL_SPIKE:    { color: 'text-blue-400',    bg: 'bg-blue-950/50',    border: 'border-blue-800/50',    icon: '📊' },
+  }
+
+  const statusText = () => {
+    if (!swReady) return 'Loading service worker...'
+    if (permission === 'denied') return '⚠️ Notifications blocked — enable in browser settings'
+    if (!enabled) return 'Click Enable to start background monitoring'
+    if (!marketOpen) return '⏸️ Active — market closed, checks paused till 9:15 AM IST'
+    return '✅ Running — checking every 5 min, fires even when you switch tabs'
   }
 
   return (
@@ -122,11 +168,24 @@ export default function Alerts() {
             <h1 className="text-3xl font-black tracking-tight mb-1">Signal Alerts</h1>
             <p className="text-gray-500 text-sm">Background monitoring · Works even when you switch tabs · Service Worker powered</p>
           </div>
-          {lastCheck && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
-              <Clock size={11}/>Last: {lastCheck}
+          <div className="flex items-center gap-2">
+            {/* Market status */}
+            <div className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border ${marketOpen ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-400' : 'bg-gray-900 border-gray-800 text-gray-500'}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${marketOpen ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
+              {marketOpen ? 'Market Open' : 'Market Closed'}
             </div>
-          )}
+            {lastCheck && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+                <Clock size={11}/>Last: {lastCheck}
+              </div>
+            )}
+            {enabled && (
+              <button onClick={checkNow}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-lg px-3 py-2 transition-all">
+                <RefreshCw size={11}/>Check Now
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-6 mb-6">
@@ -134,13 +193,8 @@ export default function Alerts() {
             <div>
               <h2 className="text-lg font-bold text-white mb-1">Alert Engine</h2>
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${enabled ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
-                <p className="text-sm text-gray-500">
-                  {!swReady ? 'Loading service worker...'
-                    : permission === 'denied' ? '⚠️ Notifications blocked in browser settings'
-                    : enabled ? '✅ Running in background — works even when you switch tabs'
-                    : 'Click Enable to start background monitoring'}
-                </p>
+                <div className={`w-2 h-2 rounded-full ${enabled && marketOpen ? 'bg-emerald-400 animate-pulse' : enabled ? 'bg-amber-400' : 'bg-gray-600'}`}/>
+                <p className="text-sm text-gray-500">{statusText()}</p>
               </div>
             </div>
             <button onClick={enabled ? disableAlerts : enableAlerts}
@@ -200,10 +254,13 @@ export default function Alerts() {
             <div className="text-4xl mb-4">🔔</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">{enabled ? 'Monitoring in background' : 'Alerts disabled'}</h3>
             <p className="text-sm text-gray-600 max-w-sm">
-              {enabled ? 'Service worker is running. Alerts will appear here and as browser notifications even when you switch tabs.'
+              {enabled
+                ? marketOpen
+                  ? 'Service worker is running. Alerts will appear here and as browser notifications.'
+                  : 'Market is closed. Alerts will resume automatically at 9:15 AM IST on the next trading day.'
                 : 'Enable alerts to start background monitoring across all signals.'}
             </p>
-            {enabled && <div className="mt-4 flex items-center gap-2 text-xs text-emerald-500"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/>Checking every 5 minutes in background</div>}
+            {enabled && marketOpen && <div className="mt-4 flex items-center gap-2 text-xs text-emerald-500"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/>Checking every 5 minutes</div>}
           </div>
         ) : (
           <div className="space-y-2">

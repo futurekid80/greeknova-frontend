@@ -453,17 +453,21 @@ export default function Dashboard() {
         const seen = new Set()
         cmpData?.forEach((c:any) => { if (!seen.has(c.symbol)) { cmpMap[c.symbol] = c.cmp; seen.add(c.symbol) } })
         setCmps(cmpMap)
-        const allSyms = [...new Set((data as any[]).map((d: any) => d.symbol))]
-        let bull = 0, bear = 0, neut = 0
-        for (const sym of allSyms) {
-          const r = (data as any[]).filter((d: any) => d.symbol === sym)
-          const ce = r.filter((d: any) => d.option_type === 'CE').reduce((s: number, d: any) => s + d.oi, 0)
-          const pe = r.filter((d: any) => d.option_type === 'PE').reduce((s: number, d: any) => s + d.oi, 0)
-          const pcr = ce > 0 ? pe / ce : 0
-          if (pcr > 1.2) bull++; else if (pcr < 0.8) bear++; else neut++
-        }
-        setBreadth({ bullish: bull, bearish: bear, neutral: neut, total: allSyms.length })
-      }
+        c// Breadth from OI Pulse (all 66 stocks, signal-based)
+        try {
+          const pulseRes = await fetch('https://greeknova-backend-production.up.railway.app/oi-pulse')
+          const pulseJson = await pulseRes.json()
+          const pulseItems = pulseJson.items || []
+          let bull = 0, bear = 0, neut = 0
+          pulseItems.forEach((s: any) => {
+            if (s.price_chg_pct > 0 && s.oi_chg_pct > 0) bull++
+            else if (s.price_chg_pct < 0 && s.oi_chg_pct > 0) bear++
+            else neut++
+          })
+          setBreadth({ bullish: bull, bearish: bear, neutral: neut, total: pulseItems.length })
+        } catch(e) {
+          console.error('Breadth fetch failed:', e)
+        }   }
     } catch(e) { console.error(e) }
     setLoading(false)
   }

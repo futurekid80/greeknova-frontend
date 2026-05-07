@@ -3,10 +3,20 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
+
+  // Debug — log everything Kite sends back
+  console.log('=== KITE CALLBACK ===')
+  console.log('Full URL:', request.url)
+  console.log('All params:', Object.fromEntries(searchParams))
+
   const requestToken = searchParams.get('request_token')
-  const email = searchParams.get('state') // we pass email as state
+  const email = searchParams.get('state')
+
+  console.log('request_token:', requestToken)
+  console.log('state/email:', email)
 
   if (!requestToken || !email) {
+    console.log('MISSING TOKEN OR EMAIL — redirecting to error')
     return NextResponse.redirect(
       new URL('/login?error=missing_token', request.url)
     )
@@ -24,16 +34,22 @@ export async function GET(request: NextRequest) {
     )
 
     if (!tokenResponse.ok) {
+      const errText = await tokenResponse.text()
+      console.log('Backend error:', errText)
       throw new Error('Token exchange failed')
     }
 
     const { access_token: kiteToken, kite_user_id } = await tokenResponse.json()
+    console.log('Kite user ID:', kite_user_id)
 
     // Sign in or create user in Supabase
-    const { data: signInData, error: signInError } =
+    const { error: signInError } =
       await supabase.auth.signInWithOtp({ email })
 
-    if (signInError) throw signInError
+    if (signInError) {
+      console.log('Supabase OTP error:', signInError)
+      throw signInError
+    }
 
     // Store kite token against user in Supabase DB
     const { error: upsertError } = await supabase
@@ -46,12 +62,16 @@ export async function GET(request: NextRequest) {
         token_date: new Date().toISOString().split('T')[0]
       })
 
-    if (upsertError) throw upsertError
+    if (upsertError) {
+      console.log('Supabase upsert error:', upsertError)
+      throw upsertError
+    }
 
-    // Redirect to dashboard
+    console.log('=== AUTH SUCCESS — redirecting to dashboard ===')
     return NextResponse.redirect(
       new URL('/dashboard?kite=connected', request.url)
     )
+
   } catch (error) {
     console.error('Kite callback error:', error)
     return NextResponse.redirect(

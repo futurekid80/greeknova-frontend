@@ -428,6 +428,14 @@ function StockSearch({ onSearch }: { onSearch: (s: string) => void }) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [analyses, setAnalyses] = useState<IndexAnalysis[]>([])
+
+  // Auth check
+  useEffect(() => {
+    const user = localStorage.getItem('greeknova_user')
+    if (!user) {
+      window.location.href = '/login'
+    }
+  }, [])
   const [cmps, setCmps] = useState<Record<string,number>>({})
   const [breadth, setBreadth] = useState({ bullish: 0, bearish: 0, neutral: 0, total: 0 })
   const [loading, setLoading] = useState(true)

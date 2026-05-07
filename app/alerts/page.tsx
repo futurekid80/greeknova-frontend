@@ -41,7 +41,6 @@ export default function Alerts() {
         const threshold = Number(localStorage.getItem('gn_spike_threshold') || 10)
         if (wasEnabled && Notification.permission === 'granted') {
           setEnabled(true)
-          // ✅ Wait for SW to be active before sending message
           const sw = reg.active || reg.waiting || reg.installing
           if (sw) {
             sw.postMessage({ type: 'ENABLE', data: { spikeThreshold: threshold } })
@@ -72,19 +71,25 @@ export default function Alerts() {
     return () => bc.close()
   }, [])
 
+  // 🎵 Calm two-tone chime — gentle and pleasant
   function playAlertSound(type: string = 'spike') {
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const oscillator = ctx.createOscillator()
-      const gainNode = ctx.createGain()
-      oscillator.connect(gainNode)
-      gainNode.connect(ctx.destination)
-      oscillator.frequency.setValueAtTime(type === 'spike' ? 880 : 660, ctx.currentTime)
-      oscillator.frequency.setValueAtTime(type === 'spike' ? 1100 : 880, ctx.currentTime + 0.1)
-      gainNode.gain.setValueAtTime(0.3, ctx.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
-      oscillator.start(ctx.currentTime)
-      oscillator.stop(ctx.currentTime + 0.3)
+      const now = ctx.currentTime
+      const freqs = type === 'spike' ? [523, 659] : [440, 554] // C5+E5 or A4+C#5
+      freqs.forEach((freq, i) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(freq, now + i * 0.18)
+        gain.gain.setValueAtTime(0, now + i * 0.18)
+        gain.gain.linearRampToValueAtTime(0.18, now + i * 0.18 + 0.05)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.18 + 0.6)
+        osc.start(now + i * 0.18)
+        osc.stop(now + i * 0.18 + 0.6)
+      })
     } catch(e) { console.error('Sound failed:', e) }
   }
 
@@ -104,7 +109,6 @@ export default function Alerts() {
     }
     navigator.serviceWorker.addEventListener('message', handleSWMessage)
 
-    // Run an immediate check on enable
     navigator.serviceWorker.ready.then(reg => {
       reg.active?.postMessage({ type: 'CHECK_NOW', data: {} })
       setLastCheck(new Date().toLocaleTimeString('en-IN'))
@@ -123,7 +127,6 @@ export default function Alerts() {
     localStorage.setItem('gn_alerts_enabled', 'true')
     localStorage.setItem('gn_spike_threshold', String(spikeThreshold))
     setEnabled(true)
-    // ✅ Actually send ENABLE to the service worker
     const reg = await navigator.serviceWorker.ready
     reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold } })
   }
@@ -169,7 +172,6 @@ export default function Alerts() {
             <p className="text-gray-500 text-sm">Background monitoring · Works even when you switch tabs · Service Worker powered</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Market status */}
             <div className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border ${marketOpen ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-400' : 'bg-gray-900 border-gray-800 text-gray-500'}`}>
               <div className={`w-1.5 h-1.5 rounded-full ${marketOpen ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
               {marketOpen ? 'Market Open' : 'Market Closed'}
@@ -234,6 +236,10 @@ export default function Alerts() {
               }}
               className="w-32 accent-orange-400"/>
             <span className="text-sm font-black text-orange-400">{spikeThreshold}%</span>
+            <button onClick={() => playAlertSound('spike')}
+              className="text-xs text-gray-500 hover:text-white border border-gray-700 hover:border-gray-600 px-3 py-1.5 rounded-lg transition-all ml-2">
+              🔔 Preview Sound
+            </button>
           </div>
         </div>
 

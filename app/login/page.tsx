@@ -1,1 +1,152 @@
+'use client'
 
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+const KITE_API_KEY = process.env.NEXT_PUBLIC_KITE_API_KEY
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [step, setStep] = useState<'email' | 'kite' | 'check_email'>('email')
+  const [error, setError] = useState('')
+
+  // Step 1 — validate email exists in our beta list
+  async function handleEmailSubmit() {
+    if (!email || !email.includes('@')) {
+      setError('Please enter a valid email address')
+      return
+    }
+    setLoading(true)
+    setError('')
+
+    const { data, error: dbError } = await supabase
+      .from('beta_users')
+      .select('email')
+      .eq('email', email.toLowerCase().trim())
+      .single()
+
+    if (dbError || !data) {
+      setError('This email is not on our beta list. Please contact Manish to get access.')
+      setLoading(false)
+      return
+    }
+
+    setStep('kite')
+    setLoading(false)
+  }
+
+  // Step 2 — redirect to Kite OAuth
+  function handleKiteConnect() {
+    if (!KITE_API_KEY) {
+      setError('Configuration error. Please contact support.')
+      return
+    }
+    const kiteLoginUrl =
+      `https://kite.zerodha.com/connect/login?api_key=${KITE_API_KEY}&v=3&state=${encodeURIComponent(email)}`
+    window.location.href = kiteLoginUrl
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+
+        {/* Logo + Header */}
+        <div className="text-center mb-10">
+          <h1 className="text-3xl font-bold text-white tracking-tight">
+            Greek<span className="text-blue-400">Nova</span>
+          </h1>
+          <p className="text-gray-400 mt-2 text-sm">
+            F&O Analytics Platform — Beta Access
+          </p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-xl">
+
+          {/* Step 1 — Email */}
+          {step === 'email' && (
+            <>
+              <h2 className="text-white text-lg font-semibold mb-1">
+                Welcome to GreekNova Beta
+              </h2>
+              <p className="text-gray-400 text-sm mb-6">
+                Enter your email to check if you're on the beta list.
+              </p>
+
+              <label className="text-gray-400 text-xs uppercase tracking-wider mb-1 block">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleEmailSubmit()}
+                placeholder="you@example.com"
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 mb-4"
+              />
+
+              {error && (
+                <p className="text-red-400 text-sm mb-4">{error}</p>
+              )}
+
+              <button
+                onClick={handleEmailSubmit}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition disabled:opacity-50"
+              >
+                {loading ? 'Checking...' : 'Continue'}
+              </button>
+            </>
+          )}
+
+          {/* Step 2 — Connect Kite */}
+          {step === 'kite' && (
+            <>
+              <h2 className="text-white text-lg font-semibold mb-1">
+                Connect your Kite Account
+              </h2>
+              <p className="text-gray-400 text-sm mb-6">
+                GreekNova uses your personal Zerodha Kite Connect API to fetch market data. 
+                Your data stays yours — we never share or redistribute it.
+              </p>
+
+              <div className="bg-gray-800 rounded-lg p-4 mb-6 text-sm text-gray-300 space-y-2">
+                <p>✓ Logged in as <span className="text-white font-medium">{email}</span></p>
+                <p>✓ Kite Connect API subscription required (₹500/month from Zerodha)</p>
+                <p>✓ Your data is fetched directly from your account</p>
+              </div>
+
+              {error && (
+                <p className="text-red-400 text-sm mb-4">{error}</p>
+              )}
+
+              <button
+                onClick={handleKiteConnect}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition mb-3"
+              >
+                Connect with Kite →
+              </button>
+
+              <button
+                onClick={() => { setStep('email'); setError('') }}
+                className="w-full text-gray-500 hover:text-gray-300 text-sm py-2 transition"
+              >
+                ← Use a different email
+              </button>
+            </>
+          )}
+
+        </div>
+
+        {/* Footer disclaimer */}
+        <p className="text-center text-gray-600 text-xs mt-6 px-4">
+          GreekNova is an analytics tool, not an investment adviser. 
+          Data is sourced from your personal Zerodha Kite Connect subscription.
+          Nothing on this platform constitutes investment advice.
+        </p>
+
+      </div>
+    </div>
+  )
+}

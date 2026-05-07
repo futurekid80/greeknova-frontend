@@ -37,7 +37,7 @@ function CallbackHandler() {
         localStorage.removeItem('greeknova_pending_email')
         localStorage.setItem('greeknova_user', JSON.stringify({ email, kite_user_id }))
 
-        router.push('/dashboard?kite=connected')
+        router.push('/')
 
       } catch (error) {
         console.error('Callback error:', error)

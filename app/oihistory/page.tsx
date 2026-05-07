@@ -6,6 +6,16 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContaine
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const STOCKS = [
+  'RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BHARTIARTL',
+  'KOTAKBANK','LT','AXISBANK','ASIANPAINT','MARUTI','TITAN','SUNPHARMA','ULTRACEMCO',
+  'BAJFINANCE','WIPRO','HCLTECH','TATACONSUM','TATASTEEL','ADANIENT','POWERGRID','NTPC',
+  'ONGC','JSWSTEEL','COALINDIA','BAJAJFINSV','TECHM','APOLLOHOSP','BAJAJ-AUTO','BPCL',
+  'BRITANNIA','CIPLA','DRREDDY','EICHERMOT','GRASIM','HEROMOTOCO','HINDALCO','HDFCLIFE',
+  'INDUSINDBK','JIOFIN','M&M','NESTLEIND','SBILIFE','SHRIRAMFIN','TRENT','ADANIPORTS',
+  'BANKBARODA','BEL','CANBK','CHOLAFIN','DLF','GAIL','HAVELLS','HAL','INDIGO','PFC',
+  'RECLTD','SAIL','TATAPOWER','VEDL',
+]
 
 function fmtOI(n: number) {
   const abs = Math.abs(n)
@@ -70,6 +80,8 @@ export default function OIHistory() {
   useEffect(() => { setDateA(''); setDateB(''); setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, dateA, dateB, expiry])
 
+  const isStock = STOCKS.includes(symbol)
+
   // Chart data — top 20 strikes by total absolute change
   const chartData = data?.rows
     .map(r => ({
@@ -104,14 +116,22 @@ export default function OIHistory() {
           </button>
         </div>
 
-        {/* Index selector */}
-        <div className="flex gap-2 mb-4">
+        {/* Symbol selector */}
+        <div className="flex flex-wrap gap-2 mb-4 items-center">
           {INDICES.map(idx => (
             <button key={idx} onClick={() => setSymbol(idx)}
               className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${symbol === idx ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {idx}
             </button>
           ))}
+          <select
+            value={isStock ? symbol : ''}
+            onChange={e => e.target.value && setSymbol(e.target.value)}
+            className={`rounded-xl text-sm font-bold border transition-all px-4 py-2.5 focus:outline-none focus:border-white
+              ${isStock ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+            <option value="">Stocks ▾</option>
+            {STOCKS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
 
         {/* Controls */}

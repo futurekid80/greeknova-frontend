@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Pages that don't require login
 const PUBLIC_PATHS = [
   '/login',
   '/auth/callback',
@@ -11,11 +10,11 @@ const PUBLIC_PATHS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths through
+  // Allow public paths
   const isPublic = PUBLIC_PATHS.some(path => pathname.startsWith(path))
   if (isPublic) return NextResponse.next()
 
-  // Allow static files and API routes through
+  // Allow static files
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
@@ -25,11 +24,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for Supabase session cookie
-  const supabaseCookie = request.cookies.get('sb-ovadytserwakjdiefehn-auth-token')
+  // Check for our auth cookie
+  const greetnovaUser = request.cookies.get('greeknova_user')
 
-  if (!supabaseCookie) {
-    // Not logged in — redirect to login
+  if (!greetnovaUser) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
@@ -39,7 +37,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }

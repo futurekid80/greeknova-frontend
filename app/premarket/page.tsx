@@ -70,21 +70,21 @@ export default function PreMarket() {
       const indices = mpData.symbols?.filter((s: any) => s.is_index) || []
       const expiryToday = mpData.symbols?.filter((s: any) => s.days_to_expiry <= 1) || []
       const topConfluence = confData.signals?.slice(0, 8) || []
-      const allSymbols = mpData.symbols || []
-const pulseItems2 = pulseData.items || []
-let bullish = 0, bearish = 0, neutral = 0
-pulseItems2.forEach((s: any) => {
-  if (s.price_chg_pct > 0 && s.oi_chg_pct > 0) bullish++
-  else if (s.price_chg_pct < 0 && s.oi_chg_pct > 0) bearish++
-  else neutral++
-})
+
+      // Market breadth from OI Pulse (all 66 stocks)
+      const pulseItems = pulseData.items || []
+      let bullish = 0, bearish = 0, neutral = 0
+      pulseItems.forEach((s: any) => {
+        if (s.price_chg_pct > 0 && s.oi_chg_pct > 0) bullish++
+        else if (s.price_chg_pct < 0 && s.oi_chg_pct > 0) bearish++
+        else neutral++
+      })
+
       const maxPainFar = mpData.symbols
         ?.filter((s: any) => !s.is_index && Math.abs(s.dist_from_mp) > 2)
         ?.sort((a: any, b: any) => Math.abs(b.dist_from_mp) - Math.abs(a.dist_from_mp))
         ?.slice(0, 6) || []
 
-      // OI Pulse movers
-      const pulseItems = pulseData.items || []
       const topOIBuildup = pulseItems
         .filter((i: any) => i.signal === 'LONG_BUILDUP' || i.signal === 'SHORT_BUILDUP')
         .sort((a: any, b: any) => Math.abs(b.oi_chg_pct) - Math.abs(a.oi_chg_pct))
@@ -98,7 +98,12 @@ pulseItems2.forEach((s: any) => {
         .sort((a: any, b: any) => Math.abs(b.oi_chg_pct) - Math.abs(a.oi_chg_pct))
         .slice(0, 6)
 
-      setData({ indices, topConfluence, expiryToday, marketBreadth: { bullish, bearish, neutral, total: allSymbols.length }, maxPainFar, topOIBuildup, topOIUnwinding, topShortBuildup, timestamp: mpData.timestamp })
+      setData({
+        indices, topConfluence, expiryToday,
+        marketBreadth: { bullish, bearish, neutral, total: pulseItems.length },
+        maxPainFar, topOIBuildup, topOIUnwinding, topShortBuildup,
+        timestamp: mpData.timestamp
+      })
       if (mpData.timestamp) setLastUpdate(toIST(mpData.timestamp))
     } catch (e) { console.error(e) }
     setLoading(false)
@@ -124,7 +129,6 @@ pulseItems2.forEach((s: any) => {
       <Navbar active="/premarket" />
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header */}
         <div className="flex items-end justify-between mb-6">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">Pre-Market Setup</h1>
@@ -150,7 +154,6 @@ pulseItems2.forEach((s: any) => {
           </div>
         </div>
 
-        {/* Expiry Alert */}
         {data?.expiryToday && data.expiryToday.length > 0 && (
           <div className="bg-red-950/30 border border-red-800/50 rounded-xl p-4 mb-6 flex items-start gap-3">
             <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0"/>
@@ -162,13 +165,12 @@ pulseItems2.forEach((s: any) => {
           </div>
         )}
 
-        {/* Market Breadth — full width */}
         {data?.marketBreadth && (
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-6">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-bold text-white">Market Breadth</h3>
-                <p className="text-xs text-gray-500">{data.marketBreadth.total} F&O symbols · PCR-based sentiment</p>
+                <p className="text-xs text-gray-500">{data.marketBreadth.total} F&O symbols · OI signal based</p>
               </div>
               <div className="flex items-center gap-4 text-xs">
                 <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"/><span className="text-emerald-400 font-bold">{data.marketBreadth.bullish} Bullish</span></span>
@@ -193,9 +195,7 @@ pulseItems2.forEach((s: any) => {
           </div>
         )}
 
-        {/* Row 1 — Index levels + Top Confluence */}
         <div className="grid grid-cols-3 gap-6 mb-6">
-          {/* Index levels */}
           <div>
             <h2 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-cyan-400"/>Index Key Levels</h2>
             <div className="space-y-3">
@@ -221,7 +221,6 @@ pulseItems2.forEach((s: any) => {
             </div>
           </div>
 
-          {/* Top Confluence */}
           <div>
             <h2 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-400"/>Top Confluence Signals</h2>
             <div className="space-y-2">
@@ -253,12 +252,11 @@ pulseItems2.forEach((s: any) => {
             </div>
           </div>
 
-          {/* Far from Max Pain */}
           <div>
             <h2 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-violet-400"/>Far from Max Pain (&gt;2%)</h2>
             <div className="space-y-2">
               {loading ? [1,2,3,4,5].map(i => <div key={i} className="h-12 bg-gray-900/30 border border-gray-800 rounded-lg animate-pulse"/>) :
-                data?.maxPainFar.map((s: any) => (
+                data?.maxPainFar.length ? data.maxPainFar.map((s: any) => (
                   <a href={`/stock/${s.symbol}`} key={s.symbol}
                     className={`flex items-center justify-between rounded-xl border px-3 py-2.5 hover:border-gray-600 transition-all ${s.direction === 'ABOVE' ? 'bg-orange-950/10 border-orange-900/30' : 'bg-blue-950/10 border-blue-900/30'}`}>
                     <div>
@@ -274,19 +272,18 @@ pulseItems2.forEach((s: any) => {
                       </p>
                     </div>
                   </a>
-                ))
+                )) : (
+                  <div className="text-xs text-gray-600 text-center py-8">All stocks within 2% of Max Pain — market is well pinned</div>
+                )
               }
             </div>
           </div>
         </div>
 
-        {/* Row 2 — OI Movers */}
         <div className="grid grid-cols-2 gap-6">
-          {/* Top OI Buildup */}
           <div>
             <h2 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-              <TrendingUp size={14} className="text-emerald-400"/>
-              Top OI Buildup — Long & Short
+              <TrendingUp size={14} className="text-emerald-400"/>Top OI Buildup — Long & Short
             </h2>
             <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden">
               <table className="w-full text-xs">
@@ -302,20 +299,10 @@ pulseItems2.forEach((s: any) => {
                   {loading ? [1,2,3,4,5,6].map(i => <tr key={i}><td colSpan={4} className="px-4 py-3"><div className="h-4 bg-gray-800 rounded animate-pulse"/></td></tr>) :
                     data?.topOIBuildup.map((item: any) => (
                       <tr key={item.symbol} className={`border-b border-gray-800/50 hover:bg-gray-800/20 ${signalBg[item.signal] || ''}`}>
-                        <td className="px-4 py-2.5">
-                          <a href={`/stock/${item.symbol}`} className="font-bold text-white hover:text-emerald-400 transition-colors">{item.symbol}</a>
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <span className={`font-bold text-xs ${signalColors[item.signal] || 'text-gray-400'}`}>
-                            {item.label}
-                          </span>
-                        </td>
-                        <td className={`px-4 py-2.5 text-right font-bold ${item.oi_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {item.oi_chg_pct >= 0 ? '+' : ''}{item.oi_chg_pct?.toFixed(2)}%
-                        </td>
-                        <td className={`px-4 py-2.5 text-right font-bold ${item.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {item.price_chg_pct >= 0 ? '+' : ''}{item.price_chg_pct?.toFixed(2)}%
-                        </td>
+                        <td className="px-4 py-2.5"><a href={`/stock/${item.symbol}`} className="font-bold text-white hover:text-emerald-400 transition-colors">{item.symbol}</a></td>
+                        <td className="px-4 py-2.5 text-right"><span className={`font-bold text-xs ${signalColors[item.signal] || 'text-gray-400'}`}>{item.label}</span></td>
+                        <td className={`px-4 py-2.5 text-right font-bold ${item.oi_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{item.oi_chg_pct >= 0 ? '+' : ''}{item.oi_chg_pct?.toFixed(2)}%</td>
+                        <td className={`px-4 py-2.5 text-right font-bold ${item.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{item.price_chg_pct >= 0 ? '+' : ''}{item.price_chg_pct?.toFixed(2)}%</td>
                       </tr>
                     ))
                   }
@@ -324,11 +311,9 @@ pulseItems2.forEach((s: any) => {
             </div>
           </div>
 
-          {/* Top OI Unwinding / Covering */}
           <div>
             <h2 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-              <TrendingDown size={14} className="text-orange-400"/>
-              Top OI Unwinding & Covering
+              <TrendingDown size={14} className="text-orange-400"/>Top OI Unwinding & Covering
             </h2>
             <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden">
               <table className="w-full text-xs">
@@ -344,20 +329,10 @@ pulseItems2.forEach((s: any) => {
                   {loading ? [1,2,3,4,5,6].map(i => <tr key={i}><td colSpan={4} className="px-4 py-3"><div className="h-4 bg-gray-800 rounded animate-pulse"/></td></tr>) :
                     data?.topOIUnwinding.length ? data.topOIUnwinding.map((item: any) => (
                       <tr key={item.symbol} className={`border-b border-gray-800/50 hover:bg-gray-800/20 ${signalBg[item.signal] || ''}`}>
-                        <td className="px-4 py-2.5">
-                          <a href={`/stock/${item.symbol}`} className="font-bold text-white hover:text-emerald-400 transition-colors">{item.symbol}</a>
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <span className={`font-bold text-xs ${signalColors[item.signal] || 'text-gray-400'}`}>
-                            {item.label}
-                          </span>
-                        </td>
-                        <td className={`px-4 py-2.5 text-right font-bold ${item.oi_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {item.oi_chg_pct >= 0 ? '+' : ''}{item.oi_chg_pct?.toFixed(2)}%
-                        </td>
-                        <td className={`px-4 py-2.5 text-right font-bold ${item.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {item.price_chg_pct >= 0 ? '+' : ''}{item.price_chg_pct?.toFixed(2)}%
-                        </td>
+                        <td className="px-4 py-2.5"><a href={`/stock/${item.symbol}`} className="font-bold text-white hover:text-emerald-400 transition-colors">{item.symbol}</a></td>
+                        <td className="px-4 py-2.5 text-right"><span className={`font-bold text-xs ${signalColors[item.signal] || 'text-gray-400'}`}>{item.label}</span></td>
+                        <td className={`px-4 py-2.5 text-right font-bold ${item.oi_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{item.oi_chg_pct >= 0 ? '+' : ''}{item.oi_chg_pct?.toFixed(2)}%</td>
+                        <td className={`px-4 py-2.5 text-right font-bold ${item.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{item.price_chg_pct >= 0 ? '+' : ''}{item.price_chg_pct?.toFixed(2)}%</td>
                       </tr>
                     )) : (
                       <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-600">No unwinding signals right now</td></tr>
@@ -369,7 +344,6 @@ pulseItems2.forEach((s: any) => {
           </div>
         </div>
 
-        {/* Quick Links */}
         <div className="mt-6 grid grid-cols-5 gap-3">
           {[
             { href: '/oipulse', label: 'OI Pulse', icon: '📡', desc: 'All signals live' },

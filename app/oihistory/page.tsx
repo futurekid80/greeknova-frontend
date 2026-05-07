@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid, Legend, Cell } from 'recharts'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
@@ -37,13 +37,14 @@ interface Row {
 interface Data {
   symbol: string; date_a: string; date_b: string
   expiry: string; expiries: string[]; dates: string[]; rows: Row[]
+  cmp?: number; atm_strike?: number
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, atm }: any) => {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 shadow-xl text-xs">
-      <p className="text-white font-bold mb-2">Strike: {Number(label).toLocaleString()}</p>
+      <p className="text-white font-bold mb-1">Strike: {Number(label).toLocaleString()}{label === atm ? ' ⭐ ATM' : ''}</p>
       {payload.map((p: any) => (
         <p key={p.name} style={{ color: p.color }}>{p.name}: {fmtOI(p.value)}</p>
       ))}
@@ -81,6 +82,7 @@ export default function OIHistory() {
   useEffect(() => { fetchData() }, [symbol, dateA, dateB, expiry])
 
   const isStock = STOCKS.includes(symbol)
+  const atm = data?.atm_strike
 
   // Chart data — top 20 strikes by total absolute change
   const chartData = data?.rows
@@ -88,6 +90,7 @@ export default function OIHistory() {
       strike: r.strike,
       'CE Change': r.ce_chg,
       'PE Change': r.pe_chg,
+      isATM: r.strike === atm,
     }))
     .sort((a, b) => Math.abs(b['CE Change'] + b['PE Change']) - Math.abs(a['CE Change'] + a['PE Change']))
     .slice(0, 20)
@@ -110,10 +113,20 @@ export default function OIHistory() {
             <h1 className="text-3xl font-black tracking-tight mb-1">Historical OI Comparison</h1>
             <p className="text-gray-500 text-sm">Compare OI buildup vs unwinding between any two trading days</p>
           </div>
-          <button onClick={fetchData} disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all disabled:opacity-50">
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            {/* CMP Badge */}
+            {data?.cmp && (
+              <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-800/50 rounded-xl px-4 py-2">
+                <span className="text-xs text-gray-500">CMP</span>
+                <span className="text-lg font-black text-amber-400">₹{data.cmp.toLocaleString()}</span>
+                {atm && <span className="text-xs text-gray-500">ATM <span className="text-amber-300 font-bold">{atm.toLocaleString()}</span></span>}
+              </div>
+            )}
+            <button onClick={fetchData} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all disabled:opacity-50">
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />Refresh
+            </button>
+          </div>
         </div>
 
         {/* Symbol selector */}
@@ -136,7 +149,6 @@ export default function OIHistory() {
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-4 mb-6">
-          {/* Date A */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">Compare</span>
             <select value={dateA} onChange={e => setDateA(e.target.value)}
@@ -145,14 +157,12 @@ export default function OIHistory() {
             </select>
           </div>
           <span className="text-gray-600 text-sm">vs</span>
-          {/* Date B */}
           <div className="flex items-center gap-2">
             <select value={dateB} onChange={e => setDateB(e.target.value)}
               className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
               {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
             </select>
           </div>
-          {/* Expiry */}
           {data?.expiries && data.expiries.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Expiry:</span>
@@ -162,7 +172,6 @@ export default function OIHistory() {
               </select>
             </div>
           )}
-          {/* View toggle */}
           <div className="flex items-center gap-1 ml-auto bg-gray-900 border border-gray-800 rounded-lg p-1">
             {(['chart', 'table'] as const).map(v => (
               <button key={v} onClick={() => setView(v)}
@@ -216,7 +225,10 @@ export default function OIHistory() {
 
             {view === 'chart' ? (
               <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-6 mb-6">
-                <h2 className="text-base font-bold text-white mb-1">OI Change by Strike</h2>
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-base font-bold text-white">OI Change by Strike</h2>
+                  {atm && <span className="text-xs text-amber-400 bg-amber-950/30 border border-amber-800/40 px-2 py-1 rounded-lg">⭐ ATM = {atm.toLocaleString()}</span>}
+                </div>
                 <p className="text-xs text-gray-500 mb-5">
                   {fmtDate(dateA)} vs {fmtDate(dateB)} · Top 20 strikes · Positive = buildup · Negative = unwinding
                 </p>
@@ -224,14 +236,25 @@ export default function OIHistory() {
                   <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
                     <XAxis dataKey="strike" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false}
-                      tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                      tickFormatter={v => {
+                        const label = v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)
+                        return v === atm ? `⭐${label}` : label
+                      }} />
                     <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false}
                       tickFormatter={v => fmtOI(v)} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                    <Tooltip content={<CustomTooltip atm={atm} />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                     <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                     <ReferenceLine y={0} stroke="#374151" />
-                    <Bar dataKey="CE Change" name="CE Change" fill="#ef4444" opacity={0.85} radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="PE Change" name="PE Change" fill="#10b981" opacity={0.85} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="CE Change" name="CE Change" radius={[3, 3, 0, 0]}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={index} fill={entry.isATM ? '#f59e0b' : '#ef4444'} opacity={entry.isATM ? 1 : 0.85} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="PE Change" name="PE Change" radius={[3, 3, 0, 0]}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={index} fill={entry.isATM ? '#f59e0b' : '#10b981'} opacity={entry.isATM ? 1 : 0.85} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -251,24 +274,32 @@ export default function OIHistory() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.rows.map(row => (
-                      <tr key={row.strike} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
-                        <td className="py-2 px-4 text-center font-bold text-amber-400">{row.strike.toLocaleString()}</td>
-                        <td className="py-2 px-3 text-right text-gray-300">{fmtOI(row.ce_a)}</td>
-                        <td className="py-2 px-3 text-right text-gray-500">{fmtOI(row.ce_b)}</td>
-                        <td className={`py-2 px-3 text-right font-semibold ${row.ce_chg > 0 ? 'text-red-400' : row.ce_chg < 0 ? 'text-orange-400' : 'text-gray-600'}`}>
-                          {row.ce_chg > 0 ? '+' : ''}{fmtOI(row.ce_chg)}
-                        </td>
-                        <td className="py-2 px-3 text-right text-gray-300">{fmtOI(row.pe_a)}</td>
-                        <td className="py-2 px-3 text-right text-gray-500">{fmtOI(row.pe_b)}</td>
-                        <td className={`py-2 px-3 text-right font-semibold ${row.pe_chg > 0 ? 'text-emerald-400' : row.pe_chg < 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
-                          {row.pe_chg > 0 ? '+' : ''}{fmtOI(row.pe_chg)}
-                        </td>
-                        <td className={`py-2 px-3 text-right font-bold ${row.net_chg > 0 ? 'text-emerald-400' : row.net_chg < 0 ? 'text-red-400' : 'text-gray-600'}`}>
-                          {row.net_chg > 0 ? '🐂' : row.net_chg < 0 ? '🐻' : '—'}
-                        </td>
-                      </tr>
-                    ))}
+                    {data.rows.map(row => {
+                      const isATM = row.strike === atm
+                      return (
+                        <tr key={row.strike} className={`border-b border-gray-800/50 transition-colors ${isATM ? 'bg-amber-950/20 border-amber-800/30' : 'hover:bg-gray-800/20'}`}>
+                          <td className="py-2 px-4 text-center font-bold">
+                            <span className={isATM ? 'text-amber-400' : 'text-amber-400/70'}>
+                              {isATM && '⭐ '}{row.strike.toLocaleString()}
+                              {isATM && <span className="ml-1 text-xs text-amber-500/70 font-normal">ATM</span>}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-right text-gray-300">{fmtOI(row.ce_a)}</td>
+                          <td className="py-2 px-3 text-right text-gray-500">{fmtOI(row.ce_b)}</td>
+                          <td className={`py-2 px-3 text-right font-semibold ${row.ce_chg > 0 ? 'text-red-400' : row.ce_chg < 0 ? 'text-orange-400' : 'text-gray-600'}`}>
+                            {row.ce_chg > 0 ? '+' : ''}{fmtOI(row.ce_chg)}
+                          </td>
+                          <td className="py-2 px-3 text-right text-gray-300">{fmtOI(row.pe_a)}</td>
+                          <td className="py-2 px-3 text-right text-gray-500">{fmtOI(row.pe_b)}</td>
+                          <td className={`py-2 px-3 text-right font-semibold ${row.pe_chg > 0 ? 'text-emerald-400' : row.pe_chg < 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
+                            {row.pe_chg > 0 ? '+' : ''}{fmtOI(row.pe_chg)}
+                          </td>
+                          <td className={`py-2 px-3 text-right font-bold ${row.net_chg > 0 ? 'text-emerald-400' : row.net_chg < 0 ? 'text-red-400' : 'text-gray-600'}`}>
+                            {row.net_chg > 0 ? '🐂' : row.net_chg < 0 ? '🐻' : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

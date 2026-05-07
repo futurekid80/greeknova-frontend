@@ -453,7 +453,7 @@ export default function Dashboard() {
         const seen = new Set()
         cmpData?.forEach((c:any) => { if (!seen.has(c.symbol)) { cmpMap[c.symbol] = c.cmp; seen.add(c.symbol) } })
         setCmps(cmpMap)
-        c// Breadth from OI Pulse (all 66 stocks, signal-based)
+        // Breadth from OI Pulse (all 66 stocks, signal-based)
         try {
           const pulseRes = await fetch('https://greeknova-backend-production.up.railway.app/oi-pulse')
           const pulseJson = await pulseRes.json()

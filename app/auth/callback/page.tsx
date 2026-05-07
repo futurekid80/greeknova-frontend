@@ -35,7 +35,8 @@ function CallbackHandler() {
         const { kite_user_id } = await response.json()
 
         localStorage.removeItem('greeknova_pending_email')
-        localStorage.setItem('greeknova_user', JSON.stringify({ email, kite_user_id }))
+        // Set cookie so middleware can read it
+document.cookie = `greeknova_user=${encodeURIComponent(JSON.stringify({ email, kite_user_id }))}; path=/; max-age=86400; SameSite=Lax`
 
         router.push('/')
 

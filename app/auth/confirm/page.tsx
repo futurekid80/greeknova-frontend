@@ -9,14 +9,29 @@ export default function ConfirmPage() {
 
   useEffect(() => {
     async function handleConfirm() {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
+      // Give Supabase time to process the hash fragment
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
       const { data: { session } } = await supabase.auth.getSession()
 
       if (session) {
         router.push('/')
       } else {
-        router.push('/login?error=link_expired')
+        // Listen for auth state change
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          (event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+              subscription.unsubscribe()
+              router.push('/')
+            }
+          }
+        )
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          subscription.unsubscribe()
+          router.push('/login?error=link_expired')
+        }, 10000)
       }
     }
 

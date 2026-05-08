@@ -13,6 +13,13 @@ interface ConfluenceSignal {
   dist_ce: number; dist_pe: number; is_index: boolean
 }
 
+interface MomentumSignal {
+  symbol: string; cmp: number; price_chg_pct: number
+  direction: string; pcr: number
+  oi_confirms: boolean; vol_confirms: boolean
+  conviction: number; is_index: boolean
+}
+
 const SIGNAL_COLORS: Record<string, string> = {
   CALL_WRITING: 'text-red-400',
   PUT_WRITING: 'text-emerald-400',
@@ -51,8 +58,24 @@ function StrengthMeter({ count }: { count: number }) {
   )
 }
 
+function ConvictionDots({ count }: { count: number }) {
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className={`w-2 h-2 rounded-full ${i <= count ? (count >= 3 ? 'bg-orange-400' : 'bg-amber-400') : 'bg-gray-800'}`} />
+      ))}
+      <span className="text-xs text-gray-500 ml-1">{count}/4 conviction</span>
+    </div>
+  )
+}
+
 export default function Confluence() {
-  const [data, setData] = useState<{ total: number; signals: ConfluenceSignal[]; timestamp: string } | null>(null)
+  const [data, setData] = useState<{
+    total: number
+    signals: ConfluenceSignal[]
+    timestamp: string
+    momentum?: { total: number; signals: MomentumSignal[] }
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [biasFilter, setBiasFilter] = useState<'all' | 'BEARISH' | 'BULLISH' | 'MIXED'>('all')
   const [lastUpdate, setLastUpdate] = useState('')
@@ -78,6 +101,7 @@ export default function Confluence() {
   const bullish = data?.signals.filter(s => s.bias === 'BULLISH').length || 0
   const mixed = data?.signals.filter(s => s.bias === 'MIXED').length || 0
   const strong = data?.signals.filter(s => s.signal_count >= 3).length || 0
+  const momentum = data?.momentum?.signals || []
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -126,6 +150,92 @@ export default function Confluence() {
           </div>
         </div>
 
+        {/* Momentum Scanner Section */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-xl font-black text-white">⚡ Momentum Scanner</h2>
+            <span className="text-xs px-2 py-1 bg-amber-950/50 text-amber-400 border border-amber-800/50 rounded-lg">
+              Price + OI + Volume aligned
+            </span>
+            {momentum.length > 0 && (
+              <span className="text-xs px-2 py-1 bg-orange-950/50 text-orange-400 border border-orange-800/50 rounded-lg">
+                {momentum.length} active
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Stocks showing strong directional price moves (&gt;1% in last 25 mins) with confirming OI and volume. Best for catching 3-7% intraday moves early.
+          </p>
+
+          {loading ? (
+            <div className="grid grid-cols-3 gap-3">
+              {[1,2,3].map(i => <div key={i} className="h-32 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>)}
+            </div>
+          ) : momentum.length > 0 ? (
+            <div className="grid grid-cols-3 gap-3">
+              {momentum.map(sig => {
+                const isBull = sig.direction === 'BULLISH'
+                return (
+                  <a href={`/stock/${sig.symbol}`} key={sig.symbol}
+                    className={`block rounded-xl border p-4 hover:border-gray-600 transition-all ${
+                      isBull ? 'bg-emerald-950/10 border-emerald-900/40' : 'bg-red-950/10 border-red-900/40'
+                    }`}>
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-base font-black text-white">{sig.symbol}</span>
+                          {sig.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">INDEX</span>}
+                          {sig.conviction >= 3 && <span className="text-xs px-1.5 py-0.5 bg-orange-950 text-orange-400 border border-orange-800/50 rounded-md">🔥</span>}
+                        </div>
+                        <span className="text-sm text-amber-400 font-bold">₹{sig.cmp.toLocaleString()}</span>
+                      </div>
+                      <div className={`text-right`}>
+                        <p className={`text-2xl font-black ${isBull ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {sig.price_chg_pct > 0 ? '+' : ''}{sig.price_chg_pct}%
+                        </p>
+                        <p className="text-xs text-gray-500">~25 min move</p>
+                      </div>
+                    </div>
+
+                    <div className="mb-3">
+                      <ConvictionDots count={sig.conviction} />
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md bg-gray-800 border border-gray-700 ${isBull ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {isBull ? '↑ BULLISH MOVE' : '↓ BEARISH MOVE'}
+                      </span>
+                      {sig.oi_confirms && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-gray-800 border border-gray-700 text-cyan-400">
+                          OI Confirms
+                        </span>
+                      )}
+                      {sig.vol_confirms && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-gray-800 border border-gray-700 text-violet-400">
+                          Vol Confirms
+                        </span>
+                      )}
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-gray-800 border border-gray-700 text-gray-400">
+                        PCR {sig.pcr}
+                      </span>
+                    </div>
+                  </a>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-8 border border-gray-800/50 rounded-2xl text-center">
+              <div>
+                <p className="text-gray-500 text-sm mb-1">No momentum signals right now</p>
+                <p className="text-gray-600 text-xs">Appears when stocks move &gt;1% with confirming OI — most active between 10 AM–2 PM IST</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-gray-800 mb-8"/>
+
         {/* How it works */}
         <div className="bg-gray-900/20 border border-gray-800/50 rounded-xl p-4 mb-6">
           <div className="flex items-center gap-6 text-xs text-gray-500">
@@ -145,7 +255,7 @@ export default function Confluence() {
           {(['all', 'BEARISH', 'BULLISH', 'MIXED'] as const).map(b => (
             <button key={b} onClick={() => setBiasFilter(b)}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${biasFilter === b
-                ? b === 'BEARISH' ? 'bg-red-950/60 text-red-400 border-red-800' 
+                ? b === 'BEARISH' ? 'bg-red-950/60 text-red-400 border-red-800'
                   : b === 'BULLISH' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
                   : b === 'MIXED' ? 'bg-amber-950/60 text-amber-400 border-amber-800'
                   : 'bg-white text-gray-900 border-white'
@@ -167,11 +277,9 @@ export default function Confluence() {
               return (
                 <a href={`/stock/${sig.symbol}`} key={sig.symbol}
                   className={`block rounded-xl border p-5 hover:border-gray-600 transition-all ${
-                    isBearish ? 'bg-red-950/10 border-red-900/40' 
+                    isBearish ? 'bg-red-950/10 border-red-900/40'
                     : isBullish ? 'bg-emerald-950/10 border-emerald-900/40'
                     : 'bg-amber-950/10 border-amber-900/40'}`}>
-
-                  {/* Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
@@ -191,18 +299,12 @@ export default function Confluence() {
                       <p className="text-xs text-gray-600">PCR</p>
                     </div>
                   </div>
-
-                  {/* Signal strength meter */}
                   <div className="mb-4">
                     <StrengthMeter count={sig.signal_count} />
                   </div>
-
-                  {/* Active signals */}
                   <div className="flex flex-wrap gap-1.5 mb-4">
                     {sig.active_signals.map((s, i) => <SignalBadge key={i} label={s} />)}
                   </div>
-
-                  {/* Walls */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-red-950/20 border border-red-900/30 rounded-lg p-2">
                       <p className="text-xs text-gray-600">CE Wall <span className="text-red-400">{sig.dist_ce}% away</span></p>
@@ -213,7 +315,6 @@ export default function Confluence() {
                       <p className="text-sm font-bold text-emerald-400">{sig.pe_wall.toLocaleString()}</p>
                     </div>
                   </div>
-
                   <p className="text-xs text-gray-600 mt-3 text-right">Click for full analysis →</p>
                 </a>
               )

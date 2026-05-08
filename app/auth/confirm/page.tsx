@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Suspense } from 'react'
@@ -8,6 +8,7 @@ import { Suspense } from 'react'
 function ConfirmHandler() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [status, setStatus] = useState('Starting...')
 
   useEffect(() => {
     async function handleConfirm() {
@@ -15,42 +16,50 @@ function ConfirmHandler() {
       const token_hash = searchParams.get('token_hash')
       const type = searchParams.get('type')
 
-      console.log('Confirm params:', { code, token_hash, type })
+      setStatus(`Params: code=${code ? 'YES' : 'NO'} token_hash=${token_hash ? 'YES' : 'NO'} type=${type}`)
+
+      await new Promise(r => setTimeout(r, 3000))
 
       try {
         if (code) {
-          // PKCE flow — exchange code for session
+          setStatus('Exchanging code...')
           const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-          console.log('Exchange result:', data, error)
+          setStatus(`Exchange: ${error ? error.message : 'SUCCESS user=' + data.session?.user?.email}`)
+          await new Promise(r => setTimeout(r, 3000))
           if (error) throw error
           router.push('/')
           return
         }
 
         if (token_hash && type) {
-          // Token hash flow
+          setStatus('Verifying token...')
           const { data, error } = await supabase.auth.verifyOtp({
             token_hash,
             type: type as any
           })
-          console.log('Verify result:', data, error)
+          setStatus(`Verify: ${error ? error.message : 'SUCCESS user=' + data.session?.user?.email}`)
+          await new Promise(r => setTimeout(r, 3000))
           if (error) throw error
           router.push('/')
           return
         }
 
-        // Try getting existing session
+        setStatus('No code or token found — checking session...')
+        await new Promise(r => setTimeout(r, 3000))
         const { data: { session } } = await supabase.auth.getSession()
+        setStatus(`Session: ${session ? 'FOUND user=' + session.user.email : 'NOT FOUND'}`)
+        await new Promise(r => setTimeout(r, 3000))
+
         if (session) {
           router.push('/')
           return
         }
 
-        // Nothing worked
         router.push('/login?error=link_expired')
 
-      } catch (error) {
-        console.error('Confirm error:', error)
+      } catch (error: any) {
+        setStatus(`ERROR: ${error.message}`)
+        await new Promise(r => setTimeout(r, 5000))
         router.push('/login?error=auth_failed')
       }
     }
@@ -60,13 +69,13 @@ function ConfirmHandler() {
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="text-center">
+      <div className="text-center max-w-lg px-4">
         <div className="text-4xl mb-4">✨</div>
-        <div className="text-white text-lg font-semibold mb-2">
+        <div className="text-white text-lg font-semibold mb-4">
           Logging you in...
         </div>
-        <div className="text-gray-400 text-sm">
-          Please wait, do not close this tab.
+        <div className="text-yellow-400 text-sm font-mono bg-gray-900 p-4 rounded-xl border border-gray-700">
+          {status}
         </div>
       </div>
     </div>

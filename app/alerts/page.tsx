@@ -105,8 +105,22 @@ export default function Alerts() {
     }, 4 * 60 * 1000)
 
     const handleSWMessage = (e: MessageEvent) => {
-      if (e.data.type === 'PLAY_SOUND') playAlertSound(e.data.alert)
+  if (e.data.type === 'PLAY_SOUND') {
+    // Only play sound during market hours (9:15 AM - 3:30 PM IST)
+    const now = new Date()
+    const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+    const hours = ist.getHours()
+    const minutes = ist.getMinutes()
+    const totalMinutes = hours * 60 + minutes
+    const marketOpen = 9 * 60 + 15   // 9:15 AM
+    const marketClose = 15 * 60 + 30  // 3:30 PM
+    const isWeekday = ist.getDay() >= 1 && ist.getDay() <= 5
+    
+    if (isWeekday && totalMinutes >= marketOpen && totalMinutes <= marketClose) {
+      playAlertSound(e.data.alert)
     }
+  }
+}
     navigator.serviceWorker.addEventListener('message', handleSWMessage)
 
     navigator.serviceWorker.ready.then(reg => {

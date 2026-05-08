@@ -491,7 +491,7 @@ useEffect(() => {
     { name:'Call Writing', icon:'↓', iconBg:'bg-red-950/60 border-red-900/40', text:'text-red-400', desc:'Ceiling erected. Distribution likely.' },
     { name:'IV Squeeze', icon:'⚡', iconBg:'bg-amber-950/60 border-amber-900/40', text:'text-amber-400', desc:'Coiling energy. Big move incoming.' },
     { name:'Battleground', icon:'⚔', iconBg:'bg-violet-950/60 border-violet-900/40', text:'text-violet-400', desc:'Aggressive two-way writing. Pin risk high.' },
-  ]
+  ]}
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">

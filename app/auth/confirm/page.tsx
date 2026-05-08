@@ -9,30 +9,27 @@ export default function ConfirmPage() {
 
   useEffect(() => {
     async function handleConfirm() {
-      // Give Supabase time to process the hash fragment
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // PKCE flow — Supabase handles token exchange automatically
+      // Just need to check session after a short delay
+      let attempts = 0
+      
+      const check = async () => {
+        attempts++
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session) {
+          router.push('/')
+          return
+        }
 
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (session) {
-        router.push('/')
-      } else {
-        // Listen for auth state change
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (event, session) => {
-            if (event === 'SIGNED_IN' && session) {
-              subscription.unsubscribe()
-              router.push('/')
-            }
-          }
-        )
-
-        // Timeout after 10 seconds
-        setTimeout(() => {
-          subscription.unsubscribe()
+        if (attempts < 10) {
+          setTimeout(check, 1000)
+        } else {
           router.push('/login?error=link_expired')
-        }, 10000)
+        }
       }
+
+      setTimeout(check, 1500)
     }
 
     handleConfirm()

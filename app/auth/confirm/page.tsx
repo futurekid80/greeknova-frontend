@@ -1,39 +1,62 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { Suspense } from 'react'
 
-export default function ConfirmPage() {
+function ConfirmHandler() {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     async function handleConfirm() {
-      // PKCE flow — Supabase handles token exchange automatically
-      // Just need to check session after a short delay
-      let attempts = 0
-      
-      const check = async () => {
-        attempts++
+      const code = searchParams.get('code')
+      const token_hash = searchParams.get('token_hash')
+      const type = searchParams.get('type')
+
+      console.log('Confirm params:', { code, token_hash, type })
+
+      try {
+        if (code) {
+          // PKCE flow — exchange code for session
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+          console.log('Exchange result:', data, error)
+          if (error) throw error
+          router.push('/')
+          return
+        }
+
+        if (token_hash && type) {
+          // Token hash flow
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash,
+            type: type as any
+          })
+          console.log('Verify result:', data, error)
+          if (error) throw error
+          router.push('/')
+          return
+        }
+
+        // Try getting existing session
         const { data: { session } } = await supabase.auth.getSession()
-        
         if (session) {
           router.push('/')
           return
         }
 
-        if (attempts < 10) {
-          setTimeout(check, 1000)
-        } else {
-          router.push('/login?error=link_expired')
-        }
-      }
+        // Nothing worked
+        router.push('/login?error=link_expired')
 
-      setTimeout(check, 1500)
+      } catch (error) {
+        console.error('Confirm error:', error)
+        router.push('/login?error=auth_failed')
+      }
     }
 
     handleConfirm()
-  }, [router])
+  }, [router, searchParams])
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -47,5 +70,17 @@ export default function ConfirmPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ConfirmPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    }>
+      <ConfirmHandler />
+    </Suspense>
   )
 }

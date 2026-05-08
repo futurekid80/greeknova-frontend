@@ -41,8 +41,8 @@ export default function LoginPage() {
   }
 
   async function handleOtpSubmit() {
-    if (!otp || otp.length < 6) {
-      setError('Please enter the 6-digit code from your email')
+    if (!otp || otp.length < 4) {
+      setError('Please enter the code from your email')
       return
     }
     setLoading(true)
@@ -53,7 +53,7 @@ export default function LoginPage() {
       type: 'email'
     })
     if (verifyError) {
-      setError('Invalid or expired code. Please try again.')
+      setError('Invalid or expired code. Please request a new one.')
       setLoading(false)
       return
     }
@@ -107,25 +107,24 @@ export default function LoginPage() {
                 Check your email
               </h2>
               <p className="text-gray-400 text-sm mb-2">
-                We sent a 6-digit code to:
+                We sent a login code to:
               </p>
               <p className="text-blue-400 font-medium text-sm mb-6">{email}</p>
               <label className="text-gray-400 text-xs uppercase tracking-wider mb-1 block">
-                Enter 6-digit code
+                Enter code from email
               </label>
               <input
                 type="text"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(e) => setOtp(e.target.value.replace(/\s/g, '').replace(/\D/g, ''))}
                 onKeyDown={(e) => e.key === 'Enter' && handleOtpSubmit()}
-                placeholder="123456"
-                maxLength={6}
+                placeholder="Enter code"
                 className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 mb-4 text-center tracking-[0.5em] text-lg font-bold"
               />
               {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
               <button
                 onClick={handleOtpSubmit}
-                disabled={loading || otp.length < 6}
+                disabled={loading || otp.length < 4}
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition disabled:opacity-50"
               >
                 {loading ? 'Verifying...' : 'Login →'}
@@ -134,7 +133,7 @@ export default function LoginPage() {
                 onClick={() => { setStep('email'); setOtp(''); setError('') }}
                 className="w-full text-gray-500 hover:text-gray-300 text-sm py-2 mt-2 transition"
               >
-                ← Use a different email
+                ← Request a new code
               </button>
             </div>
           )}

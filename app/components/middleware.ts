@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 
 const PUBLIC_PATHS = [
   '/login',
+  '/auth/confirm',
   '/auth/callback',
   '/disclaimer',
 ]
@@ -10,11 +11,9 @@ const PUBLIC_PATHS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths
   const isPublic = PUBLIC_PATHS.some(path => pathname.startsWith(path))
   if (isPublic) return NextResponse.next()
 
-  // Allow static files
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
@@ -24,10 +23,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for our auth cookie
-  const greetnovaUser = request.cookies.get('greeknova_user')
+  // Check Supabase session cookie
+  const supabaseSession = request.cookies.get(
+    'sb-ovadytserwakjdiefehn-auth-token'
+  )
 
-  if (!greetnovaUser) {
+  if (!supabaseSession) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)

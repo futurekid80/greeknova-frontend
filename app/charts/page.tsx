@@ -121,15 +121,23 @@ export default function Charts() {
           </button>
         </div>
 
-        {/* Index selector */}
-        <div className="flex gap-2 mb-6">
-          {INDICES.map(idx => (
-            <button key={idx} onClick={() => setSymbol(idx)}
-              className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${symbol === idx ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-600 hover:text-white'}`}>
-              {idx}
-            </button>
-          ))}
-        </div>
+       {/* Symbol selector */}
+<div className="flex flex-wrap gap-2 mb-6 items-center">
+  {INDICES.map(idx => (
+    <button key={idx} onClick={() => setSymbol(idx)}
+      className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${symbol === idx ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-600 hover:text-white'}`}>
+      {idx}
+    </button>
+  ))}
+  <select
+    value={STOCKS.includes(symbol) ? symbol : ''}
+    onChange={e => e.target.value && setSymbol(e.target.value)}
+    className={`rounded-xl text-sm font-bold border transition-all px-4 py-2.5 focus:outline-none focus:border-white
+      ${STOCKS.includes(symbol) ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+    <option value="">Stocks ▾</option>
+    {STOCKS.map(s => <option key={s} value={s}>{s}</option>)}
+  </select>
+</div>
 
         {/* Stats row */}
         <div className="grid grid-cols-4 gap-3 mb-6">

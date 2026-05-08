@@ -571,8 +571,13 @@ useEffect(() => {
         {loading ? (
           <div className="grid grid-cols-3 gap-4">{[1,2,3].map(i=><div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4"><div className="flex justify-between"><div className="h-5 w-24 bg-gray-800 rounded"/><div className="h-6 w-20 bg-gray-800 rounded-full"/></div><div className="grid grid-cols-3 gap-2">{[1,2,3].map(j=><div key={j} className="h-16 bg-gray-800 rounded-xl"/>)}</div><div className="h-1.5 bg-gray-800 rounded-full"/><div className="flex gap-2"><div className="flex-1 h-8 bg-gray-800 rounded-lg"/><div className="flex-1 h-8 bg-gray-800 rounded-lg"/></div></div>)}</div>
         ) : analyses.length > 0 ? (
-          <div className="grid grid-cols-3 gap-4">{analyses.map(a=><IndexCard key={a.symbol} a={a}/>)}</div>
-        ) : (
+          <div className="grid grid-cols-3 gap-4">
+  {analyses.map(a => (
+    <div key={a.symbol} onClick={() => setSearchedSymbol(a.symbol)} className="cursor-pointer">
+      <IndexCard a={a}/>
+    </div>
+  ))}
+</div>
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mb-4"><Database size={28} className="text-gray-700"/></div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">Waiting for market data</h3>

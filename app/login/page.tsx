@@ -35,6 +35,7 @@ export default function LoginPage() {
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: email.toLowerCase().trim(),
       options: {
+        shouldCreateUser: false,
         emailRedirectTo: 'https://greeknova-frontend.vercel.app/auth/confirm'
       }
     })
@@ -110,7 +111,7 @@ export default function LoginPage() {
                 </p>
                 <p className="text-blue-400 font-medium mb-6">{email}</p>
                 <p className="text-gray-500 text-xs">
-                  Click the link in the email to access GreekNova. 
+                  Click the link in the email to access GreekNova.
                   The link expires in 1 hour.
                 </p>
                 <button

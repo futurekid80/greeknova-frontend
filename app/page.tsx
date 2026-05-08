@@ -61,11 +61,14 @@ function IndexCard({ a }: { a: IndexAnalysis }) {
   const bull = a.posture==='BULLISH', bear = a.posture==='BEARISH'
   const ceP = Math.round((a.totalCEOI/(a.totalCEOI+a.totalPEOI))*100)
   return (
-    <div className="relative rounded-2xl border border-gray-800 bg-gray-900/40 p-5 overflow-hidden hover:border-gray-700 transition-all duration-300">
+    <div className="relative rounded-2xl border border-gray-800 bg-gray-900/40 p-5 overflow-hidden hover:border-emerald-700/50 hover:bg-gray-900/60 transition-all duration-300 cursor-pointer">
       <div className={`absolute -top-8 -right-8 w-32 h-32 rounded-full blur-2xl opacity-15 ${bull?'bg-emerald-500':bear?'bg-red-500':'bg-amber-500'}`}/>
       <div className="relative z-10">
         <div className="flex items-start justify-between mb-5">
-          <div><h3 className="text-base font-bold text-white tracking-wide">{a.symbol}</h3><p className="text-xs text-gray-600 mt-0.5">Index Options</p></div>
+          <div>
+            <h3 className="text-base font-bold text-white tracking-wide">{a.symbol}</h3>
+            <p className="text-xs text-gray-600 mt-0.5">Index Options · Click for details</p>
+          </div>
           <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${bull?'bg-emerald-950/80 text-emerald-400 border-emerald-800/60':bear?'bg-red-950/80 text-red-400 border-red-800/60':'bg-amber-950/80 text-amber-400 border-amber-800/60'}`}>
             {bull?<TrendingUp size={11}/>:bear?<TrendingDown size={11}/>:<Minus size={11}/>}{a.posture}
           </span>
@@ -79,15 +82,25 @@ function IndexCard({ a }: { a: IndexAnalysis }) {
           ))}
         </div>
         <div className="mb-3.5">
-          <div className="flex justify-between text-xs mb-1.5"><span className="text-red-400 font-medium">CE {ceP}%</span><span className="text-gray-500 text-xs">OI Split</span><span className="text-emerald-400 font-medium">PE {100-ceP}%</span></div>
+          <div className="flex justify-between text-xs mb-1.5">
+            <span className="text-red-400 font-medium">CE {ceP}%</span>
+            <span className="text-gray-500 text-xs">OI Split</span>
+            <span className="text-emerald-400 font-medium">PE {100-ceP}%</span>
+          </div>
           <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden flex">
             <div className="bg-red-500/80 h-full rounded-l-full transition-all duration-700" style={{width:`${ceP}%`}}/>
             <div className="bg-emerald-500/80 h-full rounded-r-full transition-all duration-700" style={{width:`${100-ceP}%`}}/>
           </div>
         </div>
         <div className="flex gap-2">
-          <div className="flex-1 flex items-center justify-between bg-red-950/20 border border-red-900/30 rounded-lg px-3 py-2"><span className="text-xs text-gray-500">CE Wall</span><span className="text-xs font-bold text-red-400">{a.topCEStrike.toLocaleString()}</span></div>
-          <div className="flex-1 flex items-center justify-between bg-emerald-950/20 border border-emerald-900/30 rounded-lg px-3 py-2"><span className="text-xs text-gray-500">PE Wall</span><span className="text-xs font-bold text-emerald-400">{a.topPEStrike.toLocaleString()}</span></div>
+          <div className="flex-1 flex items-center justify-between bg-red-950/20 border border-red-900/30 rounded-lg px-3 py-2">
+            <span className="text-xs text-gray-500">CE Wall</span>
+            <span className="text-xs font-bold text-red-400">{a.topCEStrike.toLocaleString()}</span>
+          </div>
+          <div className="flex-1 flex items-center justify-between bg-emerald-950/20 border border-emerald-900/30 rounded-lg px-3 py-2">
+            <span className="text-xs text-gray-500">PE Wall</span>
+            <span className="text-xs font-bold text-emerald-400">{a.topPEStrike.toLocaleString()}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -128,7 +141,6 @@ function ExpiryCountdown() {
   )
 }
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
 function Section({ title, icon, color, children, defaultOpen = true }: { title: string; icon: string; color: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -145,7 +157,6 @@ function Section({ title, icon, color, children, defaultOpen = true }: { title: 
   )
 }
 
-// ─── Stock Command Centre ─────────────────────────────────────────────────────
 function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () => void }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -162,28 +173,21 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
           fetch(`${API}/volume-spikes?threshold=20`),
         ])
         const [pulse, mp, oi, uoa, vol] = await Promise.all([pulseRes.json(), mpRes.json(), oiRes.json(), uoaRes.json(), volRes.json()])
-
         const pulseItem = pulse.items?.find((i: any) => i.symbol === symbol)
         const mpItem = mp.symbols?.find((i: any) => i.symbol === symbol)
         const uoaItems = uoa.signals?.filter((i: any) => i.symbol === symbol) || []
         const volItems = vol.spikes?.filter((i: any) => i.symbol === symbol) || []
-
         const rows = oi.rows || []
         const totalCE = rows.reduce((s: number, r: any) => s + (r.ce_a || 0), 0)
         const totalPE = rows.reduce((s: number, r: any) => s + (r.pe_a || 0), 0)
         const pcr = totalCE > 0 ? Math.round((totalPE / totalCE) * 100) / 100 : null
-
-        // Top 5 CE and PE strikes by OI
         const topCEStrikes = [...rows].sort((a: any, b: any) => b.ce_a - a.ce_a).slice(0, 5)
         const topPEStrikes = [...rows].sort((a: any, b: any) => b.pe_a - a.pe_a).slice(0, 5)
-
-        // OI change summary
         const totalCEBuilt = rows.filter((r: any) => r.ce_chg > 0).reduce((s: number, r: any) => s + r.ce_chg, 0)
         const totalPEBuilt = rows.filter((r: any) => r.pe_chg > 0).reduce((s: number, r: any) => s + r.pe_chg, 0)
         const totalCEUnwound = rows.filter((r: any) => r.ce_chg < 0).reduce((s: number, r: any) => s + r.ce_chg, 0)
         const totalPEUnwound = rows.filter((r: any) => r.pe_chg < 0).reduce((s: number, r: any) => s + r.pe_chg, 0)
         const bullish = totalPEBuilt + totalCEUnwound > totalCEBuilt + totalPEUnwound
-
         setData({ pulseItem, mpItem, oi, pcr, topCEStrikes, topPEStrikes, uoaItems, volItems, totalCEBuilt, totalPEBuilt, totalCEUnwound, totalPEUnwound, bullish, rows })
       } catch (e) { console.error(e) }
       setLoading(false)
@@ -201,7 +205,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
 
   return (
     <div className="bg-gray-900/60 border border-gray-700 rounded-2xl mb-8 overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/80">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-black text-white">{symbol}</h2>
@@ -220,13 +223,13 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
           <button onClick={onClose} className="text-gray-600 hover:text-white transition-colors p-1"><X size={18}/></button>
         </div>
       </div>
-
       {loading ? (
-        <div className="flex items-center justify-center py-16"><RefreshCw size={24} className="text-gray-600 animate-spin"/><span className="ml-3 text-gray-500 text-sm">Loading all data…</span></div>
+        <div className="flex items-center justify-center py-16">
+          <RefreshCw size={24} className="text-gray-600 animate-spin"/>
+          <span className="ml-3 text-gray-500 text-sm">Loading all data…</span>
+        </div>
       ) : (
         <div className="p-5">
-
-          {/* 1. OI Signal — HERO */}
           <Section title="OI Signal — What's happening NOW" icon="⚡" color="text-white" defaultOpen={true}>
             {data?.pulseItem ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -249,7 +252,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
             ) : <p className="text-gray-500 text-sm">No OI signal data available for {symbol}</p>}
           </Section>
 
-          {/* 2. Max Pain */}
           <Section title="Max Pain — Where price is gravitating" icon="🎯" color="text-amber-400" defaultOpen={true}>
             {data?.mpItem ? (
               <div className="grid grid-cols-3 gap-3">
@@ -274,7 +276,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
             ) : <p className="text-gray-500 text-sm">No max pain data available</p>}
           </Section>
 
-          {/* 3. Key Levels */}
           <Section title="Key Levels — Top CE & PE Strikes" icon="🧱" color="text-cyan-400" defaultOpen={true}>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -304,7 +305,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
             </div>
           </Section>
 
-          {/* 4. OI History — Buildup vs Unwinding */}
           <Section title="OI Structure — Buildup vs Unwinding" icon="📊" color="text-violet-400" defaultOpen={true}>
             {data?.rows?.length ? (
               <>
@@ -338,7 +338,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
             ) : <p className="text-gray-500 text-sm">No OI history data available</p>}
           </Section>
 
-          {/* 5. Volume Spikes */}
           <Section title="Volume Spikes" icon="🌊" color="text-blue-400" defaultOpen={false}>
             {data?.volItems?.length ? (
               <div className="space-y-2">
@@ -359,7 +358,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
             ) : <p className="text-gray-500 text-sm">No significant volume spikes for {symbol} right now</p>}
           </Section>
 
-          {/* 6. UOA — Unusual Activity */}
           <Section title="Unusual Options Activity (UOA)" icon="🔍" color="text-yellow-400" defaultOpen={false}>
             {data?.uoaItems?.length ? (
               <div className="space-y-2">
@@ -382,14 +380,12 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
               </div>
             ) : <p className="text-gray-500 text-sm">No unusual activity detected for {symbol} right now</p>}
           </Section>
-
         </div>
       )}
     </div>
   )
 }
 
-// ─── Search Bar ───────────────────────────────────────────────────────────────
 function StockSearch({ onSearch }: { onSearch: (s: string) => void }) {
   const [query, setQuery] = useState('')
   const suggestions = query.length >= 1 ? ALL_SYMBOLS.filter(s => s.startsWith(query.toUpperCase())).slice(0, 8) : []
@@ -425,28 +421,22 @@ function StockSearch({ onSearch }: { onSearch: (s: string) => void }) {
   )
 }
 
-// ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [analyses, setAnalyses] = useState<IndexAnalysis[]>([])
-
-  // Auth check
-  // Auth check
-useEffect(() => {
-  async function checkAuth() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      window.location.href = '/login'
-    }
-  }
-  checkAuth()
-}, [])
   const [cmps, setCmps] = useState<Record<string,number>>({})
   const [breadth, setBreadth] = useState({ bullish: 0, bearish: 0, neutral: 0, total: 0 })
   const [loading, setLoading] = useState(true)
-  const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)
   const [recordCount, setRecordCount] = useState(0)
   const [lastUpdate, setLastUpdate] = useState('')
   const [searchedSymbol, setSearchedSymbol] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) window.location.href = '/login'
+    }
+    checkAuth()
+  }, [])
 
   async function fetchData() {
     setLoading(true)
@@ -465,7 +455,6 @@ useEffect(() => {
         const seen = new Set()
         cmpData?.forEach((c:any) => { if (!seen.has(c.symbol)) { cmpMap[c.symbol] = c.cmp; seen.add(c.symbol) } })
         setCmps(cmpMap)
-        // Breadth from OI Pulse (all 66 stocks, signal-based)
         try {
           const pulseRes = await fetch('https://greeknova-backend-production.up.railway.app/oi-pulse')
           const pulseJson = await pulseRes.json()
@@ -477,21 +466,22 @@ useEffect(() => {
             else neut++
           })
           setBreadth({ bullish: bull, bearish: bear, neutral: neut, total: pulseItems.length })
-        } catch(e) {
-          console.error('Breadth fetch failed:', e)
-        }   }
+        } catch(e) { console.error('Breadth fetch failed:', e) }
+      }
     } catch(e) { console.error(e) }
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() },[])
+  const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)
+
+  useEffect(() => { fetchData() }, [])
 
   const signals = [
     { name:'Put Writing', icon:'↑', iconBg:'bg-emerald-950/60 border-emerald-900/40', text:'text-emerald-400', desc:'Sellers building support. Bullish bias forming.' },
     { name:'Call Writing', icon:'↓', iconBg:'bg-red-950/60 border-red-900/40', text:'text-red-400', desc:'Ceiling erected. Distribution likely.' },
     { name:'IV Squeeze', icon:'⚡', iconBg:'bg-amber-950/60 border-amber-900/40', text:'text-amber-400', desc:'Coiling energy. Big move incoming.' },
     { name:'Battleground', icon:'⚔', iconBg:'bg-violet-950/60 border-violet-900/40', text:'text-violet-400', desc:'Aggressive two-way writing. Pin risk high.' },
-  ]}
+  ]
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -521,19 +511,26 @@ useEffect(() => {
             <p className="text-gray-500 text-sm">Options flow · Greeks decoded · Posture mapped</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2"><Clock size={11}/>{new Date().toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"})}</div>
-            {lastUpdate && <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">📸 {lastUpdate}</div>}
-            <button onClick={toggleAuto} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled?"bg-emerald-950/60 text-emerald-400 border-emerald-800/60":"bg-gray-900/40 text-gray-500 border-gray-800"}`}><div className={`w-1.5 h-1.5 rounded-full ${autoEnabled?"bg-emerald-400 animate-pulse":"bg-gray-600"}`}/>{autoEnabled?countdownStr:"Auto"}</button>
+            <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+              <Clock size={11}/>{new Date().toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kolkata"})}
+            </div>
+            {lastUpdate && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+                📸 {lastUpdate}
+              </div>
+            )}
+            <button onClick={toggleAuto} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled?"bg-emerald-950/60 text-emerald-400 border-emerald-800/60":"bg-gray-900/40 text-gray-500 border-gray-800"}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${autoEnabled?"bg-emerald-400 animate-pulse":"bg-gray-600"}`}/>
+              {autoEnabled?countdownStr:"Auto"}
+            </button>
             <button onClick={fetchData} disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all">
               <RefreshCw size={13} className={loading?'animate-spin':''}/>Refresh
             </button>
           </div>
         </div>
 
-        {/* Search */}
         <StockSearch onSearch={setSearchedSymbol}/>
 
-        {/* Command Centre */}
         {searchedSymbol && <StockCommandCentre symbol={searchedSymbol} onClose={() => setSearchedSymbol(null)}/>}
 
         <div className="grid grid-cols-4 gap-3 mb-8">
@@ -549,7 +546,10 @@ useEffect(() => {
         {breadth.total > 0 && (
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-6">
             <div className="flex items-center justify-between mb-3">
-              <div><h3 className="text-sm font-bold text-white">Market Breadth</h3><p className="text-xs text-gray-500">{breadth.total} F&O symbols · PCR-based sentiment</p></div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Market Breadth</h3>
+                <p className="text-xs text-gray-500">{breadth.total} F&O symbols · PCR-based sentiment</p>
+              </div>
               <div className="flex items-center gap-4 text-xs">
                 <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"/><span className="text-emerald-400 font-bold">{breadth.bullish} Bullish</span></span>
                 <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500"/><span className="text-amber-400 font-bold">{breadth.neutral} Neutral</span></span>
@@ -569,17 +569,29 @@ useEffect(() => {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-3 gap-4">{[1,2,3].map(i=><div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4"><div className="flex justify-between"><div className="h-5 w-24 bg-gray-800 rounded"/><div className="h-6 w-20 bg-gray-800 rounded-full"/></div><div className="grid grid-cols-3 gap-2">{[1,2,3].map(j=><div key={j} className="h-16 bg-gray-800 rounded-xl"/>)}</div><div className="h-1.5 bg-gray-800 rounded-full"/><div className="flex gap-2"><div className="flex-1 h-8 bg-gray-800 rounded-lg"/><div className="flex-1 h-8 bg-gray-800 rounded-lg"/></div></div>)}</div>
+          <div className="grid grid-cols-3 gap-4">
+            {[1,2,3].map(i=>(
+              <div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4">
+                <div className="flex justify-between"><div className="h-5 w-24 bg-gray-800 rounded"/><div className="h-6 w-20 bg-gray-800 rounded-full"/></div>
+                <div className="grid grid-cols-3 gap-2">{[1,2,3].map(j=><div key={j} className="h-16 bg-gray-800 rounded-xl"/>)}</div>
+                <div className="h-1.5 bg-gray-800 rounded-full"/>
+                <div className="flex gap-2"><div className="flex-1 h-8 bg-gray-800 rounded-lg"/><div className="flex-1 h-8 bg-gray-800 rounded-lg"/></div>
+              </div>
+            ))}
+          </div>
         ) : analyses.length > 0 ? (
           <div className="grid grid-cols-3 gap-4">
-  {analyses.map(a => (
-    <div key={a.symbol} onClick={() => setSearchedSymbol(a.symbol)} className="cursor-pointer">
-      <IndexCard a={a}/>
-    </div>
-  ))}
-</div>
+            {analyses.map(a => (
+              <div key={a.symbol} onClick={() => setSearchedSymbol(a.symbol)}>
+                <IndexCard a={a}/>
+              </div>
+            ))}
+          </div>
+        ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mb-4"><Database size={28} className="text-gray-700"/></div>
+            <div className="w-16 h-16 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mb-4">
+              <Database size={28} className="text-gray-700"/>
+            </div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">Waiting for market data</h3>
             <p className="text-sm text-gray-600 max-w-xs">OI capture runs automatically on weekdays 9:15 AM – 3:30 PM IST</p>
           </div>
@@ -587,7 +599,10 @@ useEffect(() => {
 
         <div className="mt-10">
           <div className="flex items-center justify-between mb-4">
-            <div><h2 className="text-xl font-black text-white">Scanner Signals</h2><p className="text-xs text-gray-600 mt-0.5">Powered by options flow intelligence</p></div>
+            <div>
+              <h2 className="text-xl font-black text-white">Scanner Signals</h2>
+              <p className="text-xs text-gray-600 mt-0.5">Powered by options flow intelligence</p>
+            </div>
             <a href="/scanners" className="text-sm font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors">Open Scanners →</a>
           </div>
           <div className="grid grid-cols-4 gap-3">

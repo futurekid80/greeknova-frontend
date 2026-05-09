@@ -48,7 +48,7 @@ export default function OISpikes() {
         // Use NIFTY OI spike date endpoint — reuse existing backend
         const res = await fetch(`${API}/oi-dates/NIFTY`)
         const json = await res.json()
-        const dates: string[] = (json.dates || []).slice(-7).reverse() // last 7 days, newest first
+        const dates: string[] = [...(json.dates || [])].reverse()
         setAvailDates(dates)
         if (dates.length > 0 && !dateRef.current) {
           setDate(dates[0])

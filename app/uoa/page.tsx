@@ -70,7 +70,7 @@ export default function UOA() {
       try {
         const res = await fetch(`${API}/oi-dates/NIFTY`)
         const json = await res.json()
-        const dates: string[] = (json.dates || []).slice(-7).reverse()
+        const dates: string[] = [...(json.dates || [])].reverse()
         setAvailDates(dates)
         if (dates.length > 0 && !dateRef.current) {
           setDate(dates[0])

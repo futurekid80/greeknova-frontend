@@ -3,6 +3,8 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, Activity } from 'lucide-react'
 
+const API = 'https://greeknova-backend-production.up.railway.app'
+
 interface VolumeSpike {
   symbol: string; tradingsymbol: string; strike: number
   option_type: string; old_volume: number; new_volume: number
@@ -12,6 +14,7 @@ interface VolumeSpike {
 interface SpikeData {
   ts_new: string; ts_old: string; threshold: number
   total_spikes: number; spikes: VolumeSpike[]
+  date: string; open_time: string; close_time: string; snapshots: number
 }
 
 const SIGNAL_META: Record<string, { color: string; bg: string; border: string; label: string; desc: string }> = {
@@ -26,12 +29,15 @@ export default function VolumeSpikes() {
   const [threshold, setThreshold] = useState(20)
   const [filter, setFilter] = useState<'all'|'FRESH_BUILD'|'UNWINDING'|'CHURN'>('all')
   const [typeFilter, setTypeFilter] = useState<'all'|'CE'|'PE'>('all')
+  const [date, setDate] = useState<string>('')
+  const [availDates, setAvailDates] = useState<string[]>([])
   const [lastUpdate, setLastUpdate] = useState('')
   const [autoEnabled, setAutoEnabled] = useState(false)
   const [countdown, setCountdown] = useState(300)
   const intervalRef = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const thresholdRef = useRef(20)
+  const dateRef = useRef('')
 
   useEffect(() => {
     try {
@@ -40,17 +46,41 @@ export default function VolumeSpikes() {
     } catch {}
   }, [])
 
+  // ── Fetch available dates ───────────────────────────────────────────────────
+  useEffect(() => {
+    async function loadDates() {
+      try {
+        const res = await fetch(`${API}/oi-dates/NIFTY`)
+        const json = await res.json()
+        const dates: string[] = (json.dates || []).slice(-7).reverse()
+        setAvailDates(dates)
+        if (dates.length > 0 && !dateRef.current) {
+          setDate(dates[0])
+          dateRef.current = dates[0]
+        }
+      } catch (e) { console.error('Failed to load dates', e) }
+    }
+    loadDates()
+  }, [])
+
   const fetchSpikes = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`https://greeknova-backend-production.up.railway.app/volume-spikes?threshold=${thresholdRef.current}`)
+      const res = await fetch(`${API}/volume-spikes?threshold=${thresholdRef.current}${dateRef.current ? '&date=' + dateRef.current : ''}`)
       const json = await res.json()
       setData(json)
-      setLastUpdate(new Date(json.ts_new).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short', timeZone:'UTC' }))
+      if (json.ts_new) {
+        setLastUpdate(new Date(json.ts_new).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short', timeZone:'UTC' }))
+      }
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [])
 
+  function handleDateChange(d: string) {
+    setDate(d)
+    dateRef.current = d
+    fetchSpikes()
+  }
 
   const debounceRef = useRef<NodeJS.Timeout|null>(null)
   function handleThresholdChange(v: number) {
@@ -62,14 +92,12 @@ export default function VolumeSpikes() {
   }
 
   function startAuto() {
-    setAutoEnabled(true)
-    setCountdown(300)
+    setAutoEnabled(true); setCountdown(300)
     if (intervalRef.current) clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
     intervalRef.current = setInterval(() => { fetchSpikes(); setCountdown(300) }, 5*60*1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
   }
-
   function stopAuto() {
     setAutoEnabled(false)
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
@@ -77,8 +105,7 @@ export default function VolumeSpikes() {
   }
 
   useEffect(() => {
-    fetchSpikes()
-    startAuto()
+    fetchSpikes(); startAuto()
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
@@ -107,6 +134,20 @@ export default function VolumeSpikes() {
             <p className="text-gray-500 text-sm">Sudden volume surges · Fresh Build = new positions · Unwinding = exits · Churn = rolling</p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Date picker */}
+            {availDates.length > 0 && (
+              <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2">
+                <span className="text-xs text-gray-500">Date:</span>
+                <select value={date} onChange={e => handleDateChange(e.target.value)}
+                  className="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
+                  {availDates.map(d => (
+                    <option key={d} value={d} className="bg-gray-900">
+                      {new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', weekday: 'short' })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {lastUpdate && <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2"><Clock size={11}/>{lastUpdate}</div>}
             <button onClick={() => autoEnabled ? stopAuto() : startAuto()}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
@@ -153,7 +194,7 @@ export default function VolumeSpikes() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-600">{filtered.length} results</p>
+          <p className="text-xs text-gray-600">{filtered.length} results · {data?.open_time && `${data.open_time} → ${data.close_time} IST · ${data.snapshots} snapshots`}</p>
         </div>
 
         {loading ? (
@@ -202,7 +243,7 @@ export default function VolumeSpikes() {
           <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl">
             <div className="text-5xl mb-4">📊</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">No volume spikes above {threshold}%</h3>
-            <p className="text-sm text-gray-600">Lower the threshold or wait for next capture</p>
+            <p className="text-sm text-gray-600">Lower the threshold or select a different date</p>
           </div>
         )}
       </div>

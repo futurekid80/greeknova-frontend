@@ -3,6 +3,8 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, TrendingUp, TrendingDown, Zap } from 'lucide-react'
 
+const API = 'https://greeknova-backend-production.up.railway.app'
+
 interface Spike {
   symbol: string; tradingsymbol: string; strike: number
   option_type: string; old_oi: number; new_oi: number
@@ -30,6 +32,7 @@ export default function OISpikes() {
   const intervalRef = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const thresholdRef = useRef(5)
+  const dateRef = useRef('')
 
   useEffect(() => {
     try {
@@ -38,17 +41,43 @@ export default function OISpikes() {
     } catch {}
   }, [])
 
+  // ── Fetch available dates from backend ──────────────────────────────────────
+  useEffect(() => {
+    async function loadDates() {
+      try {
+        // Use NIFTY OI spike date endpoint — reuse existing backend
+        const res = await fetch(`${API}/oi-dates/NIFTY`)
+        const json = await res.json()
+        const dates: string[] = [...(json.dates || [])].reverse()
+        setAvailDates(dates)
+        if (dates.length > 0 && !dateRef.current) {
+          setDate(dates[0])
+          dateRef.current = dates[0]
+        }
+      } catch (e) { console.error('Failed to load dates', e) }
+    }
+    loadDates()
+  }, [])
+
   const fetchSpikes = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`https://greeknova-backend-production.up.railway.app/oi-spikes?threshold=${thresholdRef.current}${date ? '&date='+date : ''}`)
+      const res = await fetch(`${API}/oi-spikes?threshold=${thresholdRef.current}${dateRef.current ? '&date=' + dateRef.current : ''}`)
       const json = await res.json()
       setData(json)
-      setLastUpdate(new Date(json.ts_new).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short', timeZone:'UTC' }))
+      if (json.ts_new) {
+        setLastUpdate(new Date(json.ts_new).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }))
+      }
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [])
 
+  // Re-fetch when date changes
+  function handleDateChange(d: string) {
+    setDate(d)
+    dateRef.current = d
+    fetchSpikes()
+  }
 
   const debounceRef = useRef<NodeJS.Timeout|null>(null)
   function handleThresholdChange(v: number) {
@@ -60,14 +89,12 @@ export default function OISpikes() {
   }
 
   function startAuto() {
-    setAutoEnabled(true)
-    setCountdown(300)
+    setAutoEnabled(true); setCountdown(300)
     if (intervalRef.current) clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
     intervalRef.current = setInterval(() => { fetchSpikes(); setCountdown(300) }, 5*60*1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
   }
-
   function stopAuto() {
     setAutoEnabled(false)
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
@@ -104,6 +131,20 @@ export default function OISpikes() {
             <p className="text-gray-500 text-sm">Sudden OI buildups and unwinds · Compares last two snapshots</p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Date picker — always visible once dates loaded */}
+            {availDates.length > 0 && (
+              <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2">
+                <span className="text-xs text-gray-500">Date:</span>
+                <select value={date} onChange={e => handleDateChange(e.target.value)}
+                  className="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
+                  {availDates.map(d => (
+                    <option key={d} value={d} className="bg-gray-900">
+                      {new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', weekday: 'short' })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {lastUpdate && <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2"><Clock size={11}/>{lastUpdate}</div>}
             <button onClick={() => autoEnabled ? stopAuto() : startAuto()}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
@@ -141,22 +182,11 @@ export default function OISpikes() {
                 className="flex-1 accent-amber-400"/>
               <span className="text-lg font-black text-amber-400 min-w-[3rem] text-right">{threshold}%</span>
             </div>
-            {availDates.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Date:</span>
-                <select value={date} onChange={e => setDate(e.target.value)}
-                  className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-500">
-                  {availDates.map(d => <option key={d} value={d}>{new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</option>)}
-                </select>
-              </div>
-            )}
             {data?.open_time && (
-              <div className="text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5">
+              <p className="text-xs text-gray-600 mt-2">
                 Session: {data.open_time} → {data.close_time} IST · {data.snapshots} snapshots
-              </div>
+              </p>
             )}
-            <div className="hidden">
-            </div>
           </div>
         </div>
 
@@ -230,7 +260,7 @@ export default function OISpikes() {
           <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl">
             <div className="text-5xl mb-4">📡</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">No spikes above {threshold}%</h3>
-            <p className="text-sm text-gray-600">Try lowering the threshold or wait for next capture</p>
+            <p className="text-sm text-gray-600">Try lowering the threshold or select a different date</p>
           </div>
         )}
       </div>

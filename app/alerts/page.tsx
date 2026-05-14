@@ -1,6 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock } from 'lucide-react'
 
 function isMarketOpen() {
@@ -14,6 +14,49 @@ function isMarketOpen() {
   return true
 }
 
+// ── Trading terminal beep (Bloomberg-style, clean two-tone) ──────────────────
+function playTerminalBeep(ctx: AudioContext) {
+  const now = ctx.currentTime
+
+  // Primary tone: 880 Hz (A5)
+  const osc1 = ctx.createOscillator()
+  const gain1 = ctx.createGain()
+  osc1.type = 'sine'
+  osc1.frequency.setValueAtTime(880, now)
+  gain1.gain.setValueAtTime(0, now)
+  gain1.gain.linearRampToValueAtTime(0.35, now + 0.01)
+  gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.42)
+  osc1.connect(gain1)
+  gain1.connect(ctx.destination)
+  osc1.start(now)
+  osc1.stop(now + 0.42)
+
+  // Harmony tone: 1108 Hz (C#6) — adds depth
+  const osc2 = ctx.createOscillator()
+  const gain2 = ctx.createGain()
+  osc2.type = 'sine'
+  osc2.frequency.setValueAtTime(1108, now)
+  gain2.gain.setValueAtTime(0, now)
+  gain2.gain.linearRampToValueAtTime(0.18, now + 0.015)
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35)
+  osc2.connect(gain2)
+  gain2.connect(ctx.destination)
+  osc2.start(now + 0.01)
+  osc2.stop(now + 0.35)
+
+  // Subtle click transient for terminal feel
+  const click = ctx.createOscillator()
+  const clickGain = ctx.createGain()
+  click.type = 'sine'
+  click.frequency.setValueAtTime(2400, now)
+  clickGain.gain.setValueAtTime(0.08, now)
+  clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.025)
+  click.connect(clickGain)
+  clickGain.connect(ctx.destination)
+  click.start(now)
+  click.stop(now + 0.025)
+}
+
 export default function Alerts() {
   const [enabled, setEnabled] = useState(false)
   const [permission, setPermission] = useState('default')
@@ -22,7 +65,28 @@ export default function Alerts() {
   const [lastCheck, setLastCheck] = useState('')
   const [alerts, setAlerts] = useState<any[]>([])
   const [marketOpen, setMarketOpen] = useState(false)
+  const audioCtxRef = useRef<AudioContext | null>(null)
 
+  // Get or create AudioContext (must be created after user gesture)
+  const getAudioCtx = useCallback((): AudioContext => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume()
+    }
+    return audioCtxRef.current
+  }, [])
+
+  const playSound = useCallback(() => {
+    try {
+      playTerminalBeep(getAudioCtx())
+    } catch (e) {
+      console.warn('[Alerts] Sound failed:', e)
+    }
+  }, [getAudioCtx])
+
+  // ── Load saved state ────────────────────────────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem('gn_alerts')
     if (saved) setAlerts(JSON.parse(saved))
@@ -32,8 +96,10 @@ export default function Alerts() {
     return () => clearInterval(t)
   }, [])
 
+  // ── Register SW + BroadcastChannel ─────────────────────────────────────────
   useEffect(() => {
     if ('Notification' in window) setPermission(Notification.permission)
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then(reg => {
         setSwReady(true)
@@ -62,7 +128,10 @@ export default function Alerts() {
     const bc = new BroadcastChannel('gn_alerts')
     bc.onmessage = (e) => {
       setAlerts(prev => {
-        const updated = [{ ...e.data, id: Date.now(), receivedAt: new Date().toLocaleTimeString('en-IN') }, ...prev].slice(0, 50)
+        const updated = [
+          { ...e.data, id: Date.now(), receivedAt: new Date().toLocaleTimeString('en-IN') },
+          ...prev
+        ].slice(0, 50)
         localStorage.setItem('gn_alerts', JSON.stringify(updated))
         return updated
       })
@@ -71,42 +140,32 @@ export default function Alerts() {
     return () => bc.close()
   }, [])
 
-  // 🎵 Calm two-tone chime — gentle and pleasant
-  function playAlertSound(type: string = 'spike') {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const now = ctx.currentTime
-      const freqs = type === 'spike' ? [523, 659] : [440, 554] // C5+E5 or A4+C#5
-      freqs.forEach((freq, i) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.type = 'sine'
-        osc.frequency.setValueAtTime(freq, now + i * 0.18)
-        gain.gain.setValueAtTime(0, now + i * 0.18)
-        gain.gain.linearRampToValueAtTime(0.18, now + i * 0.18 + 0.05)
-        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.18 + 0.6)
-        osc.start(now + i * 0.18)
-        osc.stop(now + i * 0.18 + 0.6)
-      })
-    } catch(e) { console.error('Sound failed:', e) }
-  }
-
+  // ── Keep-alive + PLAY_SOUND handler ────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return
+
     const keepAlive = setInterval(async () => {
       try {
         await fetch('/sw-keepalive')
         const reg = await navigator.serviceWorker.ready
         reg.active?.postMessage({ type: 'CHECK_NOW', data: {} })
         setLastCheck(new Date().toLocaleTimeString('en-IN'))
-      } catch(e) {}
+      } catch (e) {}
     }, 4 * 60 * 1000)
 
     const handleSWMessage = (e: MessageEvent) => {
-      if (e.data.type === 'PLAY_SOUND') playAlertSound(e.data.alert)
+      if (e.data.type === 'PLAY_SOUND') {
+        // Only play during market hours
+        const now = new Date()
+        const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+        const total = ist.getHours() * 60 + ist.getMinutes()
+        const isWeekday = ist.getDay() >= 1 && ist.getDay() <= 5
+        if (isWeekday && total >= 555 && total <= 930) { // 9:15–15:30
+          playSound()
+        }
+      }
     }
+
     navigator.serviceWorker.addEventListener('message', handleSWMessage)
 
     navigator.serviceWorker.ready.then(reg => {
@@ -118,9 +177,12 @@ export default function Alerts() {
       clearInterval(keepAlive)
       navigator.serviceWorker.removeEventListener('message', handleSWMessage)
     }
-  }, [enabled])
+  }, [enabled, playSound])
 
+  // ── Alert controls ──────────────────────────────────────────────────────────
   async function enableAlerts() {
+    // Unlock AudioContext on this user gesture
+    getAudioCtx()
     const result = await Notification.requestPermission()
     setPermission(result)
     if (result !== 'granted') return
@@ -173,18 +235,18 @@ export default function Alerts() {
           </div>
           <div className="flex items-center gap-2">
             <div className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border ${marketOpen ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-400' : 'bg-gray-900 border-gray-800 text-gray-500'}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${marketOpen ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
+              <div className={`w-1.5 h-1.5 rounded-full ${marketOpen ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`} />
               {marketOpen ? 'Market Open' : 'Market Closed'}
             </div>
             {lastCheck && (
               <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
-                <Clock size={11}/>Last: {lastCheck}
+                <Clock size={11} />Last: {lastCheck}
               </div>
             )}
             {enabled && (
               <button onClick={checkNow}
                 className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-lg px-3 py-2 transition-all">
-                <RefreshCw size={11}/>Check Now
+                <RefreshCw size={11} />Check Now
               </button>
             )}
           </div>
@@ -195,17 +257,20 @@ export default function Alerts() {
             <div>
               <h2 className="text-lg font-bold text-white mb-1">Alert Engine</h2>
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${enabled && marketOpen ? 'bg-emerald-400 animate-pulse' : enabled ? 'bg-amber-400' : 'bg-gray-600'}`}/>
+                <div className={`w-2 h-2 rounded-full ${enabled && marketOpen ? 'bg-emerald-400 animate-pulse' : enabled ? 'bg-amber-400' : 'bg-gray-600'}`} />
                 <p className="text-sm text-gray-500">{statusText()}</p>
               </div>
             </div>
             <button onClick={enabled ? disableAlerts : enableAlerts}
               disabled={!swReady || permission === 'denied'}
               className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${
-                enabled ? 'bg-red-950/60 text-red-400 border border-red-800/60 hover:bg-red-950'
-                  : !swReady || permission === 'denied' ? 'bg-gray-800 text-gray-600 border border-gray-700 cursor-not-allowed'
-                  : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 hover:bg-emerald-950'}`}>
-              {enabled ? <><BellOff size={16}/>Disable</> : <><Bell size={16}/>Enable Alerts</>}
+                enabled
+                  ? 'bg-red-950/60 text-red-400 border border-red-800/60 hover:bg-red-950'
+                  : !swReady || permission === 'denied'
+                  ? 'bg-gray-800 text-gray-600 border border-gray-700 cursor-not-allowed'
+                  : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 hover:bg-emerald-950'
+              }`}>
+              {enabled ? <><BellOff size={16} />Disable</> : <><Bell size={16} />Enable Alerts</>}
             </button>
           </div>
 
@@ -234,9 +299,10 @@ export default function Alerts() {
                   reg.active?.postMessage({ type: 'UPDATE_THRESHOLD', data: { spikeThreshold: Number(e.target.value) } })
                 })
               }}
-              className="w-32 accent-orange-400"/>
+              className="w-32 accent-orange-400" />
             <span className="text-sm font-black text-orange-400">{spikeThreshold}%</span>
-            <button onClick={() => playAlertSound('spike')}
+            <button
+              onClick={() => { getAudioCtx(); playSound() }}
               className="text-xs text-gray-500 hover:text-white border border-gray-700 hover:border-gray-600 px-3 py-1.5 rounded-lg transition-all ml-2">
               🔔 Preview Sound
             </button>
@@ -250,7 +316,7 @@ export default function Alerts() {
           {alerts.length > 0 && (
             <button onClick={() => { setAlerts([]); localStorage.removeItem('gn_alerts') }}
               className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 transition-colors">
-              <Trash2 size={12}/>Clear all
+              <Trash2 size={12} />Clear all
             </button>
           )}
         </div>
@@ -266,7 +332,11 @@ export default function Alerts() {
                   : 'Market is closed. Alerts will resume automatically at 9:15 AM IST on the next trading day.'
                 : 'Enable alerts to start background monitoring across all signals.'}
             </p>
-            {enabled && marketOpen && <div className="mt-4 flex items-center gap-2 text-xs text-emerald-500"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/>Checking every 5 minutes</div>}
+            {enabled && marketOpen && (
+              <div className="mt-4 flex items-center gap-2 text-xs text-emerald-500">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />Checking every 5 minutes
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -279,7 +349,9 @@ export default function Alerts() {
                     <div>
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="text-base font-black text-white">{alert.symbol}</span>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>{alert.signal?.replace('_', ' ')}</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
+                          {alert.signal?.replace('_', ' ')}
+                        </span>
                       </div>
                       <p className="text-xs text-gray-500">{alert.message || `Signal detected at ${alert.receivedAt}`}</p>
                     </div>

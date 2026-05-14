@@ -34,8 +34,12 @@ function fmtDate(d: string) {
 }
 
 function analyzeIndex(data: OIRecord[], symbol: string): IndexAnalysis | null {
-  const rows = data.filter(d => d.symbol === symbol)
-  if (!rows.length) return null
+  const allRows = data.filter(d => d.symbol === symbol)
+  if (!allRows.length) return null
+  // Filter to nearest expiry only to avoid inflated PCR from monthly hedges
+  const expiries = [...new Set(allRows.map(d => (d as any).expiry).filter(Boolean))].sort()
+  const nearestExpiry = expiries[0]
+  const rows = nearestExpiry ? allRows.filter(d => (d as any).expiry === nearestExpiry) : allRows
   const ce = rows.filter(d => d.option_type === 'CE')
   const pe = rows.filter(d => d.option_type === 'PE')
   const totalCEOI = ce.reduce((s,d) => s+d.oi, 0)

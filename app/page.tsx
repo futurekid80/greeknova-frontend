@@ -445,7 +445,7 @@ export default function Dashboard() {
   async function fetchData() {
     setLoading(true)
     try {
-      const { data:latest } = await supabase.from('oi_snapshots').select('timestamp').order('timestamp',{ascending:false}).limit(1)
+      const { data:latest } = await supabase.from('oi_snapshots').select('timestamp').eq('symbol','NIFTY').gte('timestamp', new Date(Date.now()-2*24*60*60*1000).toISOString().slice(0,10)+'T00:00:00+00:00').lte('timestamp', new Date().toISOString().slice(0,10)+'T10:00:00+00:00').order('timestamp',{ascending:false}).limit(1)
       if(!latest?.length) { setLoading(false); return }
       const ts = latest[0].timestamp
       setLastUpdate(new Date(ts).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }))

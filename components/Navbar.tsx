@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, MessageSquare, X } from 'lucide-react'
+import { ChevronDown, MessageSquare, X, Bell } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -21,15 +21,14 @@ const NAV_GROUPS = [
       { href: '/oihistory',  label: 'OI History' },
       { href: '/oipulse',    label: 'OI Pulse' },
       { href: '/eod',        label: 'EOD Analysis' },
-      { href: '/spikes',     label: 'OI Spikes' },
       { href: '/pcr',        label: 'PCR Trend' },
     ]
   },
   {
     label: 'Greeks',
     links: [
-      { href: '/optionchain',label: 'Option Chain' },
-      { href: '/maxpain',    label: 'Max Pain' },
+      { href: '/optionchain', label: 'Option Chain' },
+      { href: '/maxpain',     label: 'Max Pain' },
     ]
   },
   {
@@ -39,7 +38,7 @@ const NAV_GROUPS = [
       { href: '/confluence', label: 'Confluence' },
       { href: '/rs',         label: 'Rel. Strength' },
       { href: '/uoa',        label: 'UOA' },
-      { href: '/volume',     label: 'Vol Spikes' },
+      { href: '/jungle',     label: '🌿 Options Jungle' },  // replaces OI Spikes + Vol Spikes
     ]
   },
 ]
@@ -77,7 +76,7 @@ function DropdownMenu({ group, active }: { group: typeof NAV_GROUPS[0], active: 
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-3 w-44 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50">
+        <div className="absolute top-full left-0 mt-3 w-48 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50">
           <div className="py-1">
             {group.links.map(({ href, label }) => {
               const isLinkActive = href === '/' ? active === '/' : active.startsWith(href)
@@ -119,13 +118,11 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
   async function handleSubmit() {
     if (!message.trim()) return
     setLoading(true)
-
     await supabase.from('feedback').insert({
       email: email || 'anonymous',
       page: pathname,
       message: message.trim(),
     })
-
     setLoading(false)
     setDone(true)
     setTimeout(() => onClose(), 2000)
@@ -133,29 +130,15 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-white font-bold text-base">Share Feedback</h3>
-            <p className="text-gray-500 text-xs mt-0.5">
-              Page: {pathname}
-            </p>
+            <p className="text-gray-500 text-xs mt-0.5">Page: {pathname}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-600 hover:text-white transition-colors"
-          >
-            <X size={18} />
-          </button>
+          <button onClick={onClose} className="text-gray-600 hover:text-white transition-colors"><X size={18} /></button>
         </div>
-
         {!done ? (
           <>
             <textarea
@@ -165,12 +148,10 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
               rows={5}
               className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 resize-none mb-4 placeholder:text-gray-600"
             />
-
             <button
               onClick={handleSubmit}
               disabled={loading || !message.trim()}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition"
-            >
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition">
               {loading ? 'Sending...' : 'Send Feedback →'}
             </button>
           </>
@@ -183,6 +164,67 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </div>
+  )
+}
+
+// ─── Bell notification badge ──────────────────────────────────────────────────
+// Reads unread count from localStorage('gn_alerts') — written by service worker
+// Clears badge when user visits /alerts
+function BellBadge() {
+  const [unread, setUnread] = useState(0)
+  const pathname = usePathname()
+
+  useEffect(() => {
+    function countUnread() {
+      try {
+        const saved = localStorage.getItem('gn_alerts')
+        if (!saved) { setUnread(0); return }
+        const alerts = JSON.parse(saved)
+        const lastRead = Number(localStorage.getItem('gn_alerts_last_read') || 0)
+        const count = alerts.filter((a: any) => a.id > lastRead).length
+        setUnread(count)
+      } catch { setUnread(0) }
+    }
+
+    countUnread()
+
+    // If on alerts page, mark all as read
+    if (pathname === '/alerts') {
+      try {
+        const saved = localStorage.getItem('gn_alerts')
+        if (saved) {
+          const alerts = JSON.parse(saved)
+          if (alerts.length > 0) {
+            localStorage.setItem('gn_alerts_last_read', String(alerts[0].id))
+          }
+        }
+      } catch {}
+      setUnread(0)
+    }
+
+    // Listen for new alerts via BroadcastChannel
+    const bc = new BroadcastChannel('gn_alerts')
+    bc.onmessage = () => {
+      if (pathname !== '/alerts') {
+        setUnread(p => p + 1)
+      }
+    }
+
+    // Poll every 30 seconds as backup
+    const t = setInterval(countUnread, 30000)
+
+    return () => { bc.close(); clearInterval(t) }
+  }, [pathname])
+
+  return (
+    <Link href="/alerts" className="relative flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800 transition-colors">
+      <Bell size={16} className={unread > 0 ? 'text-emerald-400' : 'text-gray-500'} />
+      {unread > 0 && (
+        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center">
+          {unread > 9 ? '9+' : unread}
+        </span>
+      )}
+    </Link>
   )
 }
 
@@ -219,12 +261,12 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
             ))}
           </div>
 
-          {/* Feedback button — right side */}
-          <div className="ml-auto">
+          {/* Right side — Bell + Feedback */}
+          <div className="ml-auto flex items-center gap-2">
+            <BellBadge />
             <button
               onClick={() => setFeedbackOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-xs font-medium rounded-lg transition-all"
-            >
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-xs font-medium rounded-lg transition-all">
               <MessageSquare size={13} />
               Feedback
             </button>

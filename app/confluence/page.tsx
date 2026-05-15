@@ -164,7 +164,7 @@ export default function Confluence() {
             )}
           </div>
           <p className="text-xs text-gray-500 mb-4">
-            Stocks showing strong directional price moves (&gt;1% in last 25 mins) with confirming OI and volume. Best for catching 3-7% intraday moves early.
+            Stocks showing strong directional price moves (&gt;≥1.5% from market open (9:15 AM)) with confirming OI and volume. Best for catching 3-7% intraday moves early.
           </p>
 
           {loading ? (
@@ -193,7 +193,7 @@ export default function Confluence() {
                         <p className={`text-2xl font-black ${isBull ? 'text-emerald-400' : 'text-red-400'}`}>
                           {sig.price_chg_pct > 0 ? '+' : ''}{sig.price_chg_pct}%
                         </p>
-                        <p className="text-xs text-gray-500">~25 min move</p>
+                        <p className="text-xs text-gray-500">~open to now</p>
                       </div>
                     </div>
 

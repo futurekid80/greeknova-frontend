@@ -520,10 +520,20 @@ export default function Dashboard() {
       setCmps(cmpMap)
 
       // ── Step 3: Fetch OI snapshot data ───────────────────────────────────────
-      const { data, count } = await supabase
-        .from('oi_snapshots')
-        .select('*', { count: 'exact' })
-        .eq('timestamp', ts)
+      // FIXED — paginated fetch gets all 66 stocks
+let data: any[] = []
+let count = 0
+for (let offset = 0; offset < 200000; offset += 1000) {
+  const { data: batch, count: batchCount } = await supabase
+    .from('oi_snapshots')
+    .select('*', { count: offset === 0 ? 'exact' : 'planned' })
+    .eq('timestamp', ts)
+    .range(offset, offset + 999)
+  if (!batch?.length) break
+  data = [...data, ...batch]
+  if (offset === 0) count = batchCount || 0
+  if (batch.length < 1000) break
+}
 
       if (data) {
         setRecordCount(count || 0)

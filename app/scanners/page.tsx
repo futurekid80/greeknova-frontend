@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { RefreshCw, TrendingUp, TrendingDown, Clock } from 'lucide-react'
+import { RefreshCw, Clock } from 'lucide-react'
 
 interface StockRow {
   symbol: string; pcr: number; totalCE: number; totalPE: number
@@ -50,61 +50,37 @@ function getSignal(pcr: number, totalCE: number, totalPE: number): string {
   return 'SQUEEZE'
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIX: Unified PCR calculation matching dashboard + stock page methodology:
-// 1. Nearest expiry only (avoids monthly hedge inflation)
-// 2. ATM ±10 strikes only (matches Sensibull methodology)
-// ─────────────────────────────────────────────────────────────────────────────
-function computePCR(
-  rows: any[],
-  symbol: string,
-  cmp: number
-): { pcr: number; totalCE: number; totalPE: number; ceWall: number; peWall: number } {
+// Unified PCR: nearest expiry + ATM ±10 strikes (matches dashboard + stock page)
+function computePCR(rows: any[], symbol: string, cmp: number) {
   const symRows = rows.filter((d: any) => d.symbol === symbol)
-
-  // Step 1: nearest expiry only
   const today = new Date().toISOString().slice(0, 10)
-  const expiries = [...new Set(symRows.map((d: any) => d.expiry).filter((e: any) => e && e >= today))]
-    .sort() as string[]
+  const expiries = ([...new Set(symRows.map((d: any) => d.expiry).filter((e: any) => e && e >= today))] as string[]).sort()
   const nearestExpiry = expiries[0]
   const filtered = nearestExpiry ? symRows.filter((d: any) => d.expiry === nearestExpiry) : symRows
-
   const ce = filtered.filter((d: any) => d.option_type === 'CE')
   const pe = filtered.filter((d: any) => d.option_type === 'PE')
-
-  // CE/PE walls — from ALL filtered strikes (for support/resistance levels)
   const ceWall = [...ce].sort((a: any, b: any) => b.oi - a.oi)[0]?.strike || 0
   const peWall = [...pe].sort((a: any, b: any) => b.oi - a.oi)[0]?.strike || 0
-
-  // Step 2: ATM ±10 strikes for PCR (if CMP available)
-  const strikes = [...new Set(filtered.map((d: any) => d.strike))].sort((a: any, b: any) => a - b) as number[]
-
-  let totalCE: number
-  let totalPE: number
-
+  const strikes = ([...new Set(filtered.map((d: any) => d.strike))] as number[]).sort((a, b) => a - b)
+  let totalCE: number, totalPE: number
   if (cmp > 0 && strikes.length > 0) {
-    const atmStrike = strikes.reduce((a, b) => Math.abs(b - cmp) < Math.abs(a - cmp) ? b : a)
-    const atmIdx = strikes.indexOf(atmStrike)
-    const pcrStrikeSet = new Set(strikes.slice(Math.max(0, atmIdx - 10), atmIdx + 11))
-    totalCE = ce.filter((d: any) => pcrStrikeSet.has(d.strike)).reduce((s: number, d: any) => s + d.oi, 0)
-    totalPE = pe.filter((d: any) => pcrStrikeSet.has(d.strike)).reduce((s: number, d: any) => s + d.oi, 0)
+    const atm = strikes.reduce((a, b) => Math.abs(b - cmp) < Math.abs(a - cmp) ? b : a)
+    const atmIdx = strikes.indexOf(atm)
+    const pcrSet = new Set(strikes.slice(Math.max(0, atmIdx - 10), atmIdx + 11))
+    totalCE = ce.filter((d: any) => pcrSet.has(d.strike)).reduce((s: number, d: any) => s + d.oi, 0)
+    totalPE = pe.filter((d: any) => pcrSet.has(d.strike)).reduce((s: number, d: any) => s + d.oi, 0)
   } else {
-    // Fallback: all strikes if no CMP
     totalCE = ce.reduce((s: number, d: any) => s + d.oi, 0)
     totalPE = pe.reduce((s: number, d: any) => s + d.oi, 0)
   }
-
-  const pcr = totalCE > 0 ? Math.round((totalPE / totalCE) * 100) / 100 : 0
-
-  return { pcr, totalCE, totalPE, ceWall, peWall }
+  return { pcr: totalCE > 0 ? Math.round((totalPE / totalCE) * 100) / 100 : 0, totalCE, totalPE, ceWall, peWall }
 }
 
 function DistanceBar({ cmp, ceWall, peWall }: { cmp: number; ceWall: number; peWall: number }) {
   if (!cmp || !ceWall || !peWall) return null
   const distCE = ceWall > cmp ? ((ceWall - cmp) / cmp * 100) : 0
   const distPE = peWall < cmp ? ((cmp - peWall) / cmp * 100) : 0
-  const totalRange = ceWall - peWall
-  const pos = totalRange > 0 ? ((cmp - peWall) / totalRange * 100) : 50
+  const pos = (ceWall - peWall) > 0 ? ((cmp - peWall) / (ceWall - peWall) * 100) : 50
   return (
     <div className="mt-3 pt-3 border-t border-gray-800/60">
       <div className="flex justify-between text-xs mb-1.5">
@@ -114,8 +90,7 @@ function DistanceBar({ cmp, ceWall, peWall }: { cmp: number; ceWall: number; peW
       </div>
       <div className="relative h-2 bg-gray-800 rounded-full overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/60 via-gray-700/30 to-red-900/60 rounded-full" />
-        <div className="absolute top-0 h-full w-0.5 bg-white rounded-full transition-all duration-500"
-          style={{ left: `${Math.min(95, Math.max(5, pos))}%` }} />
+        <div className="absolute top-0 h-full w-0.5 bg-white rounded-full transition-all duration-500" style={{ left: `${Math.min(95, Math.max(5, pos))}%` }} />
       </div>
       <p className="text-xs text-gray-600 mt-1 text-center">
         {distCE < distPE ? `${distCE.toFixed(1)}% to resistance` : `${distPE.toFixed(1)}% to support`}
@@ -197,45 +172,43 @@ export default function Scanners() {
       const ts = latest[0].timestamp
       setLastUpdate(new Date(ts).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }))
 
-      // FIX: fetch CMP first (needed for ATM calculation)
-      const [{ data }, { data: cmpData }] = await Promise.all([
-        supabase.from('oi_snapshots').select('*').eq('timestamp', ts),
-        supabase.from('cmp_prices').select('*').order('timestamp', { ascending: false }).limit(200)
-      ])
+      // ── FIX: Paginated fetch — Supabase default 1000-row limit was cutting off at ~30 stocks
+      // 66 symbols × ~40 strikes × 2 types × 3 expiries ≈ 15,840 rows needed
+      let data: any[] = []
+      for (let offset = 0; offset < 200000; offset += 1000) {
+        const { data: batch } = await supabase
+          .from('oi_snapshots').select('*').eq('timestamp', ts)
+          .range(offset, offset + 999)
+        if (!batch?.length) break
+        data = [...data, ...batch]
+        if (batch.length < 1000) break
+      }
 
-      if (!data) { setLoading(false); return }
+      // ── FIX: CMP — increased limit to cover all 66 symbols
+      const { data: cmpData } = await supabase
+        .from('cmp_prices').select('*')
+        .order('timestamp', { ascending: false }).limit(500)
 
-      // Build CMP map
+      if (!data.length) { setLoading(false); return }
+
       const cmpMap: Record<string, number> = {}
       if (cmpData) {
         const seen = new Set<string>()
-        cmpData.forEach((c: any) => {
-          if (!seen.has(c.symbol)) { cmpMap[c.symbol] = c.cmp; seen.add(c.symbol) }
-        })
+        cmpData.forEach((c: any) => { if (!seen.has(c.symbol)) { cmpMap[c.symbol] = c.cmp; seen.add(c.symbol) } })
       }
 
       const symbols = [...new Set(data.map((d: any) => d.symbol))] as string[]
       const result: StockRow[] = []
 
       for (const sym of symbols) {
-        // FIX: use unified computePCR with nearest expiry + ATM±10
         const cmp = cmpMap[sym] || 0
         const { pcr, totalCE, totalPE, ceWall, peWall } = computePCR(data, sym, cmp)
-
         if (!totalCE && !totalPE) continue
-
         const isIndex = ['NIFTY', 'BANKNIFTY', 'FINNIFTY'].includes(sym)
         const distToCE = ceWall > cmp && cmp > 0 ? (ceWall - cmp) / cmp * 100 : 0
         const distToPE = peWall < cmp && cmp > 0 ? (cmp - peWall) / cmp * 100 : 0
-
         result.push({
-          symbol: sym,
-          pcr,
-          totalCE,
-          totalPE,
-          ceWall,
-          peWall,
-          isIndex,
+          symbol: sym, pcr, totalCE, totalPE, ceWall, peWall, isIndex,
           cmp: Math.round(cmp * 100) / 100,
           distToCE: Math.round(distToCE * 10) / 10,
           distToPE: Math.round(distToPE * 10) / 10,
@@ -243,7 +216,6 @@ export default function Scanners() {
           strength: Math.abs(pcr - 1) > 0.5 ? 'Strong' : 'Moderate',
         })
       }
-
       if (result.length > 0) setRows(result.sort((a, b) => Math.abs(b.pcr - 1) - Math.abs(a.pcr - 1)))
     } catch (e) { console.error(e) }
     setLoading(false)
@@ -254,21 +226,16 @@ export default function Scanners() {
   const filtered = rows
     .filter(r => tab === 'all' || r.signal === tab)
     .filter(r => filter === 'all' || (filter === 'index' ? r.isIndex : !r.isIndex))
-    .filter(r => {
-      if (structureFilter === 'all') return true
-      const ms = getMarketStructure(r.cmp, r.ceWall, r.peWall)
-      return ms.label === structureFilter
-    })
+    .filter(r => { if (structureFilter === 'all') return true; return getMarketStructure(r.cmp, r.ceWall, r.peWall).label === structureFilter })
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/scanners" />
-
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-end justify-between mb-8">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">Options Scanner</h1>
-            <p className="text-gray-500 text-sm">30 F&O stocks + 3 indices · Live CMP vs OI walls</p>
+            <p className="text-gray-500 text-sm">{rows.length > 0 ? `${rows.length} F&O symbols` : '66 F&O stocks + 3 indices'} · Live CMP vs OI walls</p>
           </div>
           <div className="flex items-center gap-3">
             {lastUpdate && <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2"><Clock size={11}/>{lastUpdate}</div>}
@@ -310,7 +277,7 @@ export default function Scanners() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {['all','index','stocks'].map(f => (
               <button key={f} onClick={() => setFilter(f as any)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${filter === f ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>{f}</button>
@@ -349,18 +316,17 @@ export default function Scanners() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-900/60 border-b border-gray-800">
-                    {['Symbol','Signal','PCR','CMP','CE Wall','→CE%','PE Wall','→PE%','OI Split'].map((h,i)=>(
-                      <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=1||i===8?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5':''}`}>{h}</th>
+                    {['Symbol','Signal','PCR','CMP','CE Wall','→CE%','PE Wall','→PE%','Structure','OI Split'].map((h,i)=>(
+                      <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=1||i===8?'text-left':'text-right'} ${i===0?'pl-5':''}`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((row,i)=>{
-                    const m=META[row.signal]
-                    const ceP=Math.round((row.totalCE/(row.totalCE+row.totalPE))*100)
+                    const m=META[row.signal]; const ceP=Math.round((row.totalCE/(row.totalCE+row.totalPE))*100)
                     return (
                       <tr key={row.symbol} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':'bg-gray-900/20'}`}>
-                        <td className="px-5 py-3.5"><a href={"/stock/" + row.symbol} className="flex items-center gap-2 hover:text-emerald-400 transition-colors"><span className="text-sm font-black text-white hover:text-emerald-400">{row.symbol}</span>{row.isIndex&&<span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}</a></td>
+                        <td className="px-5 py-3.5"><a href={"/stock/"+row.symbol} className="flex items-center gap-2"><span className="text-sm font-black text-white hover:text-emerald-400">{row.symbol}</span>{row.isIndex&&<span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}</a></td>
                         <td className="px-4 py-3.5"><span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>{m.label}</span></td>
                         <td className={`px-4 py-3.5 text-right text-sm font-black ${row.pcr>1?'text-emerald-400':'text-red-400'}`}>{row.pcr.toFixed(2)}</td>
                         <td className="px-4 py-3.5 text-right text-sm font-bold text-amber-400">₹{row.cmp.toLocaleString()}</td>
@@ -368,9 +334,7 @@ export default function Scanners() {
                         <td className="px-4 py-3.5 text-right text-xs text-red-300">{row.distToCE}%</td>
                         <td className="px-4 py-3.5 text-right text-sm font-bold text-emerald-400">{row.peWall.toLocaleString()}</td>
                         <td className="px-4 py-3.5 text-right text-xs text-emerald-300">{row.distToPE}%</td>
-                        <td className="px-4 py-3.5 text-left">
-                          {(() => { const ms = getMarketStructure(row.cmp, row.ceWall, row.peWall); return <span className={`text-xs font-bold ${ms.color}`}>{ms.label}</span> })()}
-                        </td>
+                        <td className="px-4 py-3.5 text-left">{(()=>{const ms=getMarketStructure(row.cmp,row.ceWall,row.peWall);return<span className={`text-xs font-bold ${ms.color}`}>{ms.label}</span>})()}</td>
                         <td className="px-5 py-3.5 text-right text-xs text-gray-500">{ceP}%/{100-ceP}%</td>
                       </tr>
                     )

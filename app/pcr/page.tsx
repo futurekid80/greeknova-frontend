@@ -37,21 +37,30 @@ export default function PCRTrend() {
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState('')
   const [expiries, setExpiries] = useState<string[]>([])
-  const [selectedExpiry, setSelectedExpiry] = useState<string>('all')
+  // FIX: default to empty string; will be set to nearest expiry once fetched
+  const [selectedExpiry, setSelectedExpiry] = useState<string>('')
 
   const fetchExpiries = useCallback(async (sym: string) => {
     try {
       const res = await fetch(`${API}/pcr-expiries/${sym}`)
       const json = await res.json()
-      setExpiries(json.expiries || [])
-      setSelectedExpiry('all')
+      const list: string[] = json.expiries || []
+      setExpiries(list)
+      // FIX: Auto-select nearest expiry (first in sorted list) instead of 'all'
+      // This makes PCR Trend consistent with dashboard and stock page methodology
+      if (list.length > 0) {
+        setSelectedExpiry(list[0])
+      } else {
+        setSelectedExpiry('all')
+      }
     } catch (e) { console.error(e) }
   }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const url = selectedExpiry === 'all'
+      // FIX: only fetch 'all' if truly no expiry available; otherwise always use selected
+      const url = !selectedExpiry || selectedExpiry === 'all'
         ? `${API}/pcr-trend/${symbol}`
         : `${API}/pcr-trend/${symbol}?expiry=${selectedExpiry}`
       const res = await fetch(url)
@@ -62,8 +71,17 @@ export default function PCRTrend() {
     setLoading(false)
   }, [symbol, selectedExpiry])
 
-  useEffect(() => { fetchExpiries(symbol) }, [symbol, fetchExpiries])
-  useEffect(() => { fetchData() }, [fetchData])
+  // When symbol changes, re-fetch expiries (which will auto-select nearest)
+  useEffect(() => {
+    setSelectedExpiry('') // reset while loading new expiries
+    fetchExpiries(symbol)
+  }, [symbol, fetchExpiries])
+
+  // Fetch data whenever expiry is resolved
+  useEffect(() => {
+    if (selectedExpiry !== '') fetchData()
+  }, [fetchData, selectedExpiry])
+
   const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, true)
 
   const latest = data?.points[data.points.length - 1]
@@ -108,6 +126,7 @@ export default function PCRTrend() {
         {expiries.length > 0 && (
           <div className="flex items-center gap-2 mb-6">
             <span className="text-xs text-gray-500 mr-1">Expiry:</span>
+            {/* Keep 'All' as an option but don't default to it */}
             <button
               onClick={() => setSelectedExpiry('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${selectedExpiry === 'all' ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>

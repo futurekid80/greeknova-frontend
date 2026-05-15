@@ -27,14 +27,12 @@ const META: Record<string, { color: string; bg: string; border: string; label: s
   BATTLEGROUND: { color: 'text-violet-400',  bg: 'bg-violet-950/50',  border: 'border-violet-800/50',  label: 'Battleground' },
 }
 
-
 function getMarketStructure(cmp: number, ceWall: number, peWall: number): { label: string; color: string } {
   if (!cmp || !ceWall || !peWall) return { label: 'Insufficient Data', color: 'text-gray-500' }
   const distToCE = ceWall > cmp ? ((ceWall - cmp) / cmp * 100) : 0
   const distToPE = peWall < cmp ? ((cmp - peWall) / cmp * 100) : 0
   const totalRange = ceWall - peWall
   const posInRange = totalRange > 0 ? ((cmp - peWall) / totalRange * 100) : 50
-
   if (distToCE <= 0.5) return { label: 'Breakout Watch', color: 'text-emerald-300' }
   if (distToPE <= 0.5) return { label: 'Breakdown Watch', color: 'text-red-300' }
   if (distToCE <= 2) return { label: 'Resistance Test', color: 'text-red-400' }
@@ -50,6 +48,55 @@ function getSignal(pcr: number, totalCE: number, totalPE: number): string {
   if (pcr < 0.6) return 'CALL_WRITING'
   if (ratio > 0.44 && ratio < 0.56) return 'BATTLEGROUND'
   return 'SQUEEZE'
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX: Unified PCR calculation matching dashboard + stock page methodology:
+// 1. Nearest expiry only (avoids monthly hedge inflation)
+// 2. ATM ±10 strikes only (matches Sensibull methodology)
+// ─────────────────────────────────────────────────────────────────────────────
+function computePCR(
+  rows: any[],
+  symbol: string,
+  cmp: number
+): { pcr: number; totalCE: number; totalPE: number; ceWall: number; peWall: number } {
+  const symRows = rows.filter((d: any) => d.symbol === symbol)
+
+  // Step 1: nearest expiry only
+  const today = new Date().toISOString().slice(0, 10)
+  const expiries = [...new Set(symRows.map((d: any) => d.expiry).filter((e: any) => e && e >= today))]
+    .sort() as string[]
+  const nearestExpiry = expiries[0]
+  const filtered = nearestExpiry ? symRows.filter((d: any) => d.expiry === nearestExpiry) : symRows
+
+  const ce = filtered.filter((d: any) => d.option_type === 'CE')
+  const pe = filtered.filter((d: any) => d.option_type === 'PE')
+
+  // CE/PE walls — from ALL filtered strikes (for support/resistance levels)
+  const ceWall = [...ce].sort((a: any, b: any) => b.oi - a.oi)[0]?.strike || 0
+  const peWall = [...pe].sort((a: any, b: any) => b.oi - a.oi)[0]?.strike || 0
+
+  // Step 2: ATM ±10 strikes for PCR (if CMP available)
+  const strikes = [...new Set(filtered.map((d: any) => d.strike))].sort((a: any, b: any) => a - b) as number[]
+
+  let totalCE: number
+  let totalPE: number
+
+  if (cmp > 0 && strikes.length > 0) {
+    const atmStrike = strikes.reduce((a, b) => Math.abs(b - cmp) < Math.abs(a - cmp) ? b : a)
+    const atmIdx = strikes.indexOf(atmStrike)
+    const pcrStrikeSet = new Set(strikes.slice(Math.max(0, atmIdx - 10), atmIdx + 11))
+    totalCE = ce.filter((d: any) => pcrStrikeSet.has(d.strike)).reduce((s: number, d: any) => s + d.oi, 0)
+    totalPE = pe.filter((d: any) => pcrStrikeSet.has(d.strike)).reduce((s: number, d: any) => s + d.oi, 0)
+  } else {
+    // Fallback: all strikes if no CMP
+    totalCE = ce.reduce((s: number, d: any) => s + d.oi, 0)
+    totalPE = pe.reduce((s: number, d: any) => s + d.oi, 0)
+  }
+
+  const pcr = totalCE > 0 ? Math.round((totalPE / totalCE) * 100) / 100 : 0
+
+  return { pcr, totalCE, totalPE, ceWall, peWall }
 }
 
 function DistanceBar({ cmp, ceWall, peWall }: { cmp: number; ceWall: number; peWall: number }) {
@@ -150,43 +197,45 @@ export default function Scanners() {
       const ts = latest[0].timestamp
       setLastUpdate(new Date(ts).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }))
 
+      // FIX: fetch CMP first (needed for ATM calculation)
       const [{ data }, { data: cmpData }] = await Promise.all([
         supabase.from('oi_snapshots').select('*').eq('timestamp', ts),
-        supabase.from('cmp_prices').select('*').order('timestamp', { ascending: false }).limit(100)
+        supabase.from('cmp_prices').select('*').order('timestamp', { ascending: false }).limit(200)
       ])
 
       if (!data) { setLoading(false); return }
 
-      // Build CMP map from latest prices
+      // Build CMP map
       const cmpMap: Record<string, number> = {}
       if (cmpData) {
-        const seen = new Set()
+        const seen = new Set<string>()
         cmpData.forEach((c: any) => {
           if (!seen.has(c.symbol)) { cmpMap[c.symbol] = c.cmp; seen.add(c.symbol) }
         })
       }
 
-      const symbols = [...new Set(data.map((d: any) => d.symbol))]
+      const symbols = [...new Set(data.map((d: any) => d.symbol))] as string[]
       const result: StockRow[] = []
 
       for (const sym of symbols) {
-        const r = data.filter((d: any) => d.symbol === sym)
-        const ce = r.filter((d: any) => d.option_type === 'CE')
-        const pe = r.filter((d: any) => d.option_type === 'PE')
-        const totalCE = ce.reduce((s: number, d: any) => s + d.oi, 0)
-        const totalPE = pe.reduce((s: number, d: any) => s + d.oi, 0)
+        // FIX: use unified computePCR with nearest expiry + ATM±10
+        const cmp = cmpMap[sym] || 0
+        const { pcr, totalCE, totalPE, ceWall, peWall } = computePCR(data, sym, cmp)
+
         if (!totalCE && !totalPE) continue
-        const pcr = totalCE > 0 ? totalPE / totalCE : 0
-        const ceWall = [...ce].sort((a: any, b: any) => b.oi - a.oi)[0]?.strike || 0
-        const peWall = [...pe].sort((a: any, b: any) => b.oi - a.oi)[0]?.strike || 0
-        const isIndex = ['NIFTY', 'BANKNIFTY', 'FINNIFTY'].includes(sym as string)
-        const cmp = cmpMap[sym as string] || 0
+
+        const isIndex = ['NIFTY', 'BANKNIFTY', 'FINNIFTY'].includes(sym)
         const distToCE = ceWall > cmp && cmp > 0 ? (ceWall - cmp) / cmp * 100 : 0
         const distToPE = peWall < cmp && cmp > 0 ? (cmp - peWall) / cmp * 100 : 0
 
         result.push({
-          symbol: sym as string, pcr: Math.round(pcr * 100) / 100,
-          totalCE, totalPE, ceWall, peWall, isIndex,
+          symbol: sym,
+          pcr,
+          totalCE,
+          totalPE,
+          ceWall,
+          peWall,
+          isIndex,
           cmp: Math.round(cmp * 100) / 100,
           distToCE: Math.round(distToCE * 10) / 10,
           distToPE: Math.round(distToPE * 10) / 10,
@@ -194,13 +243,17 @@ export default function Scanners() {
           strength: Math.abs(pcr - 1) > 0.5 ? 'Strong' : 'Moderate',
         })
       }
+
       if (result.length > 0) setRows(result.sort((a, b) => Math.abs(b.pcr - 1) - Math.abs(a.pcr - 1)))
     } catch (e) { console.error(e) }
     setLoading(false)
   }
 
   useEffect(() => { fetchData() }, [])
-  const filtered = rows.filter(r => tab === 'all' || r.signal === tab).filter(r => filter === 'all' || (filter === 'index' ? r.isIndex : !r.isIndex))
+
+  const filtered = rows
+    .filter(r => tab === 'all' || r.signal === tab)
+    .filter(r => filter === 'all' || (filter === 'index' ? r.isIndex : !r.isIndex))
     .filter(r => {
       if (structureFilter === 'all') return true
       const ms = getMarketStructure(r.cmp, r.ceWall, r.peWall)
@@ -316,9 +369,9 @@ export default function Scanners() {
                         <td className="px-4 py-3.5 text-right text-sm font-bold text-emerald-400">{row.peWall.toLocaleString()}</td>
                         <td className="px-4 py-3.5 text-right text-xs text-emerald-300">{row.distToPE}%</td>
                         <td className="px-4 py-3.5 text-left">
-                        {(() => { const ms = getMarketStructure(row.cmp, row.ceWall, row.peWall); return <span className={`text-xs font-bold ${ms.color}`}>{ms.label}</span> })()}
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-xs text-gray-500">{ceP}%/{100-ceP}%</td>
+                          {(() => { const ms = getMarketStructure(row.cmp, row.ceWall, row.peWall); return <span className={`text-xs font-bold ${ms.color}`}>{ms.label}</span> })()}
+                        </td>
+                        <td className="px-5 py-3.5 text-right text-xs text-gray-500">{ceP}%/{100-ceP}%</td>
                       </tr>
                     )
                   })}

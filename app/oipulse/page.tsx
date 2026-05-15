@@ -82,30 +82,44 @@ function OICard({ item }: { item: Item }) {
 export default function OIPulse() {
   const [data, setData]           = useState<Data | null>(null)
   const [loading, setLoading]     = useState(true)
+  // FIX: filter and sigFilter are now purely frontend — no API param sent
   const [filter, setFilter]       = useState<'all'|'index'|'stocks'>('all')
   const [sigFilter, setSigFilter] = useState<string>('all')
 
+  // FIX: fetch always gets ALL items — no filter param in URL
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res  = await fetch(`${API}/oi-pulse?filter=${filter}`)
+      const res  = await fetch(`${API}/oi-pulse`)
       const json = await res.json()
       setData(json)
     } catch (e) { console.error(e) }
     setLoading(false)
-  }, [filter])
+  }, []) // no dependencies — fetch never changes
 
-  useEffect(() => { fetchData() }, [filter])
+  useEffect(() => { fetchData() }, [fetchData])
   const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5*60*1000, true)
 
   const allItems = data?.items ?? []
+
+  // FIX: All filtering done locally — instant, no API calls on tab switch
+  const tabFiltered = filter === 'all'
+    ? allItems
+    : filter === 'index'
+      ? allItems.filter(i => i.is_index)
+      : allItems.filter(i => !i.is_index)
+
+  const filtered = sigFilter === 'all'
+    ? tabFiltered
+    : tabFiltered.filter(i => i.signal === sigFilter)
+
+  // Counts always from ALL items (not tab-filtered) so summary boxes are consistent
   const counts = {
     LONG_BUILDUP:   allItems.filter(i => i.signal === 'LONG_BUILDUP').length,
     SHORT_BUILDUP:  allItems.filter(i => i.signal === 'SHORT_BUILDUP').length,
     SHORT_COVERING: allItems.filter(i => i.signal === 'SHORT_COVERING').length,
     LONG_UNWINDING: allItems.filter(i => i.signal === 'LONG_UNWINDING').length,
   }
-  const filtered = sigFilter === 'all' ? allItems : allItems.filter(i => i.signal === sigFilter)
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -129,6 +143,7 @@ export default function OIPulse() {
           </div>
         </div>
 
+        {/* Summary boxes — always show counts from all items */}
         {allItems.length > 0 && (
           <div className="grid grid-cols-4 gap-3 mb-6">
             {[
@@ -147,6 +162,7 @@ export default function OIPulse() {
           </div>
         )}
 
+        {/* Tab filter + signal clear */}
         <div className="flex items-center gap-3 mb-6">
           {(['all','index','stocks'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}

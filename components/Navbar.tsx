@@ -24,21 +24,22 @@ const NAV_GROUPS = [
       { href: '/pcr',        label: 'PCR Trend' },
     ]
   },
- {
-  label: 'Greeks',
-  links: [
-    { href: '/optionchain', label: 'Option Chain' },
-    { href: '/maxpain',     label: 'Max Pain' },
-    { href: '/iv',          label: 'IV Analysis' },
-  ]
-},
+  {
+    label: 'Greeks',
+    links: [
+      { href: '/optionchain', label: 'Option Chain' },
+      { href: '/maxpain',     label: 'Max Pain' },
+      { href: '/iv',          label: 'IV Analysis' },
+    ]
+  },
+  {
     label: 'Signals',
     links: [
       { href: '/scanners',   label: 'Scanners' },
       { href: '/confluence', label: 'Confluence' },
       { href: '/rs',         label: 'Rel. Strength' },
       { href: '/uoa',        label: 'UOA' },
-      { href: '/jungle',     label: '🌿 Options Jungle' },  // replaces OI Spikes + Vol Spikes
+      { href: '/jungle',     label: '🌿 Options Jungle' },
     ]
   },
 ]

@@ -154,11 +154,11 @@ export default function PositionalRadar() {
         {/* How it works */}
         <div className="bg-gray-900/20 border border-gray-800/40 rounded-xl px-4 py-3 mb-5">
           <p className="text-xs text-gray-500 leading-relaxed">
-            <span className="text-gray-300 font-semibold">How to read: </span>
-            <span className="text-emerald-400">Consistency %</span> = how many days within the series the signal held (70%+ = HIGH, 50-70% = MEDIUM) ·
-            <span className="text-amber-400"> Consec</span> = consecutive days the signal held right up to today ·
+            <span className="text-gray-300 font-semibold">Two ways to use this: </span>
+            <span className="text-amber-400">Active streak</span> = use "Active 3d/5d/7d" buttons → stocks where signal is LIVE right now going into tomorrow ·
+            <span className="text-emerald-400"> Series consistency</span> = use "HIGH" filter → stocks where signal held 70%+ of all days this series (best overall trend) ·
             <span className="text-purple-400"> ⚡ Triple</span> = OI + Price + Volume all rising ·
-            <span className="text-blue-400"> 🚀 Accelerating</span> = OI building faster in recent half vs earlier half of series
+            <span className="text-blue-400"> 🚀 Accelerating</span> = OI building faster recently than earlier in series
           </p>
         </div>
 
@@ -170,10 +170,10 @@ export default function PositionalRadar() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             {[
-              { val: 0, label: 'All signals',     sub: 'Any trend' },
-              { val: 3, label: '3+ days consec',  sub: 'Short momentum' },
-              { val: 5, label: '5+ days consec',  sub: 'Full week' },
-              { val: 7, label: '7+ days consec',  sub: 'Strong conviction' },
+              { val: 0, label: 'All signals',       sub: 'Full series view' },
+              { val: 3, label: 'Active 3d+ streak', sub: 'Signal live last 3 days' },
+              { val: 5, label: 'Active 5d+ streak', sub: 'Signal live last 5 days' },
+              { val: 7, label: 'Active 7d+ streak', sub: 'Signal live last 7 days' },
             ].map(({ val, label, sub }) => (
               <button key={val} onClick={() => handleConsec(val)}
                 className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all text-left ${minConsec===val
@@ -259,7 +259,7 @@ export default function PositionalRadar() {
         </div>
 
         <p className="text-xs text-gray-600 mb-4">
-          {results.length} signals · {minConsec > 0 ? `${minConsec}+ consecutive days` : 'all signals'} · May series · Informational only
+          {results.length} signals · {minConsec > 0 ? `Active ${minConsec}d+ streak filter` : 'showing all signals — use HIGH consistency or Active streak filters to narrow down'} · May series · Informational only
         </p>
 
         {/* Table */}
@@ -384,7 +384,7 @@ export default function PositionalRadar() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
-            <div className="text-5xl mb-4">📈</div>
+            <div className="text-5xl mb-4 select-none">📈</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">No signals match</h3>
             <p className="text-sm text-gray-600 mb-3">
               {minConsec > 0

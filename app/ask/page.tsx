@@ -135,24 +135,24 @@ export default function AskClaude() {
             ...conversationRef.current.slice(1)
           ]
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // Call Railway backend — which calls Claude API securely
+      // Never call Anthropic API directly from browser (CORS + key exposure)
+      const response = await fetch(`${API}/ask-claude`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model:      'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          system:     SYSTEM_PROMPT,
-          messages:   apiMessages,
+          system:   SYSTEM_PROMPT,
+          messages: apiMessages,
         }),
       })
 
       const data = await response.json()
 
       if (data.error) {
-        throw new Error(data.error.message || 'Claude API error')
+        throw new Error(data.error || 'Claude API error')
       }
 
-      const assistantText = data.content?.[0]?.text || 'No response received'
+      const assistantText = data.content || 'No response received'
 
       const assistantMsg: Message = {
         role:      'assistant',

@@ -13,7 +13,7 @@ interface RadarResult {
   consec_days: number
   accelerating: boolean; oi_first_half_chg: number; oi_second_half_chg: number
   triple_confirm: boolean; vol_consec: number
-  oi_chg_pct: number; vol_chg_pct: number; cmp_chg_pct: number
+  oi_chg_pct: number; vol_chg_pct: number; vol_series_chg: number; vol_avg_7d: number; cmp_chg_pct: number
   oi_series: number[]; vol_series: number[]; cmp_series: number[]
   date_labels: string[]; cmp: number; series_days: number
 }
@@ -274,7 +274,7 @@ export default function PositionalRadar() {
                 <tr className="bg-gray-900/60 border-b border-gray-800">
                   {[
                     'Symbol', 'Signal', 'Consistency', 'Consec', 
-                    'OI (Series)', 'Volume (Series)', 'Price (Series)',
+                    'OI (Series)', 'Volume (vs 7d avg)', 'Price (Series)',
                     'OI Trend', 'Price Trend', 'Deep Dive'
                   ].map((h, i) => (
                     <th key={h} className={`text-xs font-semibold text-gray-500 px-3 py-3.5 ${i <= 3 ? 'text-left' : 'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5 text-left':''}`}>
@@ -352,6 +352,7 @@ export default function PositionalRadar() {
                         <p className={`text-sm font-black ${r.vol_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {r.vol_chg_pct > 0 ? '+' : ''}{r.vol_chg_pct}%
                         </p>
+                        <p className="text-[10px] text-gray-600">vs 7d avg ({r.vol_avg_7d}L)</p>
                         {r.triple_confirm && <p className="text-[10px] text-purple-400">⚡ {r.vol_consec}d consec</p>}
                       </td>
 

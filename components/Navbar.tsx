@@ -40,6 +40,7 @@ const NAV_GROUPS = [
       { href: '/rs',         label: 'Rel. Strength' },
       { href: '/uoa',        label: 'UOA' },
       { href: '/jungle',     label: '🌿 Options Jungle' },
+      { href: '/positional', label: '📈 Positional Radar' },
     ]
   },
 ]

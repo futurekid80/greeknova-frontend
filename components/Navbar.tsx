@@ -24,14 +24,14 @@ const NAV_GROUPS = [
       { href: '/pcr',        label: 'PCR Trend' },
     ]
   },
-  {
-    label: 'Greeks',
-    links: [
-      { href: '/optionchain', label: 'Option Chain' },
-      { href: '/maxpain',     label: 'Max Pain' },
-    ]
-  },
-  {
+ {
+  label: 'Greeks',
+  links: [
+    { href: '/optionchain', label: 'Option Chain' },
+    { href: '/maxpain',     label: 'Max Pain' },
+    { href: '/iv',          label: 'IV Analysis' },
+  ]
+},
     label: 'Signals',
     links: [
       { href: '/scanners',   label: 'Scanners' },

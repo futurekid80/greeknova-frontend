@@ -1,9 +1,85 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { Send, RefreshCw, AlertTriangle, ChevronDown } from 'lucide-react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
+
+// ── Simple markdown renderer — no external library needed ────────────────────
+function renderMarkdown(text: string) {
+  const lines = text.split('
+')
+  const elements: React.ReactNode[] = []
+
+  lines.forEach((line, i) => {
+    // H2: ## heading
+    if (line.startsWith('## ')) {
+      elements.push(
+        <h2 key={i} className="text-base font-black text-white mt-4 mb-1">
+          {line.replace('## ', '')}
+        </h2>
+      )
+    }
+    // H3: ### heading
+    else if (line.startsWith('### ')) {
+      elements.push(
+        <h3 key={i} className="text-sm font-bold text-emerald-400 mt-3 mb-1">
+          {line.replace('### ', '')}
+        </h3>
+      )
+    }
+    // Horizontal rule
+    else if (line.trim() === '---') {
+      elements.push(<hr key={i} className="border-gray-700 my-3"/>)
+    }
+    // Bullet: - item
+    else if (line.startsWith('- ') || line.startsWith('  - ')) {
+      const indent = line.startsWith('  - ')
+      const text = line.replace(/^  - |^- /, '')
+      elements.push(
+        <div key={i} className={`flex items-start gap-2 ${indent ? 'ml-4' : ''} mb-0.5`}>
+          <span className="text-emerald-400 mt-1 flex-shrink-0 text-xs">•</span>
+          <span className="text-sm leading-relaxed">{renderInline(text)}</span>
+        </div>
+      )
+    }
+    // Blockquote: > text
+    else if (line.startsWith('> ')) {
+      elements.push(
+        <div key={i} className="border-l-2 border-amber-500/50 pl-3 my-1">
+          <span className="text-sm text-gray-400 leading-relaxed italic">
+            {renderInline(line.replace('> ', ''))}
+          </span>
+        </div>
+      )
+    }
+    // Empty line
+    else if (line.trim() === '') {
+      elements.push(<div key={i} className="h-2"/>)
+    }
+    // Normal paragraph
+    else {
+      elements.push(
+        <p key={i} className="text-sm leading-relaxed mb-0.5">
+          {renderInline(line)}
+        </p>
+      )
+    }
+  })
+
+  return elements
+}
+
+// Render inline bold (**text**) and other inline formatting
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="text-white font-bold">{part.slice(2, -2)}</strong>
+    }
+    return part
+  })
+}
 
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
 const STOCKS = [
@@ -293,7 +369,7 @@ export default function AskClaude() {
                       <span className="text-xs text-gray-600">{msg.timestamp}</span>
                     </div>
                   )}
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  <div className="space-y-0.5">{renderMarkdown(msg.content)}</div>
                   {msg.role === 'user' && (
                     <p className="text-xs text-gray-500 mt-1 text-right">{msg.timestamp}</p>
                   )}

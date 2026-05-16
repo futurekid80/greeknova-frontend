@@ -1,6 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
@@ -8,22 +8,24 @@ const API = 'https://greeknova-backend-production.up.railway.app'
 interface RadarResult {
   symbol: string; is_index: boolean
   signal: string; bias: string
-  conviction: string; consec_days: number; actual_days: number
-  triple_confirm: boolean
+  consistency_pct: number; consistency_label: string
+  match_days: number; total_days: number
+  consec_days: number
+  accelerating: boolean; oi_first_half_chg: number; oi_second_half_chg: number
+  triple_confirm: boolean; vol_consec: number
   oi_chg_pct: number; vol_chg_pct: number; cmp_chg_pct: number
-  oi_consec_up: number; oi_consec_down: number
-  vol_consec_up: number
-  cmp_consec_up: number; cmp_consec_down: number
   oi_series: number[]; vol_series: number[]; cmp_series: number[]
-  date_labels: string[]; cmp: number
+  date_labels: string[]; cmp: number; series_days: number
 }
 
 interface RadarData {
-  days: number; from_date: string; to_date: string; total: number
+  expiry: string; series_start: string
+  total_trading_days: number; min_consec: number
+  total: number
   summary: {
     long_buildup: number; short_buildup: number
     short_covering: number; long_unwinding: number
-    high_conviction: number; triple_confirm: number
+    high_consistency: number; triple_confirm: number; accelerating: number
   }
   results: RadarResult[]
 }
@@ -39,66 +41,73 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
   if (data.length < 2) return null
   const min = Math.min(...data); const max = Math.max(...data)
   const range = max - min || 1
-  const w = 72; const h = 26
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(' ')
+  const w = 80; const h = 28
+  const pts = data.map((v, i) =>
+    `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`
+  ).join(' ')
   return (
     <svg width={w} height={h} className="overflow-visible">
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
-      <circle cx={(data.length-1)/(data.length-1)*w} cy={h-((data[data.length-1]-min)/range)*h} r="2.5" fill={color}/>
+      <circle
+        cx={(data.length-1)/(data.length-1)*w}
+        cy={h-((data[data.length-1]-min)/range)*h}
+        r="2.5" fill={color}/>
     </svg>
   )
 }
 
-function TrendCell({ chgPct, consecUp, consecDown, signal }: {
-  chgPct: number; consecUp: number; consecDown: number; signal: string
-}) {
-  const rising = chgPct > 0
+function ConsistencyBar({ pct, label }: { pct: number; label: string }) {
+  const color = label === 'HIGH' ? 'bg-emerald-500' : label === 'MEDIUM' ? 'bg-amber-400' : 'bg-red-500'
+  const textColor = label === 'HIGH' ? 'text-emerald-400' : label === 'MEDIUM' ? 'text-amber-400' : 'text-red-400'
   return (
-    <div className="text-right">
-      <p className={`text-sm font-black ${rising ? 'text-emerald-400' : 'text-red-400'}`}>
-        {chgPct > 0 ? '+' : ''}{chgPct}%
-      </p>
-      <p className="text-xs text-gray-600">
-        {rising ? `↑ ${consecUp}d consec` : `↓ ${consecDown}d consec`}
-      </p>
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-1">
+        <span className={`text-xs font-black ${textColor}`}>{pct}%</span>
+        <span className={`text-[10px] font-bold ${textColor}`}>{label}</span>
+      </div>
+      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden w-full">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }}/>
+      </div>
     </div>
   )
 }
 
 export default function PositionalRadar() {
-  const [data, setData]       = useState<RadarData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [days, setDays]       = useState(5)
-  const [filter, setFilter]   = useState<'all'|'index'|'stocks'>('all')
-  const [signalFilter, setSignalFilter] = useState<string>('all')
+  const [data, setData]         = useState<RadarData | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [minConsec, setMinConsec] = useState(0)
+  const [signalFilter, setSignalFilter] = useState('all')
   const [biasFilter, setBiasFilter]     = useState<'all'|'BULLISH'|'BEARISH'>('all')
-  const [convFilter, setConvFilter]     = useState<string>('all')
+  const [consisFilter, setConsisFilter] = useState('all')
   const [tripleOnly, setTripleOnly]     = useState(false)
-  const daysRef = useRef(5)
+  const [accelOnly, setAccelOnly]       = useState(false)
+  const [typeFilter, setTypeFilter]     = useState<'all'|'index'|'stocks'>('all')
 
-  const fetchData = useCallback(async (d?: number) => {
+  const fetchData = useCallback(async (consec?: number) => {
     setLoading(true)
-    const useDays = d ?? daysRef.current
+    const c = consec ?? minConsec
     try {
-      const res  = await fetch(`${API}/positional-radar?days=${useDays}`)
+      const res  = await fetch(`${API}/positional-radar?min_consec=${c}`)
       const json = await res.json()
       setData(json)
     } catch(e) { console.error(e) }
     setLoading(false)
-  }, [])
+  }, [minConsec])
 
-  function handleDays(d: number) {
-    setDays(d); daysRef.current = d; fetchData(d)
+  function handleConsec(c: number) {
+    setMinConsec(c)
+    fetchData(c)
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData(0) }, [])
 
   const results = (data?.results || [])
-    .filter(r => filter === 'all' || (filter === 'index' ? r.is_index : !r.is_index))
+    .filter(r => typeFilter === 'all' || (typeFilter === 'index' ? r.is_index : !r.is_index))
     .filter(r => signalFilter === 'all' || r.signal === signalFilter)
     .filter(r => biasFilter === 'all' || r.bias === biasFilter)
-    .filter(r => convFilter === 'all' || r.conviction === convFilter)
+    .filter(r => consisFilter === 'all' || r.consistency_label === consisFilter)
     .filter(r => !tripleOnly || r.triple_confirm)
+    .filter(r => !accelOnly  || r.accelerating)
 
   const s = data?.summary
 
@@ -108,10 +117,12 @@ export default function PositionalRadar() {
       <div className="max-w-7xl mx-auto px-6 py-8">
 
         {/* Header */}
-        <div className="flex items-end justify-between mb-6">
+        <div className="flex items-end justify-between mb-5">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">📈 Positional Radar</h1>
-            <p className="text-gray-500 text-sm">Multi-day OI + Price + Volume trends · Symbol-level · For positional traders</p>
+            <p className="text-gray-500 text-sm">
+              Monthly expiry series analysis · Consistency scoring · OI acceleration detection
+            </p>
           </div>
           <button onClick={() => fetchData()} disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
@@ -119,54 +130,86 @@ export default function PositionalRadar() {
           </button>
         </div>
 
-        {/* Methodology */}
-        <div className="bg-gray-900/20 border border-gray-800/50 rounded-xl px-4 py-3 mb-5">
+        {/* Series info */}
+        {data && (
+          <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-5 py-3 mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-6 text-sm">
+              <div>
+                <span className="text-gray-500 text-xs">Series</span>
+                <p className="text-white font-bold">{data.series_start} → {data.expiry}</p>
+              </div>
+              <div>
+                <span className="text-gray-500 text-xs">Trading days captured</span>
+                <p className="text-amber-400 font-black">{data.total_trading_days} days</p>
+              </div>
+              <div>
+                <span className="text-gray-500 text-xs">Monthly expiry</span>
+                <p className="text-cyan-400 font-bold">{data.expiry}</p>
+              </div>
+            </div>
+            <div className="text-xs text-gray-600">Full May series · NSE monthly F&O</div>
+          </div>
+        )}
+
+        {/* How it works */}
+        <div className="bg-gray-900/20 border border-gray-800/40 rounded-xl px-4 py-3 mb-5">
           <p className="text-xs text-gray-500 leading-relaxed">
             <span className="text-gray-300 font-semibold">How to read: </span>
-            <span className="text-emerald-400">% change</span> = total change over the selected period (first day → last day) ·
-            <span className="text-amber-400"> Consec</span> = how many consecutive days at the <em>end</em> of the period the condition held ·
-            <span className="text-orange-400"> Conviction</span> = HIGH if consec ≥ period−1, MEDIUM if ≥ 2 days, LOW otherwise ·
-            <span className="text-purple-400"> 🎯 Triple</span> = OI rising + Price rising + Volume rising simultaneously
+            <span className="text-emerald-400">Consistency %</span> = how many days within the series the signal held (70%+ = HIGH, 50-70% = MEDIUM) ·
+            <span className="text-amber-400"> Consec</span> = consecutive days the signal held right up to today ·
+            <span className="text-purple-400"> ⚡ Triple</span> = OI + Price + Volume all rising ·
+            <span className="text-blue-400"> 🚀 Accelerating</span> = OI building faster in recent half vs earlier half of series
           </p>
         </div>
 
-        {/* Days selector */}
-        <div className="flex items-center gap-3 mb-5">
-          <span className="text-xs text-gray-500 font-semibold">Lookback:</span>
-          {[3, 4, 5, 7].map(d => (
-            <button key={d} onClick={() => handleDays(d)}
-              className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${days===d ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              {d} days
-            </button>
-          ))}
-          {data?.from_date && (
-            <span className="text-xs text-gray-600 ml-2">{data.from_date} → {data.to_date}</span>
-          )}
+        {/* PRIMARY FILTER — Consecutive days */}
+        <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-5 mb-5">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-sm font-bold text-white">Minimum consecutive days trending:</span>
+            <span className="text-xs text-gray-500">(filters stocks where signal held for at least N days in a row right up to today)</span>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {[
+              { val: 0, label: 'All signals',     sub: 'Any trend' },
+              { val: 3, label: '3+ days consec',  sub: 'Short momentum' },
+              { val: 5, label: '5+ days consec',  sub: 'Full week' },
+              { val: 7, label: '7+ days consec',  sub: 'Strong conviction' },
+            ].map(({ val, label, sub }) => (
+              <button key={val} onClick={() => handleConsec(val)}
+                className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all text-left ${minConsec===val
+                  ? 'bg-white text-gray-900 border-white'
+                  : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+                <div>{label}</div>
+                <div className={`text-xs font-normal mt-0.5 ${minConsec===val ? 'text-gray-600' : 'text-gray-600'}`}>{sub}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Summary */}
-        <div className="grid grid-cols-6 gap-3 mb-5">
+        {/* Summary boxes */}
+        <div className="grid grid-cols-7 gap-2 mb-5">
           {[
-            { label: 'Total', val: data?.total || 0, color: 'text-white', sub: `${days}-day signals` },
-            { label: '🐂 Long Buildup',   val: s?.long_buildup   || 0, color: 'text-emerald-400', sub: 'OI + price rising' },
-            { label: '🐻 Short Buildup',  val: s?.short_buildup  || 0, color: 'text-red-400',     sub: 'OI rising, price ↓' },
-            { label: '🔄 Short Covering', val: s?.short_covering || 0, color: 'text-cyan-400',    sub: 'OI falling, price ↑' },
-            { label: '🎯 High Conv',      val: s?.high_conviction|| 0, color: 'text-orange-400',  sub: 'consecutive days held' },
-            { label: '⚡ Triple Confirm', val: s?.triple_confirm || 0, color: 'text-purple-400',  sub: 'OI + Price + Volume ↑' },
+            { label: 'Total',          val: data?.total || 0,          color: 'text-white',        sub: 'signals' },
+            { label: '🐂 Long Buildup', val: s?.long_buildup   || 0,   color: 'text-emerald-400',  sub: 'OI+price ↑' },
+            { label: '🐻 Short Buildup',val: s?.short_buildup  || 0,   color: 'text-red-400',      sub: 'OI↑ price↓' },
+            { label: '🔄 Short Cover',  val: s?.short_covering || 0,   color: 'text-cyan-400',     sub: 'OI↓ price↑' },
+            { label: '✅ High Consist', val: s?.high_consistency|| 0,  color: 'text-emerald-400',  sub: '70%+ days' },
+            { label: '⚡ Triple',       val: s?.triple_confirm || 0,   color: 'text-purple-400',   sub: 'OI+Price+Vol' },
+            { label: '🚀 Accelerating', val: s?.accelerating   || 0,   color: 'text-blue-400',     sub: 'OI speeding up' },
           ].map(({ label, val, color, sub }) => (
-            <div key={label} className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-1">{label}</p>
-              <p className={`text-2xl font-black ${color}`}>{val}</p>
-              <p className="text-xs text-gray-600">{sub}</p>
+            <div key={label} className="bg-gray-900/30 border border-gray-800 rounded-xl p-3">
+              <p className="text-[10px] text-gray-500 mb-1">{label}</p>
+              <p className={`text-xl font-black ${color}`}>{val}</p>
+              <p className="text-[10px] text-gray-600">{sub}</p>
             </div>
           ))}
         </div>
 
-        {/* Filters */}
+        {/* Secondary filters */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {(['all','index','stocks'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${filter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+            <button key={f} onClick={() => setTypeFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${typeFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {f}
             </button>
           ))}
@@ -190,27 +233,38 @@ export default function PositionalRadar() {
           ))}
           <div className="w-px h-5 bg-gray-800 mx-1"/>
           {(['all','HIGH','MEDIUM','LOW'] as const).map(c => (
-            <button key={c} onClick={() => setConvFilter(c)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${convFilter===c
-                ? c==='HIGH' ? 'bg-orange-950 text-orange-400 border-orange-800'
+            <button key={c} onClick={() => setConsisFilter(c)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${consisFilter===c
+                ? c==='HIGH' ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
                 : c==='MEDIUM' ? 'bg-amber-950 text-amber-400 border-amber-800'
+                : c==='LOW' ? 'bg-red-950 text-red-400 border-red-800'
                 : 'bg-white text-gray-900 border-white'
                 : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              {c==='all'?'All':c}
+              {c==='all'?'All Consistency':c}
             </button>
           ))}
+          <div className="w-px h-5 bg-gray-800 mx-1"/>
           <button onClick={() => setTripleOnly(t => !t)}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${tripleOnly ? 'bg-purple-950 text-purple-400 border-purple-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
             ⚡ Triple Only
           </button>
+          <button onClick={() => setAccelOnly(a => !a)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${accelOnly ? 'bg-blue-950 text-blue-400 border-blue-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+            🚀 Accelerating Only
+          </button>
+          <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setTripleOnly(false); setAccelOnly(false); setTypeFilter('all') }}
+            className="text-xs text-gray-600 hover:text-gray-400 transition-colors ml-1">
+            Clear filters
+          </button>
         </div>
 
         <p className="text-xs text-gray-600 mb-4">
-          {results.length} signals · {days}-day lookback · Informational only · Not investment advice
+          {results.length} signals · {minConsec > 0 ? `${minConsec}+ consecutive days` : 'all signals'} · May series · Informational only
         </p>
 
+        {/* Table */}
         {loading ? (
-          <div className="space-y-2">{[1,2,3,4,5].map(i=>(
+          <div className="space-y-2">{[1,2,3,4,5,6].map(i=>(
             <div key={i} className="h-20 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>
           ))}</div>
         ) : results.length > 0 ? (
@@ -218,26 +272,38 @@ export default function PositionalRadar() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-900/60 border-b border-gray-800">
-                  {['Symbol','Signal','Conviction','OI Change','Volume Change','Price Change','OI Trend','Price Trend','CMP','Deep Dive'].map((h,i)=>(
-                    <th key={h} className={`text-xs font-semibold text-gray-500 px-3 py-3.5 ${i<=2?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5 text-left':''}`}>{h}</th>
+                  {[
+                    'Symbol', 'Signal', 'Consistency', 'Consec', 
+                    'OI (Series)', 'Volume (Series)', 'Price (Series)',
+                    'OI Trend', 'Price Trend', 'Deep Dive'
+                  ].map((h, i) => (
+                    <th key={h} className={`text-xs font-semibold text-gray-500 px-3 py-3.5 ${i <= 3 ? 'text-left' : 'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5 text-left':''}`}>
+                      {h}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {results.map((r, i) => {
-                  const m = SIGNAL_META[r.signal]
+                  const m        = SIGNAL_META[r.signal]
                   const oiColor  = r.oi_chg_pct  > 0 ? '#10b981' : '#ef4444'
                   const cmpColor = r.cmp_chg_pct > 0 ? '#10b981' : '#ef4444'
+                  const rowBg    = r.triple_confirm && r.accelerating
+                    ? 'bg-purple-950/10'
+                    : r.triple_confirm ? 'bg-purple-950/5'
+                    : r.accelerating   ? 'bg-blue-950/5'
+                    : i % 2 === 0 ? '' : 'bg-gray-900/20'
+
                   return (
-                    <tr key={r.symbol}
-                      className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${r.triple_confirm ? 'bg-purple-950/10' : i%2===0?'':'bg-gray-900/20'}`}>
+                    <tr key={r.symbol} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${rowBg}`}>
 
                       {/* Symbol */}
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-black text-white">{r.symbol}</span>
-                          {r.triple_confirm && <span className="text-xs px-1.5 py-0.5 bg-purple-950 text-purple-400 border border-purple-800/50 rounded-md">⚡ Triple</span>}
-                          {r.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
+                          {r.triple_confirm && <span className="text-[10px] px-1.5 py-0.5 bg-purple-950 text-purple-400 border border-purple-800/50 rounded">⚡</span>}
+                          {r.accelerating   && <span className="text-[10px] px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-800/50 rounded">🚀</span>}
+                          {r.is_index       && <span className="text-[10px] px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded">IDX</span>}
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5">₹{r.cmp.toLocaleString('en-IN')}</p>
                       </td>
@@ -249,36 +315,44 @@ export default function PositionalRadar() {
                         </span>
                       </td>
 
-                      {/* Conviction */}
+                      {/* Consistency */}
+                      <td className="px-3 py-3.5 min-w-[110px]">
+                        <ConsistencyBar pct={r.consistency_pct} label={r.consistency_label}/>
+                        <p className="text-[10px] text-gray-600 mt-1">{r.match_days}/{r.total_days} days</p>
+                      </td>
+
+                      {/* Consecutive */}
                       <td className="px-3 py-3.5">
-                        <span className={`text-xs font-bold px-2 py-1 rounded-md border ${
-                          r.conviction === 'HIGH'   ? 'bg-orange-950/60 text-orange-400 border-orange-800/50' :
-                          r.conviction === 'MEDIUM' ? 'bg-amber-950/60 text-amber-400 border-amber-800/50' :
-                                                      'bg-gray-800 text-gray-400 border-gray-700'
-                        }`}>
-                          {r.conviction}
-                        </span>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {r.consec_days}d consec · {r.actual_days}d data
+                        <p className={`text-lg font-black ${r.consec_days >= 5 ? 'text-emerald-400' : r.consec_days >= 3 ? 'text-amber-400' : 'text-gray-400'}`}>
+                          {r.consec_days}d
                         </p>
+                        <p className="text-[10px] text-gray-600">in a row</p>
                       </td>
 
-                      {/* OI Change */}
-                      <td className="px-3 py-3.5">
-                        <TrendCell chgPct={r.oi_chg_pct} consecUp={r.oi_consec_up} consecDown={r.oi_consec_down} signal={r.signal}/>
+                      {/* OI */}
+                      <td className="px-3 py-3.5 text-right">
+                        <p className={`text-sm font-black ${r.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {r.oi_chg_pct > 0 ? '+' : ''}{r.oi_chg_pct}%
+                        </p>
+                        {r.accelerating && (
+                          <p className="text-[10px] text-blue-400">🚀 {r.oi_first_half_chg}% → {r.oi_second_half_chg}%</p>
+                        )}
                       </td>
 
-                      {/* Volume Change */}
+                      {/* Volume */}
                       <td className="px-3 py-3.5 text-right">
                         <p className={`text-sm font-black ${r.vol_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {r.vol_chg_pct > 0 ? '+' : ''}{r.vol_chg_pct}%
                         </p>
-                        <p className="text-xs text-gray-600">↑ {r.vol_consec_up}d consec</p>
+                        {r.triple_confirm && <p className="text-[10px] text-purple-400">⚡ {r.vol_consec}d consec</p>}
                       </td>
 
-                      {/* Price Change */}
-                      <td className="px-3 py-3.5">
-                        <TrendCell chgPct={r.cmp_chg_pct} consecUp={r.cmp_consec_up} consecDown={r.cmp_consec_down} signal={r.signal}/>
+                      {/* Price */}
+                      <td className="px-3 py-3.5 text-right">
+                        <p className={`text-sm font-black ${r.cmp_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {r.cmp_chg_pct > 0 ? '+' : ''}{r.cmp_chg_pct}%
+                        </p>
+                        <p className="text-[10px] text-gray-600">₹{r.cmp_series[0]?.toFixed(0)} → ₹{r.cmp.toFixed(0)}</p>
                       </td>
 
                       {/* OI Sparkline */}
@@ -293,19 +367,13 @@ export default function PositionalRadar() {
                         <div className="flex justify-end">
                           <Sparkline data={r.cmp_series} color={cmpColor}/>
                         </div>
-                        <p className="text-xs text-gray-600">₹{r.cmp_series[0]?.toFixed(0)} → ₹{r.cmp.toFixed(0)}</p>
-                      </td>
-
-                      {/* CMP */}
-                      <td className="px-3 py-3.5 text-right">
-                        <p className="text-sm font-bold text-amber-400">₹{r.cmp.toLocaleString('en-IN')}</p>
                       </td>
 
                       {/* Deep Dive */}
                       <td className="px-5 py-3.5">
                         <div className="flex flex-col gap-1">
-                          <a href="/uoa"    className="text-xs text-blue-400 hover:text-blue-300 transition-colors">🐋 UOA →</a>
-                          <a href="/jungle" className="text-xs text-amber-400 hover:text-amber-300 transition-colors">🌿 Jungle →</a>
+                          <a href="/uoa"    className="text-xs text-blue-400 hover:text-blue-300">🐋 UOA →</a>
+                          <a href="/jungle" className="text-xs text-amber-400 hover:text-amber-300">🌿 Jungle →</a>
                         </div>
                       </td>
                     </tr>
@@ -317,16 +385,24 @@ export default function PositionalRadar() {
         ) : (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
             <div className="text-5xl mb-4">📈</div>
-            <p className="text-gray-500">No signals match current filters</p>
-            <button onClick={() => { setFilter('all'); setSignalFilter('all'); setBiasFilter('all'); setConvFilter('all'); setTripleOnly(false) }}
-              className="mt-3 text-xs text-emerald-400 hover:text-emerald-300">Clear all filters</button>
+            <h3 className="text-lg font-bold text-gray-400 mb-2">No signals match</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              {minConsec > 0
+                ? `No stocks had ${minConsec}+ consecutive days of this signal. Try reducing the consecutive days filter.`
+                : 'Try changing the filters above.'}
+            </p>
+            <button onClick={() => { handleConsec(0); setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setTripleOnly(false); setAccelOnly(false) }}
+              className="text-xs text-emerald-400 hover:text-emerald-300">
+              Reset all filters
+            </button>
           </div>
         )}
 
         <div className="mt-8 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
           <p className="text-xs text-gray-600 leading-relaxed">
-            <span className="text-gray-400 font-semibold">Disclaimer:</span> Positional Radar shows observed OI, volume and price trends from NSE data.
-            Always confirm signals with UOA and Options Jungle. Not investment advice. GreekNova is not SEBI-registered.
+            <span className="text-gray-400 font-semibold">Disclaimer:</span> Positional Radar shows observed OI, volume and price trends from NSE publicly available data.
+            Signals are informational only — not investment advice. Always confirm with UOA and Options Jungle before making decisions.
+            GreekNova is not SEBI-registered. Trade at your own risk.
           </p>
         </div>
       </div>

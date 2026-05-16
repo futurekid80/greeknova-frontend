@@ -289,9 +289,9 @@ export default function PositionalRadar() {
                   const oiColor  = r.oi_chg_pct  > 0 ? '#10b981' : '#ef4444'
                   const cmpColor = r.cmp_chg_pct > 0 ? '#10b981' : '#ef4444'
                   const rowBg    = r.triple_confirm && r.accelerating
-                    ? 'bg-purple-950/10'
-                    : r.triple_confirm ? 'bg-purple-950/5'
-                    : r.accelerating   ? 'bg-blue-950/5'
+                    ? 'bg-purple-950/15 border-l-2 border-l-purple-700'
+                    : r.triple_confirm ? 'bg-purple-950/8'
+                    : r.accelerating   ? 'bg-blue-950/8 border-l-2 border-l-blue-800'
                     : i % 2 === 0 ? '' : 'bg-gray-900/20'
 
                   return (
@@ -301,9 +301,15 @@ export default function PositionalRadar() {
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-black text-white">{r.symbol}</span>
-                          {r.triple_confirm && <span className="text-[10px] px-1.5 py-0.5 bg-purple-950 text-purple-400 border border-purple-800/50 rounded">⚡</span>}
-                          {r.accelerating   && <span className="text-[10px] px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-800/50 rounded">🚀</span>}
-                          {r.is_index       && <span className="text-[10px] px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded">IDX</span>}
+                          {r.triple_confirm && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-purple-950 text-purple-400 border border-purple-800/50 rounded">⚡ Triple</span>
+                          )}
+                          {r.accelerating && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-800/50 rounded">🚀 Accel</span>
+                          )}
+                          {r.is_index && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded">IDX</span>
+                          )}
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5">₹{r.cmp.toLocaleString('en-IN')}</p>
                       </td>
@@ -323,10 +329,12 @@ export default function PositionalRadar() {
 
                       {/* Consecutive */}
                       <td className="px-3 py-3.5">
-                        <p className={`text-lg font-black ${r.consec_days >= 5 ? 'text-emerald-400' : r.consec_days >= 3 ? 'text-amber-400' : 'text-gray-400'}`}>
-                          {r.consec_days}d
+                        <p className={`text-lg font-black ${r.consec_days >= 5 ? 'text-emerald-400' : r.consec_days >= 3 ? 'text-amber-400' : r.consec_days >= 1 ? 'text-white' : 'text-orange-400'}`}>
+                          {r.consec_days > 0 ? `${r.consec_days}d` : '—'}
                         </p>
-                        <p className="text-[10px] text-gray-600">in a row</p>
+                        <p className="text-[10px] text-gray-600">
+                          {r.consec_days > 0 ? 'in a row' : 'broke last day'}
+                        </p>
                       </td>
 
                       {/* OI */}
@@ -384,7 +392,9 @@ export default function PositionalRadar() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
-            <div className="text-5xl mb-4 select-none">📈</div>
+            <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-4 text-3xl">
+              📈
+            </div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">No signals match</h3>
             <p className="text-sm text-gray-600 mb-3">
               {minConsec > 0

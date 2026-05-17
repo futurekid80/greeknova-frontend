@@ -255,9 +255,18 @@ export default function IVAnalysis() {
         <p className="text-xs text-gray-600 mb-4">{filtered.length} symbols · Informational only · Not investment advice</p>
 
         {loading ? (
-          <div className="space-y-2">{[1,2,3,4,5,6].map(i=>(
-            <div key={i} className="h-20 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>
-          ))}</div>
+          <div className="space-y-3">
+            <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl px-4 py-3 flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0"/>
+              <p className="text-xs text-blue-400">
+                Calculating Black-Scholes IV for all 66 symbols...
+                <span className="text-gray-500 ml-2">First load takes 15-20 seconds · Cached for 5 minutes after</span>
+              </p>
+            </div>
+            {[1,2,3,4,5,6].map(i=>(
+              <div key={i} className="h-20 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>
+            ))}
+          </div>
         ) : filtered.length > 0 ? (
           <div className="rounded-2xl border border-gray-800 overflow-hidden">
             <table className="w-full">

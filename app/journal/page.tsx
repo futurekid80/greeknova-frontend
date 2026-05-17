@@ -1,0 +1,729 @@
+'use client'
+import Navbar from '@/components/Navbar'
+import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import { Plus, X, TrendingUp, TrendingDown, BookOpen, Brain, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+
+const API = 'https://greeknova-backend-production.up.railway.app'
+
+const SYMBOLS = [
+  "NIFTY", "BANKNIFTY", "FINNIFTY",
+  "RELIANCE","TCS","HDFCBANK","INFY","ICICIBANK","HINDUNILVR","ITC","SBIN",
+  "BHARTIARTL","KOTAKBANK","LT","AXISBANK","ASIANPAINT","MARUTI","TITAN",
+  "SUNPHARMA","ULTRACEMCO","BAJFINANCE","WIPRO","HCLTECH","TATACONSUM",
+  "TATASTEEL","ADANIENT","POWERGRID","NTPC","ONGC","JSWSTEEL","COALINDIA",
+  "BAJAJFINSV","TECHM","APOLLOHOSP","BAJAJ-AUTO","BPCL","BRITANNIA","CIPLA",
+  "DRREDDY","EICHERMOT","GRASIM","HEROMOTOCO","HINDALCO","HDFCLIFE",
+  "INDUSINDBK","JIOFIN","M&M","NESTLEIND","SBILIFE","SHRIRAMFIN","TRENT",
+  "ADANIPORTS","BANKBARODA","BEL","CANBK","CHOLAFIN","DLF","GAIL","HAVELLS",
+  "HAL","INDIGO","PFC","RECLTD","SAIL","TATAPOWER","VEDL",
+]
+
+const LOT_SIZES: Record<string, number> = {
+  NIFTY: 75, BANKNIFTY: 30, FINNIFTY: 65,
+  RELIANCE: 250, TCS: 175, HDFCBANK: 550, INFY: 300, ICICIBANK: 700,
+  SBIN: 1500, BHARTIARTL: 500, KOTAKBANK: 400, LT: 150, AXISBANK: 625,
+  TATASTEEL: 5500, ADANIENT: 125, WIPRO: 1500, HCLTECH: 350,
+}
+
+function getLotSize(symbol: string): number {
+  return LOT_SIZES[symbol] || 500
+}
+
+interface Trade {
+  id: string
+  user_email: string
+  symbol: string
+  option_type: string
+  strike: number
+  action: string
+  entry_price: number
+  exit_price: number | null
+  quantity: number
+  entry_date: string
+  exit_date: string | null
+  notes: string | null
+  status: string
+  ivr_at_entry: number | null
+  pcr_at_entry: number | null
+  dte_at_entry: number | null
+  max_pain_entry: number | null
+  iv_at_entry: number | null
+  created_at: string
+}
+
+interface AddTradeForm {
+  symbol: string
+  option_type: string
+  strike: string
+  action: string
+  entry_price: string
+  quantity: string
+  entry_date: string
+  notes: string
+}
+
+const DEFAULT_FORM: AddTradeForm = {
+  symbol: 'NIFTY',
+  option_type: 'CE',
+  strike: '',
+  action: 'BUY',
+  entry_price: '',
+  quantity: '1',
+  entry_date: new Date().toISOString().split('T')[0],
+  notes: '',
+}
+
+function pnl(trade: Trade): number | null {
+  if (!trade.exit_price) return null
+  const lotSize = getLotSize(trade.symbol)
+  const multiplier = trade.action === 'BUY' ? 1 : -1
+  return multiplier * (trade.exit_price - trade.entry_price) * trade.quantity * lotSize
+}
+
+function PnLBadge({ trade }: { trade: Trade }) {
+  const p = pnl(trade)
+  if (p === null) return <span className="text-xs text-gray-500">Open</span>
+  return (
+    <span className={`text-sm font-black ${p >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+      {p >= 0 ? '+' : ''}₹{Math.abs(p).toLocaleString('en-IN')}
+    </span>
+  )
+}
+
+export default function TradingJournal() {
+  const [trades, setTrades]         = useState<Trade[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [userEmail, setUserEmail]   = useState('')
+  const [userId, setUserId]         = useState('')
+  const [showAdd, setShowAdd]       = useState(false)
+  const [showClose, setShowClose]   = useState<string | null>(null)
+  const [exitPrice, setExitPrice]   = useState('')
+  const [exitDate, setExitDate]     = useState(new Date().toISOString().split('T')[0])
+  const [form, setForm]             = useState<AddTradeForm>(DEFAULT_FORM)
+  const [saving, setSaving]         = useState(false)
+  const [symbolSearch, setSymbolSearch] = useState('')
+  const [showSymbolDrop, setShowSymbolDrop] = useState(false)
+  const [insights, setInsights]     = useState('')
+  const [loadingInsights, setLoadingInsights] = useState(false)
+  const [showInsights, setShowInsights] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'ALL'|'OPEN'|'CLOSED'>('ALL')
+
+  // Load session
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserEmail(session.user.email || '')
+        setUserId(session.user.id)
+      }
+    })
+  }, [])
+
+  // Load trades
+  const loadTrades = useCallback(async () => {
+    if (!userId) return
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('trading_journal')
+      .select('*')
+      .order('entry_date', { ascending: false })
+    if (!error && data) setTrades(data)
+    setLoading(false)
+  }, [userId])
+
+  useEffect(() => { if (userId) loadTrades() }, [userId, loadTrades])
+
+  // Summary stats
+  const openTrades   = trades.filter(t => t.status === 'OPEN')
+  const closedTrades = trades.filter(t => t.status === 'CLOSED')
+  const totalPnL     = closedTrades.reduce((sum, t) => sum + (pnl(t) || 0), 0)
+  const winners      = closedTrades.filter(t => (pnl(t) || 0) > 0)
+  const winRate      = closedTrades.length > 0
+    ? Math.round(winners.length / closedTrades.length * 100)
+    : 0
+
+  // Fetch market context at entry
+  async function fetchContext(symbol: string) {
+    try {
+      const res  = await fetch(`${API}/iv-analysis/${symbol}`)
+      const json = await res.json()
+      if (json.results?.[0]) {
+        const r = json.results[0]
+        return {
+          ivr_at_entry:   r.ivr,
+          iv_at_entry:    r.current_iv,
+          dte_at_entry:   r.dte,
+        }
+      }
+    } catch {}
+
+    try {
+      const res  = await fetch(`${API}/ask-context/${symbol}`)
+      const json = await res.json()
+      const ctx  = json.context || ''
+      const pcr  = ctx.match(/Current PCR: ([\d.]+)/)?.[1]
+      const mp   = ctx.match(/Max Pain: ([\d,]+)/)?.[1]
+      return {
+        pcr_at_entry:   pcr ? parseFloat(pcr) : null,
+        max_pain_entry: mp  ? parseFloat(mp.replace(',','')) : null,
+      }
+    } catch {}
+    return {}
+  }
+
+  // Save new trade
+  async function saveTrade() {
+    if (!form.symbol || !form.strike || !form.entry_price || !userId) return
+    setSaving(true)
+
+    const context = await fetchContext(form.symbol)
+
+    const { error } = await supabase.from('trading_journal').insert({
+      user_id:     userId,
+      user_email:  userEmail,
+      symbol:      form.symbol,
+      option_type: form.option_type,
+      strike:      parseFloat(form.strike),
+      action:      form.action,
+      entry_price: parseFloat(form.entry_price),
+      quantity:    parseInt(form.quantity),
+      entry_date:  form.entry_date,
+      notes:       form.notes || null,
+      status:      'OPEN',
+      ...context,
+    })
+
+    if (!error) {
+      setForm(DEFAULT_FORM)
+      setShowAdd(false)
+      await loadTrades()
+    }
+    setSaving(false)
+  }
+
+  // Close a trade
+  async function closeTrade(tradeId: string) {
+    if (!exitPrice) return
+    setSaving(true)
+    const { error } = await supabase
+      .from('trading_journal')
+      .update({
+        exit_price: parseFloat(exitPrice),
+        exit_date:  exitDate,
+        status:     'CLOSED',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', tradeId)
+
+    if (!error) {
+      setShowClose(null)
+      setExitPrice('')
+      await loadTrades()
+    }
+    setSaving(false)
+  }
+
+  // Delete a trade
+  async function deleteTrade(tradeId: string) {
+    if (!confirm('Delete this trade?')) return
+    await supabase.from('trading_journal').delete().eq('id', tradeId)
+    await loadTrades()
+  }
+
+  // Claude insights
+  async function getInsights() {
+    if (closedTrades.length < 3) return
+    setLoadingInsights(true)
+    setShowInsights(true)
+
+    const tradeSummary = closedTrades.slice(0, 20).map(t => ({
+      symbol:     t.symbol,
+      type:       `${t.action} ${t.strike} ${t.option_type}`,
+      entry:      t.entry_price,
+      exit:       t.exit_price,
+      pnl:        pnl(t),
+      ivr:        t.ivr_at_entry,
+      pcr:        t.pcr_at_entry,
+      dte:        t.dte_at_entry,
+      max_pain:   t.max_pain_entry,
+      date:       t.entry_date,
+    }))
+
+    const prompt = `You are analyzing a trader's options journal from NSE India.
+
+Here are their last ${tradeSummary.length} closed trades:
+${JSON.stringify(tradeSummary, null, 2)}
+
+Analyze and identify:
+1. Win rate and overall P&L pattern
+2. Which symbols/strategies are working vs not
+3. Pattern analysis — when IVR was high/low at entry, what happened?
+4. DTE patterns — do they perform better with more or less time to expiry?
+5. Max Pain relationship — did trades near Max Pain perform differently?
+6. Top 2-3 specific, actionable insights for this trader
+
+Keep it concise, data-driven, and specific to their actual trades.
+End with: "📊 Pattern analysis based on your journal data. Not investment advice."`
+
+    try {
+      const res  = await fetch(`${API}/ask-claude`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          system:   'You are a trading journal analyst. Analyze options trade patterns objectively. Be specific and data-driven. Never give buy/sell recommendations.',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+      const data = await res.json()
+      setInsights(data.content || 'Could not generate insights')
+    } catch {
+      setInsights('Failed to load insights. Please try again.')
+    }
+    setLoadingInsights(false)
+  }
+
+  const filteredTrades = trades.filter(t =>
+    statusFilter === 'ALL' || t.status === statusFilter
+  )
+
+  const filteredSymbols = SYMBOLS.filter(s =>
+    s.toLowerCase().includes(symbolSearch.toLowerCase())
+  )
+
+  if (!userEmail) {
+    return (
+      <div className="min-h-screen bg-[#07070e] text-white">
+        <Navbar active="/journal"/>
+        <div className="flex flex-col items-center justify-center py-32">
+          <div className="text-5xl mb-4">📓</div>
+          <h2 className="text-xl font-bold text-gray-400 mb-2">Login required</h2>
+          <p className="text-sm text-gray-600">Please login to access your trading journal</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-[#07070e] text-white">
+      <Navbar active="/journal"/>
+
+      <div className="max-w-6xl mx-auto px-6 py-8">
+
+        {/* Header */}
+        <div className="flex items-end justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight mb-1 flex items-center gap-3">
+              📓 Trading Journal
+            </h1>
+            <p className="text-gray-500 text-sm">
+              {userEmail} · Private journal · Market context auto-attached at entry
+            </p>
+          </div>
+          <button onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-all">
+            <Plus size={16}/>Log Trade
+          </button>
+        </div>
+
+        {/* Summary */}
+        <div className="grid grid-cols-4 gap-3 mb-6">
+          <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">Total Trades</p>
+            <p className="text-2xl font-black text-white">{trades.length}</p>
+            <p className="text-xs text-gray-600">{openTrades.length} open · {closedTrades.length} closed</p>
+          </div>
+          <div className={`border rounded-xl p-4 ${totalPnL >= 0 ? 'bg-emerald-950/20 border-emerald-800/40' : 'bg-red-950/20 border-red-800/40'}`}>
+            <p className="text-xs text-gray-500 mb-1">Total P&L</p>
+            <p className={`text-2xl font-black ${totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {totalPnL >= 0 ? '+' : ''}₹{Math.abs(totalPnL).toLocaleString('en-IN')}
+            </p>
+            <p className="text-xs text-gray-600">closed trades only</p>
+          </div>
+          <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">Win Rate</p>
+            <p className={`text-2xl font-black ${winRate >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {winRate}%
+            </p>
+            <p className="text-xs text-gray-600">{winners.length}/{closedTrades.length} winners</p>
+          </div>
+          <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
+            <button
+              onClick={getInsights}
+              disabled={closedTrades.length < 3 || loadingInsights}
+              className="w-full h-full flex flex-col items-start gap-1 disabled:opacity-50">
+              <p className="text-xs text-gray-500">🧠 AI Insights</p>
+              <p className="text-sm font-bold text-purple-400">
+                {loadingInsights ? 'Analysing...' : closedTrades.length < 3 ? `Need ${3 - closedTrades.length} more trades` : 'Analyse patterns →'}
+              </p>
+              <p className="text-xs text-gray-600">Claude analyses your trades</p>
+            </button>
+          </div>
+        </div>
+
+        {/* AI Insights Panel */}
+        {showInsights && (
+          <div className="bg-purple-950/20 border border-purple-800/40 rounded-2xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-purple-400 flex items-center gap-2">
+                <Brain size={16}/> Pattern Analysis
+              </h3>
+              <button onClick={() => setShowInsights(false)} className="text-gray-600 hover:text-white">
+                <X size={16}/>
+              </button>
+            </div>
+            {loadingInsights ? (
+              <div className="flex items-center gap-3 text-sm text-gray-500">
+                <div className="flex gap-1">
+                  {[0,1,2].map(i => (
+                    <div key={i} className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"
+                      style={{ animationDelay: `${i*150}ms` }}/>
+                  ))}
+                </div>
+                Analysing your {closedTrades.length} closed trades...
+              </div>
+            ) : (
+              <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                {insights}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex items-center gap-2 mb-4">
+          {(['ALL','OPEN','CLOSED'] as const).map(f => (
+            <button key={f} onClick={() => setStatusFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter===f
+                ? f==='OPEN' ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                : f==='CLOSED' ? 'bg-gray-800 text-white border-gray-600'
+                : 'bg-white text-gray-900 border-white'
+                : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              {f} {f==='OPEN' ? `(${openTrades.length})` : f==='CLOSED' ? `(${closedTrades.length})` : `(${trades.length})`}
+            </button>
+          ))}
+        </div>
+
+        {/* Trade list */}
+        {loading ? (
+          <div className="space-y-2">{[1,2,3].map(i => (
+            <div key={i} className="h-20 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>
+          ))}</div>
+        ) : filteredTrades.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
+            <div className="text-5xl mb-4">📓</div>
+            <h3 className="text-lg font-bold text-gray-400 mb-2">No trades yet</h3>
+            <p className="text-sm text-gray-600 mb-4">Log your first trade to start tracking your options journey</p>
+            <button onClick={() => setShowAdd(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl">
+              <Plus size={14}/>Log First Trade
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-gray-800 overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-900/60 border-b border-gray-800">
+                  {['Date','Trade','Entry','Exit','P&L','Context at Entry','Notes',''].map((h,i) => (
+                    <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i===0?'pl-5 text-left':i<=2?'text-left':'text-right'} ${i===7?'pr-5':''}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTrades.map((trade, i) => {
+                  const p = pnl(trade)
+                  return (
+                    <tr key={trade.id} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':'bg-gray-900/20'}`}>
+
+                      {/* Date */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-xs text-gray-400">{trade.entry_date}</p>
+                        {trade.exit_date && <p className="text-xs text-gray-600">→ {trade.exit_date}</p>}
+                      </td>
+
+                      {/* Trade */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-sm font-black text-white">{trade.symbol}</span>
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${trade.option_type==='CE' ? 'bg-red-950/50 text-red-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
+                            {trade.strike} {trade.option_type}
+                          </span>
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${trade.action==='BUY' ? 'bg-emerald-950/50 text-emerald-400' : 'bg-red-950/50 text-red-400'}`}>
+                            {trade.action}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600">{trade.quantity} lot{trade.quantity>1?'s':''} · Lot: {getLotSize(trade.symbol)}</p>
+                      </td>
+
+                      {/* Entry */}
+                      <td className="px-4 py-3.5">
+                        <p className="text-sm font-bold text-amber-400">₹{trade.entry_price}</p>
+                      </td>
+
+                      {/* Exit */}
+                      <td className="px-4 py-3.5 text-right">
+                        {trade.exit_price
+                          ? <p className="text-sm font-bold text-white">₹{trade.exit_price}</p>
+                          : <span className="text-xs text-gray-600">—</span>
+                        }
+                      </td>
+
+                      {/* P&L */}
+                      <td className="px-4 py-3.5 text-right">
+                        {p !== null ? (
+                          <p className={`text-sm font-black ${p >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {p >= 0 ? '+' : ''}₹{Math.abs(p).toLocaleString('en-IN')}
+                          </p>
+                        ) : (
+                          <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold
+                            ${trade.status === 'OPEN' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-800/50' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                            {trade.status}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Context */}
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="text-xs space-y-0.5">
+                          {trade.ivr_at_entry !== null && (
+                            <p className={trade.ivr_at_entry >= 75 ? 'text-red-400' : trade.ivr_at_entry <= 25 ? 'text-emerald-400' : 'text-gray-400'}>
+                              IVR {trade.ivr_at_entry}
+                            </p>
+                          )}
+                          {trade.pcr_at_entry !== null && (
+                            <p className="text-gray-500">PCR {trade.pcr_at_entry}</p>
+                          )}
+                          {trade.dte_at_entry !== null && (
+                            <p className="text-gray-500">{trade.dte_at_entry}d to expiry</p>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Notes */}
+                      <td className="px-4 py-3.5 text-right">
+                        <p className="text-xs text-gray-500 max-w-[120px] truncate">{trade.notes || '—'}</p>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center gap-2 justify-end">
+                          {trade.status === 'OPEN' && (
+                            <button onClick={() => { setShowClose(trade.id); setExitPrice('') }}
+                              className="text-xs px-2.5 py-1.5 bg-emerald-950/40 text-emerald-400 border border-emerald-800/50 rounded-lg hover:bg-emerald-950 transition-all">
+                              Close
+                            </button>
+                          )}
+                          <button onClick={() => deleteTrade(trade.id)}
+                            className="text-gray-600 hover:text-red-400 transition-colors">
+                            <Trash2 size={13}/>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Disclaimer */}
+        <div className="mt-8 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
+          <p className="text-xs text-gray-600">
+            <span className="text-gray-400 font-semibold">Note:</span> Market context (IVR, PCR, DTE) is fetched from GreekNova at time of logging.
+            P&L is calculated using standard lot sizes. Journal is private — only visible to you.
+            Not investment advice.
+          </p>
+        </div>
+      </div>
+
+      {/* Add Trade Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowAdd(false)}/>
+          <div className="relative w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-white">Log New Trade</h3>
+              <button onClick={() => setShowAdd(false)} className="text-gray-600 hover:text-white"><X size={18}/></button>
+            </div>
+
+            <div className="space-y-4">
+
+              {/* Symbol */}
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Symbol</label>
+                <div className="relative">
+                  <input
+                    value={symbolSearch || form.symbol}
+                    onChange={e => { setSymbolSearch(e.target.value); setShowSymbolDrop(true) }}
+                    onFocus={() => setShowSymbolDrop(true)}
+                    placeholder="Type to search..."
+                    className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"
+                  />
+                  {showSymbolDrop && filteredSymbols.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-10 max-h-48 overflow-y-auto">
+                      {filteredSymbols.map(s => (
+                        <button key={s} onClick={() => {
+                          setForm(f => ({ ...f, symbol: s }))
+                          setSymbolSearch('')
+                          setShowSymbolDrop(false)
+                        }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-emerald-400 mt-1">Selected: {form.symbol} · Lot size: {getLotSize(form.symbol)}</p>
+              </div>
+
+              {/* Option Type + Action */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Option Type</label>
+                  <div className="flex gap-2">
+                    {['CE','PE'].map(t => (
+                      <button key={t} onClick={() => setForm(f => ({...f, option_type: t}))}
+                        className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-all ${form.option_type===t
+                          ? t==='CE' ? 'bg-red-950/60 text-red-400 border-red-800' : 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
+                          : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Action</label>
+                  <div className="flex gap-2">
+                    {['BUY','SELL'].map(a => (
+                      <button key={a} onClick={() => setForm(f => ({...f, action: a}))}
+                        className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-all ${form.action===a
+                          ? a==='BUY' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' : 'bg-red-950/60 text-red-400 border-red-800'
+                          : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Strike + Entry Price */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Strike</label>
+                  <input type="number" value={form.strike}
+                    onChange={e => setForm(f => ({...f, strike: e.target.value}))}
+                    placeholder="e.g. 23700"
+                    className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Entry Price (₹)</label>
+                  <input type="number" value={form.entry_price}
+                    onChange={e => setForm(f => ({...f, entry_price: e.target.value}))}
+                    placeholder="e.g. 45"
+                    className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
+                </div>
+              </div>
+
+              {/* Quantity + Date */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Lots</label>
+                  <input type="number" value={form.quantity} min="1"
+                    onChange={e => setForm(f => ({...f, quantity: e.target.value}))}
+                    className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Entry Date</label>
+                  <input type="date" value={form.entry_date}
+                    onChange={e => setForm(f => ({...f, entry_date: e.target.value}))}
+                    className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Notes (optional)</label>
+                <input value={form.notes}
+                  onChange={e => setForm(f => ({...f, notes: e.target.value}))}
+                  placeholder="e.g. Theta play, breakout trade, hedging..."
+                  className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
+              </div>
+
+              {/* P&L preview */}
+              {form.entry_price && form.quantity && (
+                <div className="bg-gray-800/50 rounded-xl px-4 py-3">
+                  <p className="text-xs text-gray-500">
+                    Total exposure: ₹{(parseFloat(form.entry_price) * parseInt(form.quantity) * getLotSize(form.symbol)).toLocaleString('en-IN')}
+                    <span className="ml-2 text-gray-600">({form.quantity} lot{parseInt(form.quantity)>1?'s':''} × {getLotSize(form.symbol)} × ₹{form.entry_price})</span>
+                  </p>
+                </div>
+              )}
+
+              <p className="text-xs text-gray-600">
+                💡 Market context (IVR, PCR, DTE, Max Pain) will be automatically attached from live GreekNova data
+              </p>
+
+              <button onClick={saveTrade} disabled={saving || !form.strike || !form.entry_price}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all">
+                {saving ? 'Saving + fetching context...' : 'Log Trade →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Trade Modal */}
+      {showClose && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowClose(null)}/>
+          <div className="relative w-full max-w-sm bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-white">Close Trade</h3>
+              <button onClick={() => setShowClose(null)} className="text-gray-600 hover:text-white"><X size={18}/></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Exit Price (₹)</label>
+                <input type="number" value={exitPrice}
+                  onChange={e => setExitPrice(e.target.value)}
+                  placeholder="e.g. 28"
+                  className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"
+                  autoFocus/>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Exit Date</label>
+                <input type="date" value={exitDate}
+                  onChange={e => setExitDate(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
+              </div>
+
+              {/* P&L preview */}
+              {exitPrice && showClose && (() => {
+                const trade = trades.find(t => t.id === showClose)
+                if (!trade) return null
+                const lotSize = getLotSize(trade.symbol)
+                const mult = trade.action === 'BUY' ? 1 : -1
+                const previewPnl = mult * (parseFloat(exitPrice) - trade.entry_price) * trade.quantity * lotSize
+                return (
+                  <div className={`rounded-xl px-4 py-3 border ${previewPnl >= 0 ? 'bg-emerald-950/20 border-emerald-800/40' : 'bg-red-950/20 border-red-800/40'}`}>
+                    <p className={`text-sm font-black ${previewPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      P&L: {previewPnl >= 0 ? '+' : ''}₹{Math.abs(previewPnl).toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      ({trade.action === 'BUY' ? parseFloat(exitPrice) - trade.entry_price : trade.entry_price - parseFloat(exitPrice)} pts × {trade.quantity} lots × {lotSize})
+                    </p>
+                  </div>
+                )
+              })()}
+
+              <button onClick={() => closeTrade(showClose)} disabled={saving || !exitPrice}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all">
+                {saving ? 'Closing...' : 'Close Trade →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

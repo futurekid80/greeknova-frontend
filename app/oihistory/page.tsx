@@ -150,19 +150,24 @@ export default function OIHistory() {
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-4 mb-6">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">Compare</span>
-            <select value={dateA} onChange={e => setDateA(e.target.value)}
-              className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
-              {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+  <div className="flex flex-col">
+    <span className="text-[10px] text-emerald-400 font-semibold mb-0.5">RECENT DATE</span>
+    <select value={dateA} onChange={e => setDateA(e.target.value)}
+      className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
+      {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
             </select>
           </div>
-          <span className="text-gray-600 text-sm">vs</span>
-          <div className="flex items-center gap-2">
-            <select value={dateB} onChange={e => setDateB(e.target.value)}
-              className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
-              {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
-            </select>
-          </div>
+          <div className="flex flex-col items-center">
+  <span className="text-[10px] text-gray-600 mb-0.5">change from</span>
+  <span className="text-gray-400 text-sm font-bold">→</span>
+</div>
+<div className="flex flex-col">
+  <span className="text-[10px] text-gray-500 font-semibold mb-0.5">BASE DATE</span>
+  <select value={dateB} onChange={e => setDateB(e.target.value)}
+    className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
+    {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+  </select>
+</div>
           {data?.expiries && data.expiries.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Expiry:</span>

@@ -15,6 +15,7 @@ const NAV_GROUPS = [
     { href: '/journal',    label: '📓 Journal' },  // ← add this
   ]
 },
+{ 
     label: 'OI Analysis',
     links: [
       { href: '/charts',     label: 'OI Charts' },

@@ -97,9 +97,24 @@ export default function OIProfile() {
   // Show ATM ± 20 strikes for cleaner view
   const profile = data?.profile || []
   const atmIdx  = profile.findIndex(p => p.is_atm)
-  const displayProfile = atmIdx >= 0
-    ? profile.slice(Math.max(0, atmIdx - 20), atmIdx + 21).reverse() // reversed: higher strikes on top
-    : [...profile].reverse()
+
+  // Filter to ATM range — removes far OTM noise
+  const rangeProfile = atmIdx >= 0
+    ? profile.slice(Math.max(0, atmIdx - 20), atmIdx + 21)
+    : profile
+
+  // Normalize CE and PE bars against SAME max for true visual comparison
+  const maxCombined = Math.max(
+    ...rangeProfile.map(p => Math.max(p.ce_oi, p.pe_oi))
+  ) || 1
+
+  const displayProfile = rangeProfile
+    .map(p => ({
+      ...p,
+      ce_bar_pct: Math.round(p.ce_oi / maxCombined * 100),
+      pe_bar_pct: Math.round(p.pe_oi / maxCombined * 100),
+    }))
+    .reverse() // higher strikes on top
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -291,7 +306,7 @@ export default function OIProfile() {
                       <div className="flex justify-end w-full">
                         <div
                           className={`h-4 rounded-l-sm transition-all ${row.is_ce_wall ? 'bg-red-400' : row.is_poc ? 'bg-purple-500' : 'bg-red-600/60'}`}
-                          style={{ width: `${row.ce_pct}%`, minWidth: row.ce_oi > 0 ? '2px' : '0' }}
+                          style={{ width: `${(row as any).ce_bar_pct}%`, minWidth: row.ce_oi > 0 ? '2px' : '0' }}
                         />
                       </div>
                     </div>
@@ -322,7 +337,7 @@ export default function OIProfile() {
                     <div className="flex items-center h-5">
                       <div
                         className={`h-4 rounded-r-sm transition-all ${row.is_pe_wall ? 'bg-emerald-400' : row.is_poc ? 'bg-purple-500' : 'bg-emerald-600/60'}`}
-                        style={{ width: `${row.pe_pct}%`, minWidth: row.pe_oi > 0 ? '2px' : '0' }}
+                        style={{ width: `${(row as any).pe_bar_pct}%`, minWidth: row.pe_oi > 0 ? '2px' : '0' }}
                       />
                     </div>
 

@@ -47,8 +47,8 @@ const VOL_META: Record<string, { color: string; bg: string; border: string; icon
   CHURN:       { color: 'text-amber-400',   bg: 'bg-amber-950/30',   border: 'border-amber-800/40',   icon: '🔄', label: 'Churn' },
 }
 
-const OI_PRESETS  = [5, 10, 15]
-const VOL_PRESETS = [20, 50, 100]
+const OI_PRESETS:  (number | null)[] = [5, 10, 15, null]
+const VOL_PRESETS: (number | null)[] = [20, 50, 100, null]
 
 function fmtOI(n: number) {
   const abs = Math.abs(n)
@@ -61,8 +61,8 @@ export default function OptionsJungle() {
   const [data, setData]             = useState<JungleData | null>(null)
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState<'oi' | 'vol'>('oi')
-  const [oiThreshold, setOiThreshold]   = useState(5)
-  const [volThreshold, setVolThreshold] = useState(20)
+  const [oiThreshold, setOiThreshold]   = useState<number|null>(5)
+  const [volThreshold, setVolThreshold] = useState<number|null>(20)
   const [dirFilter, setDirFilter]       = useState<'all'|'BUILD'|'UNWIND'>('all')
   const [volSigFilter, setVolSigFilter] = useState<'all'|'FRESH_BUILD'|'UNWINDING'|'CHURN'>('all')
   const [typeFilter, setTypeFilter]     = useState<'all'|'CE'|'PE'>('all')
@@ -74,8 +74,8 @@ export default function OptionsJungle() {
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const dateRef = useRef('')
-  const oiRef   = useRef(5)
-  const volRef  = useRef(20)
+  const oiRef   = useRef<number|null>(5)
+  const volRef  = useRef<number|null>(20)
 
   useEffect(() => {
     async function loadDates() {
@@ -95,9 +95,11 @@ export default function OptionsJungle() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
+      // Always fetch with threshold=0 — filter on frontend
+      // This ensures button counts are always accurate
       const params = new URLSearchParams({
-        oi_threshold:  String(oiRef.current),
-        vol_threshold: String(volRef.current),
+        oi_threshold:  '0',
+        vol_threshold: '0',
       })
       if (dateRef.current) params.set('date', dateRef.current)
       const res  = await fetch(`${API}/options-jungle?${params}`)
@@ -111,12 +113,13 @@ export default function OptionsJungle() {
     setDate(d); dateRef.current = d; fetchData()
   }
 
-  function handleOIPreset(v: number) {
-    setOiThreshold(v); oiRef.current = v; fetchData()
+  function handleOIPreset(v: number | null) {
+    setOiThreshold(v); oiRef.current = v
+    // No fetchData needed — filtering happens on frontend
   }
 
-  function handleVolPreset(v: number) {
-    setVolThreshold(v); volRef.current = v; fetchData()
+  function handleVolPreset(v: number | null) {
+    setVolThreshold(v); volRef.current = v
   }
 
   function startAuto() {
@@ -143,11 +146,13 @@ export default function OptionsJungle() {
   const searchTerm = stockSearch.trim().toUpperCase()
 
   const oiFiltered = (data?.oi_spikes || [])
+    .filter(s => oiThreshold === null || Math.abs(s.oi_pct) >= oiThreshold)
     .filter(s => !searchTerm || s.symbol.includes(searchTerm))
     .filter(s => dirFilter === 'all' || s.direction === dirFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
 
   const volFiltered = (data?.vol_spikes || [])
+    .filter(s => volThreshold === null || s.vol_pct >= volThreshold)
     .filter(s => !searchTerm || s.symbol.includes(searchTerm))
     .filter(s => volSigFilter === 'all' || s.vol_signal === volSigFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
@@ -212,8 +217,8 @@ export default function OptionsJungle() {
         <div className="grid grid-cols-5 gap-3 mb-5">
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">🌊 OI Spikes</p>
-            <p className="text-2xl font-black text-white">{data?.oi_total || 0}</p>
-            <p className="text-xs text-gray-600">above {oiThreshold}% change</p>
+            <p className="text-2xl font-black text-white">{oiFiltered.length}</p>
+            <p className="text-xs text-gray-600">{oiThreshold === null ? 'all signals' : `above ${oiThreshold}% change`}</p>
           </div>
           <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">↑ OI Builds</p>
@@ -227,8 +232,8 @@ export default function OptionsJungle() {
           </div>
           <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">⚡ Vol Spikes</p>
-            <p className="text-2xl font-black text-amber-400">{data?.vol_total || 0}</p>
-            <p className="text-xs text-gray-600">above {volThreshold}% surge</p>
+            <p className="text-2xl font-black text-amber-400">{volFiltered.length}</p>
+            <p className="text-xs text-gray-600">{volThreshold === null ? 'all signals' : `above ${volThreshold}% surge`}</p>
           </div>
           <div className="bg-violet-950/20 border border-violet-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">🌱 Fresh Builds</p>
@@ -246,14 +251,17 @@ export default function OptionsJungle() {
               <span className="text-xs text-gray-500 whitespace-nowrap">🌊 OI threshold:</span>
               <div className="flex gap-1.5">
                 {OI_PRESETS.map(v => {
-                  const count = (data?.oi_spikes || []).filter(s => Math.abs(s.oi_pct) >= v).length
+                  const count = v === null
+                    ? (data?.oi_spikes || []).length
+                    : (data?.oi_spikes || []).filter(s => Math.abs(s.oi_pct) >= v).length
+                  const isActive = oiThreshold === v
                   return (
-                    <button key={v} onClick={() => handleOIPreset(v)}
-                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${oiThreshold === v
+                    <button key={String(v)} onClick={() => handleOIPreset(v)}
+                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${isActive
                         ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700'
                         : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
-                      <span>{v}%</span>
-                      {data && <span className={`text-[10px] font-normal mt-0.5 ${oiThreshold === v ? 'text-emerald-600' : 'text-gray-600'}`}>{count} signals</span>}
+                      <span>{v === null ? 'All →' : `${v}%`}</span>
+                      {data && <span className={`text-[10px] font-normal mt-0.5 ${isActive ? 'text-emerald-600' : 'text-gray-600'}`}>{count}</span>}
                     </button>
                   )
                 })}
@@ -267,14 +275,17 @@ export default function OptionsJungle() {
               <span className="text-xs text-gray-500 whitespace-nowrap">⚡ Vol threshold:</span>
               <div className="flex gap-1.5">
                 {VOL_PRESETS.map(v => {
-                  const count = (data?.vol_spikes || []).filter(s => s.vol_pct >= v).length
+                  const count = v === null
+                    ? (data?.vol_spikes || []).length
+                    : (data?.vol_spikes || []).filter(s => s.vol_pct >= v).length
+                  const isActive = volThreshold === v
                   return (
-                    <button key={v} onClick={() => handleVolPreset(v)}
-                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${volThreshold === v
+                    <button key={String(v)} onClick={() => handleVolPreset(v)}
+                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${isActive
                         ? 'bg-amber-950/60 text-amber-400 border-amber-700'
                         : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
-                      <span>{v}%</span>
-                      {data && <span className={`text-[10px] font-normal mt-0.5 ${volThreshold === v ? 'text-amber-600' : 'text-gray-600'}`}>{count} signals</span>}
+                      <span>{v === null ? 'All →' : `${v}%`}</span>
+                      {data && <span className={`text-[10px] font-normal mt-0.5 ${isActive ? 'text-amber-600' : 'text-gray-600'}`}>{count}</span>}
                     </button>
                   )
                 })}

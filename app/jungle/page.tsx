@@ -85,12 +85,15 @@ export default function OptionsJungle() {
         const dates: string[] = [...(json.dates || [])].reverse()
         setAvailDates(dates)
         if (dates.length > 0 && !dateRef.current) {
-          setDate(dates[0]); dateRef.current = dates[0]
+          setDate(dates[0])
+          dateRef.current = dates[0]
+          // Trigger fetch now that we have a date
+          fetchData()
         }
       } catch(e) { console.error(e) }
     }
     loadDates()
-  }, [])
+  }, [fetchData])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -408,7 +411,7 @@ export default function OptionsJungle() {
                 <button key={f} onClick={() => setDirFilter(f)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${dirFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
                   {f==='all'?'◈ All':f==='BUILD'?'↑ Builds':'↓ Unwinds'}
-                  <span className="ml-1 opacity-60">{f==='all'?data?.oi_total:f==='BUILD'?oiBuilds:oiUnwinds}</span>
+                  <span className="ml-1 opacity-60">{f==='all'?oiFiltered.length:f==='BUILD'?oiBuilds:oiUnwinds}</span>
                 </button>
               ))}
             </>
@@ -418,7 +421,7 @@ export default function OptionsJungle() {
                 <button key={f} onClick={() => setVolSigFilter(f)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${volSigFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
                   {f==='all'?'◈ All':f==='FRESH_BUILD'?'🌱 Fresh Build':f==='UNWINDING'?'🔻 Unwinding':'🔄 Churn'}
-                  <span className="ml-1 opacity-60">{f==='all'?data?.vol_total:f==='FRESH_BUILD'?volFresh:f==='UNWINDING'?volUnwind:volChurn}</span>
+                  <span className="ml-1 opacity-60">{f==='all'?volFiltered.length:f==='FRESH_BUILD'?volFresh:f==='UNWINDING'?volUnwind:volChurn}</span>
                 </button>
               ))}
             </>

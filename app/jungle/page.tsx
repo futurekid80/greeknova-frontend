@@ -1,7 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { RefreshCw, Clock, TrendingUp, TrendingDown, Zap, Search, X } from 'lucide-react'
+import { RefreshCw, Clock, Zap, Search, X } from 'lucide-react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
@@ -47,6 +47,9 @@ const VOL_META: Record<string, { color: string; bg: string; border: string; icon
   CHURN:       { color: 'text-amber-400',   bg: 'bg-amber-950/30',   border: 'border-amber-800/40',   icon: '🔄', label: 'Churn' },
 }
 
+const OI_PRESETS  = [5, 10, 15]
+const VOL_PRESETS = [20, 50, 100]
+
 function fmtOI(n: number) {
   const abs = Math.abs(n)
   if (abs >= 10000000) return `${(n/10000000).toFixed(2)}Cr`
@@ -54,48 +57,37 @@ function fmtOI(n: number) {
   return n.toLocaleString()
 }
 
-function toIST(ts: string) {
-  try {
-    const clean = ts.split('+')[0].split('Z')[0]
-    const dt = new Date(clean + 'Z')
-    const ist = dt.getTime() + (5.5 * 60 * 60 * 1000)
-    const d = new Date(ist)
-    return `${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')}`
-  } catch { return '—' }
-}
-
 export default function OptionsJungle() {
-  const [data, setData] = useState<JungleData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'oi' | 'vol'>('oi')
-  const [oiThreshold, setOiThreshold] = useState(10)
-  const [volThreshold, setVolThreshold] = useState(50)
-  const [dirFilter, setDirFilter] = useState<'all'|'BUILD'|'UNWIND'>('all')
+  const [data, setData]             = useState<JungleData | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [tab, setTab]               = useState<'oi' | 'vol'>('oi')
+  const [oiThreshold, setOiThreshold]   = useState(5)
+  const [volThreshold, setVolThreshold] = useState(20)
+  const [dirFilter, setDirFilter]       = useState<'all'|'BUILD'|'UNWIND'>('all')
   const [volSigFilter, setVolSigFilter] = useState<'all'|'FRESH_BUILD'|'UNWINDING'|'CHURN'>('all')
-  const [typeFilter, setTypeFilter] = useState<'all'|'CE'|'PE'>('all')
-  const [stockSearch, setStockSearch] = useState('')
-  const [date, setDate] = useState('')
-  const [availDates, setAvailDates] = useState<string[]>([])
-  const [autoEnabled, setAutoEnabled] = useState(false)
-  const [countdown, setCountdown] = useState(300)
-  const intervalRef = useRef<NodeJS.Timeout|null>(null)
+  const [typeFilter, setTypeFilter]     = useState<'all'|'CE'|'PE'>('all')
+  const [stockSearch, setStockSearch]   = useState('')
+  const [date, setDate]                 = useState('')
+  const [availDates, setAvailDates]     = useState<string[]>([])
+  const [autoEnabled, setAutoEnabled]   = useState(false)
+  const [countdown, setCountdown]       = useState(300)
+  const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const dateRef = useRef('')
-  const oiRef = useRef(10)
-  const volRef = useRef(50)
-  const debounceRef = useRef<NodeJS.Timeout|null>(null)
+  const oiRef   = useRef(5)
+  const volRef  = useRef(20)
 
   useEffect(() => {
     async function loadDates() {
       try {
-        const res = await fetch(`${API}/oi-dates/NIFTY`)
+        const res  = await fetch(`${API}/oi-dates/NIFTY`)
         const json = await res.json()
         const dates: string[] = [...(json.dates || [])].reverse()
         setAvailDates(dates)
         if (dates.length > 0 && !dateRef.current) {
           setDate(dates[0]); dateRef.current = dates[0]
         }
-      } catch (e) { console.error(e) }
+      } catch(e) { console.error(e) }
     }
     loadDates()
   }, [])
@@ -104,78 +96,72 @@ export default function OptionsJungle() {
     setLoading(true)
     try {
       const params = new URLSearchParams({
-        oi_threshold: String(oiRef.current),
+        oi_threshold:  String(oiRef.current),
         vol_threshold: String(volRef.current),
       })
       if (dateRef.current) params.set('date', dateRef.current)
-      const res = await fetch(`${API}/options-jungle?${params}`)
+      const res  = await fetch(`${API}/options-jungle?${params}`)
       const json = await res.json()
       setData(json)
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [])
 
-  function handleDateChange(d: string) { setDate(d); dateRef.current = d; fetchData() }
-
-  function handleOIThreshold(v: number) {
-    setOiThreshold(v); oiRef.current = v
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchData(), 600)
+  function handleDateChange(d: string) {
+    setDate(d); dateRef.current = d; fetchData()
   }
 
-  function handleVolThreshold(v: number) {
-    setVolThreshold(v); volRef.current = v
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchData(), 600)
+  function handleOIPreset(v: number) {
+    setOiThreshold(v); oiRef.current = v; fetchData()
+  }
+
+  function handleVolPreset(v: number) {
+    setVolThreshold(v); volRef.current = v; fetchData()
   }
 
   function startAuto() {
     setAutoEnabled(true); setCountdown(300)
-    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (intervalRef.current)  clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
-    intervalRef.current = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
+    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
   }
   function stopAuto() {
     setAutoEnabled(false)
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+    if (intervalRef.current)  { clearInterval(intervalRef.current);  intervalRef.current  = null }
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
   }
 
   useEffect(() => {
     fetchData(); startAuto()
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
+      if (intervalRef.current)  clearInterval(intervalRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
     }
   }, [])
 
   const searchTerm = stockSearch.trim().toUpperCase()
 
-  // ── OI filtered ───────────────────────────────────────────────────────────
   const oiFiltered = (data?.oi_spikes || [])
     .filter(s => !searchTerm || s.symbol.includes(searchTerm))
     .filter(s => dirFilter === 'all' || s.direction === dirFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
 
-  // ── Vol filtered ──────────────────────────────────────────────────────────
   const volFiltered = (data?.vol_spikes || [])
     .filter(s => !searchTerm || s.symbol.includes(searchTerm))
     .filter(s => volSigFilter === 'all' || s.vol_signal === volSigFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
 
-  // ── Aerial view ───────────────────────────────────────────────────────────
-  const isAerial = searchTerm.length >= 2
-  const aerialOI = oiFiltered.filter(s => s.symbol === oiFiltered[0]?.symbol)
+  const isAerial  = searchTerm.length >= 2
+  const aerialOI  = oiFiltered.filter(s => s.symbol === oiFiltered[0]?.symbol)
   const aerialVol = volFiltered.filter(s => s.symbol === volFiltered[0]?.symbol)
   const aerialSym = isAerial ? (oiFiltered[0]?.symbol || volFiltered[0]?.symbol) : null
 
-  // Summary counts
-  const oiBuilds   = (data?.oi_spikes || []).filter(s => s.direction === 'BUILD').length
-  const oiUnwinds  = (data?.oi_spikes || []).filter(s => s.direction === 'UNWIND').length
-  const volFresh   = (data?.vol_spikes || []).filter(s => s.vol_signal === 'FRESH_BUILD').length
-  const volUnwind  = (data?.vol_spikes || []).filter(s => s.vol_signal === 'UNWINDING').length
-  const volChurn   = (data?.vol_spikes || []).filter(s => s.vol_signal === 'CHURN').length
+  const oiBuilds  = (data?.oi_spikes || []).filter(s => s.direction === 'BUILD').length
+  const oiUnwinds = (data?.oi_spikes || []).filter(s => s.direction === 'UNWIND').length
+  const volFresh  = (data?.vol_spikes || []).filter(s => s.vol_signal === 'FRESH_BUILD').length
+  const volUnwind = (data?.vol_spikes || []).filter(s => s.vol_signal === 'UNWINDING').length
+  const volChurn  = (data?.vol_spikes || []).filter(s => s.vol_signal === 'CHURN').length
 
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
@@ -183,15 +169,12 @@ export default function OptionsJungle() {
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/jungle" />
-
       <div className="max-w-7xl mx-auto px-6 py-8">
 
         {/* Header */}
         <div className="flex items-end justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-black tracking-tight mb-1 flex items-center gap-3">
-              🌿 Options Jungle
-            </h1>
+            <h1 className="text-3xl font-black tracking-tight mb-1">🌿 Options Jungle</h1>
             <p className="text-gray-500 text-sm">Where the wild money flows · OI Spikes + Volume Surges · 5-min snapshot comparison</p>
           </div>
           <div className="flex items-center gap-3">
@@ -226,8 +209,8 @@ export default function OptionsJungle() {
         </div>
 
         {/* Summary boxes */}
-        <div className="grid grid-cols-5 gap-3 mb-6">
-          <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 col-span-1">
+        <div className="grid grid-cols-5 gap-3 mb-5">
+          <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">🌊 OI Spikes</p>
             <p className="text-2xl font-black text-white">{data?.oi_total || 0}</p>
             <p className="text-xs text-gray-600">above {oiThreshold}% change</p>
@@ -254,21 +237,53 @@ export default function OptionsJungle() {
           </div>
         </div>
 
-        {/* Threshold controls */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-3 flex items-center gap-4">
-            <span className="text-xs text-gray-500 whitespace-nowrap">🌊 OI threshold:</span>
-            <input type="range" min="2" max="50" value={oiThreshold}
-              onChange={e => handleOIThreshold(Number(e.target.value))}
-              className="flex-1 accent-emerald-400"/>
-            <span className="text-sm font-black text-emerald-400 min-w-[3rem] text-right">{oiThreshold}%</span>
-          </div>
-          <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-3 flex items-center gap-4">
-            <span className="text-xs text-gray-500 whitespace-nowrap">⚡ Vol threshold:</span>
-            <input type="range" min="10" max="200" value={volThreshold}
-              onChange={e => handleVolThreshold(Number(e.target.value))}
-              className="flex-1 accent-amber-400"/>
-            <span className="text-sm font-black text-amber-400 min-w-[3rem] text-right">{volThreshold}%</span>
+        {/* ── Threshold presets — replaces sliders ────────────────────────── */}
+        <div className="bg-gray-900/30 border border-gray-800 rounded-2xl px-5 py-4 mb-5">
+          <div className="flex items-center gap-8 flex-wrap">
+
+            {/* OI Threshold */}
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500 whitespace-nowrap">🌊 OI threshold:</span>
+              <div className="flex gap-1.5">
+                {OI_PRESETS.map(v => {
+                  const count = (data?.oi_spikes || []).filter(s => Math.abs(s.oi_pct) >= v).length
+                  return (
+                    <button key={v} onClick={() => handleOIPreset(v)}
+                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${oiThreshold === v
+                        ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700'
+                        : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
+                      <span>{v}%</span>
+                      {data && <span className={`text-[10px] font-normal mt-0.5 ${oiThreshold === v ? 'text-emerald-600' : 'text-gray-600'}`}>{count} signals</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="w-px h-8 bg-gray-800"/>
+
+            {/* Vol Threshold */}
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500 whitespace-nowrap">⚡ Vol threshold:</span>
+              <div className="flex gap-1.5">
+                {VOL_PRESETS.map(v => {
+                  const count = (data?.vol_spikes || []).filter(s => s.vol_pct >= v).length
+                  return (
+                    <button key={v} onClick={() => handleVolPreset(v)}
+                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${volThreshold === v
+                        ? 'bg-amber-950/60 text-amber-400 border-amber-700'
+                        : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
+                      <span>{v}%</span>
+                      {data && <span className={`text-[10px] font-normal mt-0.5 ${volThreshold === v ? 'text-amber-600' : 'text-gray-600'}`}>{count} signals</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-gray-600 ml-auto">
+              Lower % = more signals · Higher % = only strong moves
+            </p>
           </div>
         </div>
 
@@ -299,7 +314,6 @@ export default function OptionsJungle() {
               </a>
             </div>
             <div className="grid grid-cols-2 gap-6">
-              {/* OI spikes for this stock */}
               <div>
                 <p className="text-xs text-emerald-400 font-bold mb-2">🌊 OI Activity ({aerialOI.length} strikes)</p>
                 {aerialOI.length === 0 ? (
@@ -330,7 +344,6 @@ export default function OptionsJungle() {
                   </div>
                 )}
               </div>
-              {/* Vol spikes for this stock */}
               <div>
                 <p className="text-xs text-amber-400 font-bold mb-2">⚡ Volume Activity ({aerialVol.length} strikes)</p>
                 {aerialVol.length === 0 ? (
@@ -375,7 +388,7 @@ export default function OptionsJungle() {
           </button>
         </div>
 
-        {/* Tab-specific filters */}
+        {/* Tab filters */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {tab === 'oi' ? (
             <>
@@ -429,7 +442,7 @@ export default function OptionsJungle() {
                     const m = INTERP_META[s.interpretation] || INTERP_META[s.direction]
                     const isCE = s.option_type === 'CE'
                     return (
-                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':'bg-gray-900/20'}`}>
+                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':`bg-gray-900/20`}`}>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-2">
                             <button onClick={() => setStockSearch(s.symbol)} className="text-sm font-black text-white hover:text-emerald-400 transition-colors">{s.symbol}</button>
@@ -464,9 +477,9 @@ export default function OptionsJungle() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl">
-              <div className="text-5xl mb-4">🌿</div>
+              <div className="text-4xl mb-4">🌿</div>
               <h3 className="text-lg font-bold text-gray-400 mb-2">No OI spikes above {oiThreshold}%</h3>
-              <p className="text-sm text-gray-600">Try lowering the threshold or select a different date</p>
+              <p className="text-sm text-gray-600">Try the 5% preset to see more signals</p>
             </div>
           )
         ) : (
@@ -485,7 +498,7 @@ export default function OptionsJungle() {
                     const m = VOL_META[s.vol_signal]
                     const isCE = s.option_type === 'CE'
                     return (
-                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':'bg-gray-900/20'}`}>
+                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':`bg-gray-900/20`}`}>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-2">
                             <button onClick={() => setStockSearch(s.symbol)} className="text-sm font-black text-white hover:text-emerald-400 transition-colors">{s.symbol}</button>
@@ -520,9 +533,9 @@ export default function OptionsJungle() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl">
-              <div className="text-5xl mb-4">⚡</div>
+              <div className="text-4xl mb-4">⚡</div>
               <h3 className="text-lg font-bold text-gray-400 mb-2">No volume spikes above {volThreshold}%</h3>
-              <p className="text-sm text-gray-600">Try lowering the threshold or select a different date</p>
+              <p className="text-sm text-gray-600">Try the 20% preset to see more signals</p>
             </div>
           )
         )}

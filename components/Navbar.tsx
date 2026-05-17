@@ -23,6 +23,7 @@ const NAV_GROUPS = [
       { href: '/oipulse',    label: 'OI Pulse' },
       { href: '/eod',        label: 'EOD Analysis' },
       { href: '/pcr',        label: 'PCR Trend' },
+      { href: '/oiprofile', label: '📊 OI Profile' },
     ]
   },
   {

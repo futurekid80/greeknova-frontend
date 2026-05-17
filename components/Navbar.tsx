@@ -1,21 +1,21 @@
 'use client'
 import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, MessageSquare, X, Bell } from 'lucide-react'
-import { usePathname } from 'next/navigation'
+import { ChevronDown, MessageSquare, X, Bell, LogOut, User } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 const NAV_GROUPS = [
   {
-  label: 'Market',
-  links: [
-    { href: '/',           label: 'Dashboard' },
-    { href: '/premarket',  label: 'Pre-Market' },
-    { href: '/watchlist',  label: 'Watchlist' },
-    { href: '/journal',    label: '📓 Journal' },  // ← add this
-  ]
-},
-{ 
+    label: 'Market',
+    links: [
+      { href: '/',           label: 'Dashboard' },
+      { href: '/premarket',  label: 'Pre-Market' },
+      { href: '/watchlist',  label: 'Watchlist' },
+      { href: '/journal',    label: '📓 Journal' },
+    ]
+  },
+  {
     label: 'OI Analysis',
     links: [
       { href: '/charts',     label: 'OI Charts' },
@@ -36,12 +36,12 @@ const NAV_GROUPS = [
   {
     label: 'Signals',
     links: [
-      { href: '/scanners',   label: 'Scanners' },
-      { href: '/confluence', label: 'Confluence' },
-      { href: '/rs',         label: 'Rel. Strength' },
-      { href: '/uoa',        label: 'UOA' },
-      { href: '/jungle',     label: '🌿 Options Jungle' },
-      { href: '/positional', label: '📈 Positional Radar' },
+      { href: '/scanners',    label: 'Scanners' },
+      { href: '/confluence',  label: 'Confluence' },
+      { href: '/rs',          label: 'Rel. Strength' },
+      { href: '/uoa',         label: 'UOA' },
+      { href: '/jungle',      label: '🌿 Options Jungle' },
+      { href: '/positional',  label: '📈 Positional Radar' },
     ]
   },
 ]
@@ -171,8 +171,6 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
 }
 
 // ─── Bell notification badge ──────────────────────────────────────────────────
-// Reads unread count from localStorage('gn_alerts') — written by service worker
-// Clears badge when user visits /alerts
 function BellBadge() {
   const [unread, setUnread] = useState(0)
   const pathname = usePathname()
@@ -191,7 +189,6 @@ function BellBadge() {
 
     countUnread()
 
-    // If on alerts page, mark all as read
     if (pathname === '/alerts') {
       try {
         const saved = localStorage.getItem('gn_alerts')
@@ -205,17 +202,12 @@ function BellBadge() {
       setUnread(0)
     }
 
-    // Listen for new alerts via BroadcastChannel
     const bc = new BroadcastChannel('gn_alerts')
     bc.onmessage = () => {
-      if (pathname !== '/alerts') {
-        setUnread(p => p + 1)
-      }
+      if (pathname !== '/alerts') setUnread(p => p + 1)
     }
 
-    // Poll every 30 seconds as backup
     const t = setInterval(countUnread, 30000)
-
     return () => { bc.close(); clearInterval(t) }
   }, [pathname])
 
@@ -228,6 +220,85 @@ function BellBadge() {
         </span>
       )}
     </Link>
+  )
+}
+
+// ─── User Menu (shows email + logout) ────────────────────────────────────────
+function UserMenu() {
+  const [email, setEmail]   = useState('')
+  const [open, setOpen]     = useState(false)
+  const [loading, setLoading] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) setEmail(session.user.email)
+    })
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setEmail(session?.user?.email || '')
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  async function handleLogout() {
+    setLoading(true)
+    await supabase.auth.signOut()
+    setEmail('')
+    setOpen(false)
+    setLoading(false)
+    router.push('/')
+  }
+
+  if (!email) return null
+
+  // Show first part of email before @
+  const displayName = email.split('@')[0]
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-xs font-medium rounded-lg transition-all">
+        <User size={12} className="text-emerald-400"/>
+        <span className="max-w-[100px] truncate">{displayName}</span>
+        <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`}/>
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-2 w-56 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50">
+          {/* Email display */}
+          <div className="px-4 py-3 border-b border-gray-800">
+            <p className="text-xs text-gray-500 mb-0.5">Logged in as</p>
+            <p className="text-xs text-white font-semibold truncate">{email}</p>
+          </div>
+
+          {/* Journal link */}
+          <Link href="/journal" onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800/40 transition-colors">
+            <span>📓</span> My Journal
+          </Link>
+
+          {/* Logout */}
+          <button
+            onClick={handleLogout}
+            disabled={loading}
+            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-colors border-t border-gray-800">
+            <LogOut size={14}/>
+            {loading ? 'Signing out...' : 'Sign Out'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -264,7 +335,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
             ))}
           </div>
 
-          {/* Right side — Bell + Feedback */}
+          {/* Right side */}
           <div className="ml-auto flex items-center gap-2">
             <BellBadge />
             <button
@@ -273,6 +344,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
               <MessageSquare size={13} />
               Feedback
             </button>
+            <UserMenu />
           </div>
         </div>
       </nav>

@@ -118,8 +118,9 @@ export default function TradingJournal() {
   const [showSymbolDrop, setShowSymbolDrop] = useState(false)
   const [insights, setInsights]     = useState('')
   const [loadingInsights, setLoadingInsights] = useState(false)
-  const [showInsights, setShowInsights] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<'ALL'|'OPEN'|'CLOSED'>('ALL')
+  const [showInsights, setShowInsights]         = useState(false)
+  const [insightMode, setInsightMode]           = useState<'pattern'|'live'>('pattern')
+  const [statusFilter, setStatusFilter]         = useState<'ALL'|'OPEN'|'CLOSED'>('ALL')
 
   // Load session
   useEffect(() => {
@@ -294,6 +295,83 @@ End with: "📊 Pattern analysis based on your journal data. Not investment advi
     setLoadingInsights(false)
   }
 
+  // Live position review — works with any open trade
+  async function getLiveReview() {
+    if (openTrades.length === 0) return
+    setLoadingInsights(true)
+    setInsightMode('live')
+    setShowInsights(true)
+
+    // Fetch current market context for each open position
+    const positionReviews = await Promise.all(
+      openTrades.slice(0, 5).map(async (t) => {
+        try {
+          const res  = await fetch(`${API}/iv-analysis/${t.symbol}`)
+          const json = await res.json()
+          const iv   = json.results?.[0]
+          return {
+            symbol:          t.symbol,
+            strike:          t.strike,
+            option_type:     t.option_type,
+            action:          t.action,
+            entry_price:     t.entry_price,
+            entry_date:      t.entry_date,
+            ivr_at_entry:    t.ivr_at_entry,
+            iv_at_entry:     t.iv_at_entry,
+            dte_at_entry:    t.dte_at_entry,
+            current_ivr:     iv?.ivr ?? null,
+            current_iv:      iv?.current_iv ?? null,
+            current_dte:     iv?.dte ?? null,
+            expected_move:   iv?.expected_move_pts ?? null,
+            upper_range:     iv?.upper_range ?? null,
+            lower_range:     iv?.lower_range ?? null,
+            atm_straddle:    iv?.atm_straddle ?? null,
+          }
+        } catch {
+          return { symbol: t.symbol, strike: t.strike, error: true }
+        }
+      })
+    )
+
+    const prompt = `You are reviewing a trader's open options positions on NSE India.
+
+For each position, I will give you: what they entered vs current market conditions.
+
+${positionReviews.map(p => `
+POSITION: ${p.action} ${p.symbol} ${p.strike} ${p.option_type}
+- Entry price: ₹${p.entry_price} on ${p.entry_date}
+- IVR at entry: ${p.ivr_at_entry ?? 'unknown'} | Current IVR: ${p.current_ivr ?? 'unknown'}
+- IV at entry: ${p.iv_at_entry ?? 'unknown'}% | Current IV: ${p.current_iv ?? 'unknown'}%
+- DTE at entry: ${p.dte_at_entry ?? 'unknown'} days | Current DTE: ${p.current_dte ?? 'unknown'} days
+- Expected move by expiry: ±${p.expected_move ?? 'unknown'} pts (range: ${p.lower_range ?? '?'} – ${p.upper_range ?? '?'})
+- ATM straddle now: ₹${p.atm_straddle ?? 'unknown'}
+`).join('')}
+
+For each position:
+1. Describe what has changed since entry (IV, time decay, expected range)
+2. Where is the strike relative to expected move range?
+3. What does the current OI structure suggest about this level?
+
+Be factual and specific. Use actual numbers. Never say buy/sell/hold/exit.
+End with: "📊 Position review based on live GreekNova data. Not investment advice."`
+
+    try {
+      const res  = await fetch(`${API}/ask-claude`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          system:   'You are a trading position analyst. Review open options positions using current market data. Be specific with numbers. Never give directional advice or tell trader to exit/hold.',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+      const data = await res.json()
+      setInsights(data.content || 'Could not generate review')
+    } catch {
+      setInsights('Failed to load position review. Please try again.')
+    }
+    setLoadingInsights(false)
+  }
+
   const filteredTrades = trades.filter(t =>
     statusFilter === 'ALL' || t.status === statusFilter
   )
@@ -358,16 +436,23 @@ End with: "📊 Pattern analysis based on your journal data. Not investment advi
             </p>
             <p className="text-xs text-gray-600">{winners.length}/{closedTrades.length} winners</p>
           </div>
-          <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
+          <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 flex flex-col gap-2">
+            <p className="text-xs text-gray-500">🧠 Claude AI</p>
+            {/* Live review — works immediately with open trades */}
             <button
-              onClick={getInsights}
+              onClick={getLiveReview}
+              disabled={openTrades.length === 0 || loadingInsights}
+              className="w-full flex items-center justify-between px-3 py-2 bg-emerald-950/40 border border-emerald-800/40 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-950/60 transition-all disabled:opacity-40">
+              <span>📍 Review open positions</span>
+              <span>→</span>
+            </button>
+            {/* Pattern analysis — needs 3 closed trades */}
+            <button
+              onClick={() => { setInsightMode('pattern'); getInsights() }}
               disabled={closedTrades.length < 3 || loadingInsights}
-              className="w-full h-full flex flex-col items-start gap-1 disabled:opacity-50">
-              <p className="text-xs text-gray-500">🧠 AI Insights</p>
-              <p className="text-sm font-bold text-purple-400">
-                {loadingInsights ? 'Analysing...' : closedTrades.length < 3 ? `Need ${3 - closedTrades.length} more trades` : 'Analyse patterns →'}
-              </p>
-              <p className="text-xs text-gray-600">Claude analyses your trades</p>
+              className="w-full flex items-center justify-between px-3 py-2 bg-purple-950/40 border border-purple-800/40 rounded-lg text-xs font-bold text-purple-400 hover:bg-purple-950/60 transition-all disabled:opacity-40">
+              <span>📊 Pattern analysis</span>
+              <span>{closedTrades.length < 3 ? `(need ${3 - closedTrades.length} more)` : '→'}</span>
             </button>
           </div>
         </div>
@@ -377,7 +462,8 @@ End with: "📊 Pattern analysis based on your journal data. Not investment advi
           <div className="bg-purple-950/20 border border-purple-800/40 rounded-2xl p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-purple-400 flex items-center gap-2">
-                <Brain size={16}/> Pattern Analysis
+                <Brain size={16}/>
+                {insightMode === 'live' ? '📍 Live Position Review' : '📊 Pattern Analysis'}
               </h3>
               <button onClick={() => setShowInsights(false)} className="text-gray-600 hover:text-white">
                 <X size={16}/>
@@ -391,7 +477,10 @@ End with: "📊 Pattern analysis based on your journal data. Not investment advi
                       style={{ animationDelay: `${i*150}ms` }}/>
                   ))}
                 </div>
-                Analysing your {closedTrades.length} closed trades...
+                {insightMode === 'live'
+                  ? `Reviewing ${openTrades.length} open position${openTrades.length > 1 ? 's' : ''} with live market data...`
+                  : `Analysing your ${closedTrades.length} closed trades...`
+                }
               </div>
             ) : (
               <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">

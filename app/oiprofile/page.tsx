@@ -94,21 +94,15 @@ export default function OIProfile() {
   useEffect(() => { setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
 
-  // Show ATM ± 20 strikes for cleaner view
+  // Backend already filters to ±20% of CMP
+  // Just normalize bars against same max and reverse for display
   const profile = data?.profile || []
-  const atmIdx  = profile.findIndex(p => p.is_atm)
 
-  // Filter to ATM range — removes far OTM noise
-  const rangeProfile = atmIdx >= 0
-    ? profile.slice(Math.max(0, atmIdx - 20), atmIdx + 21)
-    : profile
-
-  // Normalize CE and PE bars against SAME max for true visual comparison
   const maxCombined = Math.max(
-    ...rangeProfile.map(p => Math.max(p.ce_oi, p.pe_oi))
+    ...profile.map(p => Math.max(p.ce_oi, p.pe_oi))
   ) || 1
 
-  const displayProfile = rangeProfile
+  const displayProfile = [...profile]
     .map(p => ({
       ...p,
       ce_bar_pct: Math.round(p.ce_oi / maxCombined * 100),

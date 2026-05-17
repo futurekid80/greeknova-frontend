@@ -1,560 +1,457 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { RefreshCw, Clock, Zap, Search, X } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { RefreshCw } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
-interface OISpike {
-  symbol: string; tradingsymbol: string; strike: number; option_type: string
-  cmp: number; last_price: number; ltp_chg_pct: number
-  is_index: boolean; is_otm: boolean; otm_pct: number
-  volume: number; oi: number; old_oi: number; new_oi: number
-  oi_change: number; oi_pct: number; vol_change: number
-  direction: 'BUILD' | 'UNWIND'; interpretation: string
-}
-
-interface VolSpike {
-  symbol: string; tradingsymbol: string; strike: number; option_type: string
-  cmp: number; last_price: number; ltp_chg_pct: number
-  is_index: boolean; is_otm: boolean; otm_pct: number
-  volume: number; oi: number; old_volume: number; new_volume: number
-  vol_pct: number; oi_pct: number; vol_signal: 'FRESH_BUILD' | 'UNWINDING' | 'CHURN'
-}
-
-interface JungleData {
-  date: string; ts_new: string; ts_old: string
-  open_time: string; close_time: string; snapshots: number
-  oi_threshold: number; vol_threshold: number
-  oi_spikes: OISpike[]; vol_spikes: VolSpike[]
-  oi_total: number; vol_total: number
-}
-
-const INTERP_META: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
-  LONG_BUILDUP:   { color: 'text-emerald-400', bg: 'bg-emerald-950/30', border: 'border-emerald-800/40', icon: '🐂', label: 'Long Buildup' },
-  SHORT_BUILDUP:  { color: 'text-red-400',     bg: 'bg-red-950/30',     border: 'border-red-800/40',     icon: '🐻', label: 'Short Buildup' },
-  CALL_WRITING:   { color: 'text-red-400',     bg: 'bg-red-950/30',     border: 'border-red-800/40',     icon: '✍️', label: 'Call Writing' },
-  PUT_WRITING:    { color: 'text-emerald-400', bg: 'bg-emerald-950/30', border: 'border-emerald-800/40', icon: '✍️', label: 'Put Writing' },
-  SHORT_COVERING: { color: 'text-cyan-400',    bg: 'bg-cyan-950/30',    border: 'border-cyan-800/40',    icon: '🔄', label: 'Short Covering' },
-  LONG_UNWINDING: { color: 'text-orange-400',  bg: 'bg-orange-950/30',  border: 'border-orange-800/40',  icon: '⚠️', label: 'Long Unwinding' },
-  BUILD:          { color: 'text-emerald-400', bg: 'bg-emerald-950/30', border: 'border-emerald-800/40', icon: '↑',  label: 'Build' },
-  UNWIND:         { color: 'text-red-400',     bg: 'bg-red-950/30',     border: 'border-red-800/40',     icon: '↓',  label: 'Unwind' },
-}
-
-const VOL_META: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
-  FRESH_BUILD: { color: 'text-emerald-400', bg: 'bg-emerald-950/30', border: 'border-emerald-800/40', icon: '🌱', label: 'Fresh Build' },
-  UNWINDING:   { color: 'text-red-400',     bg: 'bg-red-950/30',     border: 'border-red-800/40',     icon: '🔻', label: 'Unwinding' },
-  CHURN:       { color: 'text-amber-400',   bg: 'bg-amber-950/30',   border: 'border-amber-800/40',   icon: '🔄', label: 'Churn' },
-}
-
-const OI_PRESETS:  (number | null)[] = [5, 10, 15, null]
-const VOL_PRESETS: (number | null)[] = [20, 50, 100, null]
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const STOCKS = [
+  'RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BHARTIARTL',
+  'KOTAKBANK','LT','AXISBANK','ASIANPAINT','MARUTI','TITAN','SUNPHARMA','ULTRACEMCO',
+  'BAJFINANCE','WIPRO','HCLTECH','TATACONSUM','TATASTEEL','ADANIENT','POWERGRID','NTPC',
+  'ONGC','JSWSTEEL','COALINDIA','BAJAJFINSV','TECHM','APOLLOHOSP','BAJAJ-AUTO','BPCL',
+  'BRITANNIA','CIPLA','DRREDDY','EICHERMOT','GRASIM','HEROMOTOCO','HINDALCO','HDFCLIFE',
+  'INDUSINDBK','JIOFIN','M&M','NESTLEIND','SBILIFE','SHRIRAMFIN','TRENT','ADANIPORTS',
+  'BANKBARODA','BEL','CANBK','CHOLAFIN','DLF','GAIL','HAVELLS','HAL','INDIGO','PFC',
+  'RECLTD','SAIL','TATAPOWER','VEDL',
+]
 
 function fmtOI(n: number) {
-  const abs = Math.abs(n)
-  if (abs >= 10000000) return `${(n/10000000).toFixed(2)}Cr`
-  if (abs >= 100000) return `${(n/100000).toFixed(1)}L`
+  if (Math.abs(n) >= 10000000) return `${(n/10000000).toFixed(1)}Cr`
+  if (Math.abs(n) >= 100000)   return `${(n/100000).toFixed(1)}L`
   return n.toLocaleString()
 }
 
-export default function OptionsJungle() {
-  const [data, setData]             = useState<JungleData | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [tab, setTab]               = useState<'oi' | 'vol'>('oi')
-  const [oiThreshold, setOiThreshold]   = useState<number|null>(5)
-  const [volThreshold, setVolThreshold] = useState<number|null>(20)
-  const [dirFilter, setDirFilter]       = useState<'all'|'BUILD'|'UNWIND'>('all')
-  const [volSigFilter, setVolSigFilter] = useState<'all'|'FRESH_BUILD'|'UNWINDING'|'CHURN'>('all')
-  const [typeFilter, setTypeFilter]     = useState<'all'|'CE'|'PE'>('all')
-  const [stockSearch, setStockSearch]   = useState('')
-  const [date, setDate]                 = useState('')
-  const [availDates, setAvailDates]     = useState<string[]>([])
-  const [autoEnabled, setAutoEnabled]   = useState(false)
-  const [countdown, setCountdown]       = useState(300)
-  const intervalRef  = useRef<NodeJS.Timeout|null>(null)
-  const countdownRef = useRef<NodeJS.Timeout|null>(null)
-  const dateRef = useRef('')
-  const oiRef   = useRef<number|null>(5)
-  const volRef  = useRef<number|null>(20)
+function fmtDate(d: string) {
+  try { return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) }
+  catch { return d }
+}
+
+interface ProfileRow {
+  strike: number
+  ce_oi: number; pe_oi: number; total_oi: number
+  ce_pct: number; pe_pct: number; total_pct: number
+  imbalance: number
+  is_vacuum: boolean; is_poc: boolean
+  is_ce_wall: boolean; is_pe_wall: boolean
+  is_atm: boolean; in_value_area: boolean
+}
+
+interface WallPoint {
+  date: string; ce_wall: number; pe_wall: number
+  ce_wall_oi: number; pe_wall_oi: number
+}
+
+interface ProfileData {
+  symbol: string; date: string; expiry: string; expiries: string[]
+  cmp: number; atm_strike: number; poc_strike: number
+  ce_wall: number; pe_wall: number; vah: number; val: number
+  total_ce_oi: number; total_pe_oi: number; pcr: number
+  profile: ProfileRow[]; wall_migration: WallPoint[]
+  vacuum_count: number
+  error?: string
+}
+
+const MigrationTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 text-xs shadow-xl">
+      <p className="text-gray-400 mb-2">{fmtDate(label)}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ color: p.color }} className="font-bold">
+          {p.name}: {p.value?.toLocaleString()}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+export default function OIProfile() {
+  const [data, setData]         = useState<ProfileData | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [symbol, setSymbol]     = useState('NIFTY')
+  const [expiry, setExpiry]     = useState('')
+  const [view, setView]         = useState<'profile'|'migration'>('profile')
+  const [showVacuum, setShowVacuum] = useState(true)
+  const [showValueArea, setShowValueArea] = useState(true)
+  const isStock = STOCKS.includes(symbol)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      // Fetch with low threshold (1%) to avoid Supabase timeout
-      // Frontend filtering handles the actual threshold display
-      const params = new URLSearchParams({
-        oi_threshold:  '1',
-        vol_threshold: '1',
-      })
-      if (dateRef.current) params.set('date', dateRef.current)
-      const res  = await fetch(`${API}/options-jungle?${params}`)
+      const params = new URLSearchParams()
+      if (expiry) params.set('expiry', expiry)
+      const res  = await fetch(`${API}/oi-profile/${symbol}?${params}`)
       const json = await res.json()
       setData(json)
+      if (!expiry && json.expiry) setExpiry(json.expiry)
     } catch(e) { console.error(e) }
     setLoading(false)
-  }, [])
+  }, [symbol, expiry])
 
-  useEffect(() => {
-    async function loadDates() {
-      try {
-        const res  = await fetch(`${API}/oi-dates/NIFTY`)
-        const json = await res.json()
-        const dates: string[] = [...(json.dates || [])].reverse()
-        setAvailDates(dates)
-        if (dates.length > 0 && !dateRef.current) {
-          setDate(dates[0])
-          dateRef.current = dates[0]
-          // Trigger fetch now that we have a date
-          fetchData()
-        }
-      } catch(e) { console.error(e) }
-    }
-    loadDates()
-  }, [fetchData])
+  useEffect(() => { setExpiry('') }, [symbol])
+  useEffect(() => { fetchData() }, [symbol, expiry])
 
+  // Backend already filters to ±20% of CMP
+  // Just normalize bars against same max and reverse for display
+  const profile = data?.profile || []
 
-  function handleDateChange(d: string) {
-    setDate(d); dateRef.current = d; fetchData()
-  }
+  const maxCombined = Math.max(
+    ...profile.map(p => Math.max(p.ce_oi, p.pe_oi))
+  ) || 1
 
-  function handleOIPreset(v: number | null) {
-    setOiThreshold(v); oiRef.current = v
-    // No fetchData needed — filtering happens on frontend
-  }
-
-  function handleVolPreset(v: number | null) {
-    setVolThreshold(v); volRef.current = v
-  }
-
-  function startAuto() {
-    setAutoEnabled(true); setCountdown(300)
-    if (intervalRef.current)  clearInterval(intervalRef.current)
-    if (countdownRef.current) clearInterval(countdownRef.current)
-    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
-    countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
-  }
-  function stopAuto() {
-    setAutoEnabled(false)
-    if (intervalRef.current)  { clearInterval(intervalRef.current);  intervalRef.current  = null }
-    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
-  }
-
-  useEffect(() => {
-    fetchData(); startAuto()
-    return () => {
-      if (intervalRef.current)  clearInterval(intervalRef.current)
-      if (countdownRef.current) clearInterval(countdownRef.current)
-    }
-  }, [])
-
-  const searchTerm = stockSearch.trim().toUpperCase()
-
-  const oiFiltered = (data?.oi_spikes || [])
-    .filter(s => oiThreshold === null || Math.abs(s.oi_pct) >= oiThreshold)
-    .filter(s => !searchTerm || s.symbol.includes(searchTerm))
-    .filter(s => dirFilter === 'all' || s.direction === dirFilter)
-    .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
-
-  const volFiltered = (data?.vol_spikes || [])
-    .filter(s => volThreshold === null || s.vol_pct >= volThreshold)
-    .filter(s => !searchTerm || s.symbol.includes(searchTerm))
-    .filter(s => volSigFilter === 'all' || s.vol_signal === volSigFilter)
-    .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
-
-  const isAerial  = searchTerm.length >= 2
-  const aerialOI  = oiFiltered.filter(s => s.symbol === oiFiltered[0]?.symbol)
-  const aerialVol = volFiltered.filter(s => s.symbol === volFiltered[0]?.symbol)
-  const aerialSym = isAerial ? (oiFiltered[0]?.symbol || volFiltered[0]?.symbol) : null
-
-  // Use filtered data for all counts — consistent with what's displayed
-  const oiBuilds  = oiFiltered.filter(s => s.direction === 'BUILD').length
-  const oiUnwinds = oiFiltered.filter(s => s.direction === 'UNWIND').length
-  const volFresh  = volFiltered.filter(s => s.vol_signal === 'FRESH_BUILD').length
-  const volUnwind = volFiltered.filter(s => s.vol_signal === 'UNWINDING').length
-  const volChurn  = volFiltered.filter(s => s.vol_signal === 'CHURN').length
-
-  const mins = Math.floor(countdown/60)
-  const secs = countdown % 60
+  const displayProfile = [...profile]
+    .map(p => ({
+      ...p,
+      ce_bar_pct: Math.round(p.ce_oi / maxCombined * 100),
+      pe_bar_pct: Math.round(p.pe_oi / maxCombined * 100),
+    }))
+    .reverse() // higher strikes on top
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
-      <Navbar active="/jungle" />
+      <Navbar active="/oiprofile" />
+
       <div className="max-w-7xl mx-auto px-6 py-8">
 
         {/* Header */}
         <div className="flex items-end justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-black tracking-tight mb-1">🌿 Options Jungle</h1>
-            <p className="text-gray-500 text-sm">Where the wild money flows · OI Spikes + Volume Surges · 5-min snapshot comparison</p>
+            <h1 className="text-3xl font-black tracking-tight mb-1">📊 OI Profile</h1>
+            <p className="text-gray-500 text-sm">
+              Visual OI distribution · Vacuum zones · Wall migration · Value area
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            {availDates.length > 0 && (
+            {data?.expiries && data.expiries.length > 0 && (
               <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2">
-                <span className="text-xs text-gray-500">Date:</span>
-                <select value={date} onChange={e => handleDateChange(e.target.value)}
+                <span className="text-xs text-gray-500">Expiry:</span>
+                <select value={expiry} onChange={e => setExpiry(e.target.value)}
                   className="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
-                  {availDates.map(d => (
-                    <option key={d} value={d} className="bg-gray-900">
-                      {new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', weekday: 'short' })}
-                    </option>
+                  {data.expiries.map(e => (
+                    <option key={e} value={e} className="bg-gray-900">{fmtDate(e)}</option>
                   ))}
                 </select>
               </div>
             )}
-            {data?.open_time && (
-              <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
-                <Clock size={11}/>{data.open_time} → {data.close_time} IST · {data.snapshots} snapshots
+            {data?.cmp && (
+              <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-800/50 rounded-xl px-4 py-2">
+                <span className="text-xs text-gray-500">CMP</span>
+                <span className="text-lg font-black text-amber-400">₹{data.cmp.toLocaleString()}</span>
+                {data.atm_strike && <span className="text-xs text-gray-500">ATM <span className="text-amber-300 font-bold">{data.atm_strike.toLocaleString()}</span></span>}
               </div>
             )}
-            <button onClick={() => autoEnabled ? stopAuto() : startAuto()}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${autoEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
-              {autoEnabled ? `${mins}:${secs.toString().padStart(2,'0')}` : 'Auto OFF'}
-            </button>
             <button onClick={fetchData} disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all disabled:opacity-50">
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
             </button>
           </div>
         </div>
 
-        {/* Summary boxes */}
-        <div className="grid grid-cols-5 gap-3 mb-5">
-          <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">🌊 OI Spikes</p>
-            <p className="text-2xl font-black text-white">{oiFiltered.length}</p>
-            <p className="text-xs text-gray-600">{oiThreshold === null ? 'all signals' : `above ${oiThreshold}% change`}</p>
-          </div>
-          <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">↑ OI Builds</p>
-            <p className="text-2xl font-black text-emerald-400">{oiBuilds}</p>
-            <p className="text-xs text-gray-600">fresh positions</p>
-          </div>
-          <div className="bg-red-950/20 border border-red-800/40 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">↓ OI Unwinds</p>
-            <p className="text-2xl font-black text-red-400">{oiUnwinds}</p>
-            <p className="text-xs text-gray-600">positions exited</p>
-          </div>
-          <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">⚡ Vol Spikes</p>
-            <p className="text-2xl font-black text-amber-400">{volFiltered.length}</p>
-            <p className="text-xs text-gray-600">{volThreshold === null ? 'all signals' : `above ${volThreshold}% surge`}</p>
-          </div>
-          <div className="bg-violet-950/20 border border-violet-800/40 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">🌱 Fresh Builds</p>
-            <p className="text-2xl font-black text-violet-400">{volFresh}</p>
-            <p className="text-xs text-gray-600">vol + OI rising</p>
-          </div>
-        </div>
-
-        {/* ── Threshold presets — replaces sliders ────────────────────────── */}
-        <div className="bg-gray-900/30 border border-gray-800 rounded-2xl px-5 py-4 mb-5">
-          <div className="flex items-center gap-8 flex-wrap">
-
-            {/* OI Threshold */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 whitespace-nowrap">🌊 OI threshold:</span>
-              <div className="flex gap-1.5">
-                {OI_PRESETS.map(v => {
-                  const count = v === null
-                    ? (data?.oi_spikes || []).length
-                    : (data?.oi_spikes || []).filter(s => Math.abs(s.oi_pct) >= v).length
-                  const isActive = oiThreshold === v
-                  return (
-                    <button key={String(v)} onClick={() => handleOIPreset(v)}
-                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${isActive
-                        ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700'
-                        : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
-                      <span>{v === null ? 'All →' : `${v}%`}</span>
-                      {data && <span className={`text-[10px] font-normal mt-0.5 ${isActive ? 'text-emerald-600' : 'text-gray-600'}`}>{count}</span>}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="w-px h-8 bg-gray-800"/>
-
-            {/* Vol Threshold */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 whitespace-nowrap">⚡ Vol threshold:</span>
-              <div className="flex gap-1.5">
-                {VOL_PRESETS.map(v => {
-                  const count = v === null
-                    ? (data?.vol_spikes || []).length
-                    : (data?.vol_spikes || []).filter(s => s.vol_pct >= v).length
-                  const isActive = volThreshold === v
-                  return (
-                    <button key={String(v)} onClick={() => handleVolPreset(v)}
-                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${isActive
-                        ? 'bg-amber-950/60 text-amber-400 border-amber-700'
-                        : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
-                      <span>{v === null ? 'All →' : `${v}%`}</span>
-                      {data && <span className={`text-[10px] font-normal mt-0.5 ${isActive ? 'text-amber-600' : 'text-gray-600'}`}>{count}</span>}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <p className="text-[10px] text-gray-600 ml-auto">
-              Lower % = more signals · Higher % = only strong moves
-            </p>
-          </div>
-        </div>
-
-        {/* Stock Search */}
-        <div className="relative mb-5">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
-          <input
-            value={stockSearch}
-            onChange={e => setStockSearch(e.target.value.toUpperCase())}
-            placeholder="Search stock for aerial view — e.g. TECHM, NIFTY, RELIANCE"
-            className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-xl pl-9 pr-10 py-3 focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-gray-600"
-          />
-          {stockSearch && (
-            <button onClick={() => setStockSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
-              <X size={14}/>
-            </button>
-          )}
-        </div>
-
-        {/* Aerial View */}
-        {isAerial && aerialSym && (
-          <div className="rounded-2xl border border-gray-700 bg-gray-900/40 p-5 mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-xl font-black text-white">{aerialSym}</h2>
-              <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded-lg">Aerial View</span>
-              <a href={`/stock/${aerialSym}`} className="ml-auto text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 px-2 py-1 rounded-lg transition-colors">
-                Full Stock Page →
-              </a>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-xs text-emerald-400 font-bold mb-2">🌊 OI Activity ({aerialOI.length} strikes)</p>
-                {aerialOI.length === 0 ? (
-                  <p className="text-xs text-gray-600">No OI spikes above {oiThreshold}%</p>
-                ) : (
-                  <div className="space-y-2">
-                    {aerialOI.map((s, i) => {
-                      const m = INTERP_META[s.interpretation] || INTERP_META[s.direction]
-                      return (
-                        <div key={i} className={`rounded-xl p-3 border ${m.bg} ${m.border}`}>
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-black text-white">{s.strike.toLocaleString()} {s.option_type}</span>
-                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.color}`}>{m.icon} {m.label}</span>
-                            </div>
-                            <span className={`text-sm font-black ${s.oi_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {s.oi_pct > 0 ? '+' : ''}{s.oi_pct}% OI
-                            </span>
-                          </div>
-                          <div className="flex gap-4 text-xs text-gray-500">
-                            <span>LTP: <span className="text-white">₹{s.last_price}</span></span>
-                            <span>LTP Δ: <span className={s.ltp_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}>{s.ltp_chg_pct > 0 ? '+' : ''}{s.ltp_chg_pct}%</span></span>
-                            <span>Vol: <span className="text-gray-300">{fmtOI(s.volume)}</span></span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-amber-400 font-bold mb-2">⚡ Volume Activity ({aerialVol.length} strikes)</p>
-                {aerialVol.length === 0 ? (
-                  <p className="text-xs text-gray-600">No volume spikes above {volThreshold}%</p>
-                ) : (
-                  <div className="space-y-2">
-                    {aerialVol.map((s, i) => {
-                      const m = VOL_META[s.vol_signal]
-                      return (
-                        <div key={i} className={`rounded-xl p-3 border ${m.bg} ${m.border}`}>
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-black text-white">{s.strike.toLocaleString()} {s.option_type}</span>
-                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.color}`}>{m.icon} {m.label}</span>
-                            </div>
-                            <span className="text-sm font-black text-amber-400">+{s.vol_pct}% vol</span>
-                          </div>
-                          <div className="flex gap-4 text-xs text-gray-500">
-                            <span>LTP: <span className="text-white">₹{s.last_price}</span></span>
-                            <span>OI Δ: <span className={s.oi_pct > 0 ? 'text-emerald-400' : 'text-red-400'}>{s.oi_pct > 0 ? '+' : ''}{s.oi_pct}%</span></span>
-                            <span>Vol: <span className="text-gray-300">{fmtOI(s.new_volume)}</span></span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div className="flex items-center gap-1 mb-5 bg-gray-900/40 border border-gray-800 rounded-xl p-1 w-fit">
-          <button onClick={() => setTab('oi')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'oi' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/60' : 'text-gray-500 hover:text-white'}`}>
-            🌊 OI Spikes <span className="text-xs opacity-70">{oiFiltered.length}</span>
-          </button>
-          <button onClick={() => setTab('vol')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'vol' ? 'bg-amber-950 text-amber-400 border border-amber-800/60' : 'text-gray-500 hover:text-white'}`}>
-            ⚡ Volume Spikes <span className="text-xs opacity-70">{volFiltered.length}</span>
-          </button>
-        </div>
-
-        {/* Tab filters */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          {tab === 'oi' ? (
-            <>
-              {(['all','BUILD','UNWIND'] as const).map(f => (
-                <button key={f} onClick={() => setDirFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${dirFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-                  {f==='all'?'◈ All':f==='BUILD'?'↑ Builds':'↓ Unwinds'}
-                  <span className="ml-1 opacity-60">{f==='all'?oiFiltered.length:f==='BUILD'?oiBuilds:oiUnwinds}</span>
-                </button>
-              ))}
-            </>
-          ) : (
-            <>
-              {(['all','FRESH_BUILD','UNWINDING','CHURN'] as const).map(f => (
-                <button key={f} onClick={() => setVolSigFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${volSigFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-                  {f==='all'?'◈ All':f==='FRESH_BUILD'?'🌱 Fresh Build':f==='UNWINDING'?'🔻 Unwinding':'🔄 Churn'}
-                  <span className="ml-1 opacity-60">{f==='all'?volFiltered.length:f==='FRESH_BUILD'?volFresh:f==='UNWINDING'?volUnwind:volChurn}</span>
-                </button>
-              ))}
-            </>
-          )}
-          <div className="w-px h-5 bg-gray-800 mx-1"/>
-          {(['all','CE','PE'] as const).map(t => (
-            <button key={t} onClick={() => setTypeFilter(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${typeFilter===t ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              {t==='all'?'All':t}
+        {/* Symbol selector */}
+        <div className="flex flex-wrap gap-2 mb-5 items-center">
+          {INDICES.map(idx => (
+            <button key={idx} onClick={() => setSymbol(idx)}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${symbol===idx ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              {idx}
             </button>
           ))}
+          <select value={isStock ? symbol : ''} onChange={e => e.target.value && setSymbol(e.target.value)}
+            className={`rounded-xl text-sm font-bold border transition-all px-4 py-2.5 focus:outline-none ${isStock ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800'}`}>
+            <option value="">Stocks ▾</option>
+            {STOCKS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
 
-        <p className="text-xs text-gray-600 mb-4">
-          {tab === 'oi' ? oiFiltered.length : volFiltered.length} signals · {data?.open_time} → {data?.close_time} IST
-        </p>
-
-        {loading ? (
-          <div className="space-y-2">{[1,2,3,4,5].map(i=><div key={i} className="h-14 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>)}</div>
-        ) : tab === 'oi' ? (
-          oiFiltered.length > 0 ? (
-            <div className="rounded-2xl border border-gray-800 overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-900/60 border-b border-gray-800">
-                    {['Symbol','Strike','Type','Signal','OI Δ%','LTP Δ%','Old OI','New OI','Volume','LTP'].map((h,i)=>(
-                      <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=3?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5':''}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {oiFiltered.map((s, i) => {
-                    const m = INTERP_META[s.interpretation] || INTERP_META[s.direction]
-                    const isCE = s.option_type === 'CE'
-                    return (
-                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':`bg-gray-900/20`}`}>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setStockSearch(s.symbol)} className="text-sm font-black text-white hover:text-emerald-400 transition-colors">{s.symbol}</button>
-                            {s.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
-                          </div>
-                          <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{s.cmp.toLocaleString()}</p>
-                        </td>
-                        <td className="px-4 py-3.5 text-sm font-bold text-gray-300">{s.strike.toLocaleString()}</td>
-                        <td className="px-4 py-3.5">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isCE?'bg-red-950/50 text-red-400 border border-red-800/50':'bg-emerald-950/50 text-emerald-400 border border-emerald-800/50'}`}>{s.option_type}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
-                            {m.icon} {m.label}
-                          </div>
-                        </td>
-                        <td className={`px-4 py-3.5 text-right text-sm font-black ${s.oi_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          <span className="flex items-center justify-end gap-1"><Zap size={11}/>{s.oi_pct > 0 ? '+' : ''}{s.oi_pct}%</span>
-                        </td>
-                        <td className={`px-4 py-3.5 text-right text-sm font-semibold ${s.ltp_chg_pct > 0 ? 'text-emerald-400' : s.ltp_chg_pct < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-                          {s.ltp_chg_pct > 0 ? '+' : ''}{s.ltp_chg_pct}%
-                        </td>
-                        <td className="px-4 py-3.5 text-right text-sm text-gray-500">{fmtOI(s.old_oi)}</td>
-                        <td className="px-4 py-3.5 text-right text-sm text-gray-300">{fmtOI(s.new_oi)}</td>
-                        <td className="px-4 py-3.5 text-right text-sm text-gray-400">{fmtOI(s.volume)}</td>
-                        <td className="px-5 py-3.5 text-right text-sm font-bold text-amber-400">₹{s.last_price}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl">
-              <div className="text-4xl mb-4">🌿</div>
-              <h3 className="text-lg font-bold text-gray-400 mb-2">No OI spikes above {oiThreshold}%</h3>
-              <p className="text-sm text-gray-600">Try the 5% preset to see more signals</p>
-            </div>
-          )
-        ) : (
-          volFiltered.length > 0 ? (
-            <div className="rounded-2xl border border-gray-800 overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-900/60 border-b border-gray-800">
-                    {['Symbol','Strike','Type','Vol Signal','Vol Δ%','OI Δ%','LTP Δ%','Old Vol','New Vol','LTP'].map((h,i)=>(
-                      <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=3?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5':''}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {volFiltered.map((s, i) => {
-                    const m = VOL_META[s.vol_signal]
-                    const isCE = s.option_type === 'CE'
-                    return (
-                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':`bg-gray-900/20`}`}>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setStockSearch(s.symbol)} className="text-sm font-black text-white hover:text-emerald-400 transition-colors">{s.symbol}</button>
-                            {s.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
-                          </div>
-                          <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{s.cmp.toLocaleString()}</p>
-                        </td>
-                        <td className="px-4 py-3.5 text-sm font-bold text-gray-300">{s.strike.toLocaleString()}</td>
-                        <td className="px-4 py-3.5">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isCE?'bg-red-950/50 text-red-400 border border-red-800/50':'bg-emerald-950/50 text-emerald-400 border border-emerald-800/50'}`}>{s.option_type}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
-                            {m.icon} {m.label}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 text-right text-sm font-black text-amber-400">+{s.vol_pct}%</td>
-                        <td className={`px-4 py-3.5 text-right text-sm font-semibold ${s.oi_pct > 0 ? 'text-emerald-400' : s.oi_pct < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-                          {s.oi_pct > 0 ? '+' : ''}{s.oi_pct}%
-                        </td>
-                        <td className={`px-4 py-3.5 text-right text-sm font-semibold ${s.ltp_chg_pct > 0 ? 'text-emerald-400' : s.ltp_chg_pct < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-                          {s.ltp_chg_pct > 0 ? '+' : ''}{s.ltp_chg_pct}%
-                        </td>
-                        <td className="px-4 py-3.5 text-right text-sm text-gray-500">{fmtOI(s.old_volume)}</td>
-                        <td className="px-4 py-3.5 text-right text-sm text-gray-300">{fmtOI(s.new_volume)}</td>
-                        <td className="px-5 py-3.5 text-right text-sm font-bold text-amber-400">₹{s.last_price}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl">
-              <div className="text-4xl mb-4">⚡</div>
-              <h3 className="text-lg font-bold text-gray-400 mb-2">No volume spikes above {volThreshold}%</h3>
-              <p className="text-sm text-gray-600">Try the 20% preset to see more signals</p>
-            </div>
-          )
+        {/* Key levels summary */}
+        {data && !data.error && (
+          <div className="grid grid-cols-6 gap-3 mb-5">
+            {[
+              { label: '📍 POC',        val: data.poc_strike?.toLocaleString(),  sub: 'Max OI concentration',   color: 'text-purple-400',  bg: 'bg-purple-950/20 border-purple-800/40' },
+              { label: '🔴 CE Wall',    val: data.ce_wall?.toLocaleString(),     sub: 'Strongest resistance',   color: 'text-red-400',     bg: 'bg-red-950/20 border-red-800/40' },
+              { label: '🟢 PE Wall',    val: data.pe_wall?.toLocaleString(),     sub: 'Strongest support',      color: 'text-emerald-400', bg: 'bg-emerald-950/20 border-emerald-800/40' },
+              { label: '↑ VAH',         val: data.vah?.toLocaleString(),         sub: 'Value area high',        color: 'text-cyan-400',    bg: 'bg-gray-900/30 border-gray-800' },
+              { label: '↓ VAL',         val: data.val?.toLocaleString(),         sub: 'Value area low',         color: 'text-cyan-400',    bg: 'bg-gray-900/30 border-gray-800' },
+              { label: '⚡ Vacuums',    val: String(data.vacuum_count),          sub: 'Fast-move zones',        color: 'text-amber-400',   bg: 'bg-amber-950/20 border-amber-800/40' },
+            ].map(({ label, val, sub, color, bg }) => (
+              <div key={label} className={`border rounded-xl p-3 ${bg}`}>
+                <p className="text-[10px] text-gray-500 mb-1">{label}</p>
+                <p className={`text-lg font-black ${color}`}>{val || '—'}</p>
+                <p className="text-[10px] text-gray-600">{sub}</p>
+              </div>
+            ))}
+          </div>
         )}
+
+        {/* PCR + Total OI row */}
+        {data && !data.error && (
+          <div className="flex items-center gap-4 mb-5">
+            <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-2 flex items-center gap-3">
+              <span className="text-xs text-gray-500">PCR</span>
+              <span className={`text-base font-black ${data.pcr > 1 ? 'text-emerald-400' : 'text-red-400'}`}>{data.pcr}</span>
+              <span className="text-xs text-gray-600">{data.pcr > 1.2 ? 'Bullish' : data.pcr < 0.8 ? 'Bearish' : 'Neutral'}</span>
+            </div>
+            <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-2 flex items-center gap-3">
+              <span className="text-xs text-red-400">Total CE OI</span>
+              <span className="text-base font-black text-white">{fmtOI(data.total_ce_oi)}</span>
+            </div>
+            <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-2 flex items-center gap-3">
+              <span className="text-xs text-emerald-400">Total PE OI</span>
+              <span className="text-base font-black text-white">{fmtOI(data.total_pe_oi)}</span>
+            </div>
+
+            {/* View toggle */}
+            <div className="ml-auto flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
+              {(['profile','migration'] as const).map(v => (
+                <button key={v} onClick={() => setView(v)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${view===v ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}>
+                  {v==='profile' ? '📊 OI Profile' : '🏔️ Wall Migration'}
+                </button>
+              ))}
+            </div>
+
+            {/* Toggles */}
+            {view === 'profile' && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowVacuum(v => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${showVacuum ? 'bg-amber-950/40 text-amber-400 border-amber-800/50' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
+                  ⚡ Vacuums
+                </button>
+                <button onClick={() => setShowValueArea(v => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${showValueArea ? 'bg-cyan-950/40 text-cyan-400 border-cyan-800/50' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
+                  📐 Value Area
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Legend */}
+        {view === 'profile' && (
+          <div className="flex items-center gap-4 mb-3 px-1">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-3 h-3 rounded-sm bg-red-500/70"/>CE OI (resistance)
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-3 h-3 rounded-sm bg-emerald-500/70"/>PE OI (support)
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-3 h-3 rounded-sm bg-purple-500/70"/>POC
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-3 h-3 rounded-sm bg-amber-500/30 border border-amber-500/50"/>⚡ Vacuum
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-3 h-3 rounded-sm bg-cyan-500/10 border border-cyan-500/30"/>📐 Value Area
+            </div>
+          </div>
+        )}
+
+        {/* Main content */}
+        {loading ? (
+          <div className="space-y-2">{[1,2,3,4,5,6,7,8].map(i=>(
+            <div key={i} className="h-10 bg-gray-900/30 border border-gray-800 rounded-lg animate-pulse"/>
+          ))}</div>
+        ) : data?.error ? (
+          <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
+            <div className="text-4xl mb-4">📊</div>
+            <p className="text-gray-500">{data.error}</p>
+          </div>
+        ) : view === 'profile' ? (
+
+          /* ── OI PROFILE CHART ───────────────────────────────────────────── */
+          <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden">
+            {/* Column headers */}
+            <div className="grid grid-cols-[80px_1fr_80px_1fr_80px] gap-0 px-4 py-2 border-b border-gray-800 bg-gray-900/40">
+              <div className="text-[10px] text-red-400 font-bold text-right pr-2">CE OI</div>
+              <div className="text-[10px] text-gray-600 text-right">←</div>
+              <div className="text-[10px] text-gray-500 font-bold text-center">STRIKE</div>
+              <div className="text-[10px] text-gray-600">→</div>
+              <div className="text-[10px] text-emerald-400 font-bold pl-2">PE OI</div>
+            </div>
+
+            <div className="divide-y divide-gray-800/40">
+              {displayProfile.map((row) => {
+                const isSpecial = row.is_poc || row.is_atm || row.is_ce_wall || row.is_pe_wall
+                const rowBg = row.is_poc       ? 'bg-purple-950/20'
+                  : row.is_vacuum && showVacuum ? 'bg-amber-950/10'
+                  : row.in_value_area && showValueArea ? 'bg-cyan-950/5'
+                  : row.is_atm                  ? 'bg-amber-950/10'
+                  : ''
+                const rowBorder = row.is_poc       ? 'border-l-2 border-l-purple-600'
+                  : row.is_ce_wall                 ? 'border-l-2 border-l-red-700'
+                  : row.is_pe_wall                 ? 'border-l-2 border-l-emerald-700'
+                  : row.is_vacuum && showVacuum     ? 'border-l-2 border-l-amber-600/50'
+                  : ''
+
+                return (
+                  <div key={row.strike}
+                    className={`grid grid-cols-[80px_1fr_80px_1fr_80px] gap-0 items-center px-4 py-1.5 hover:bg-gray-800/20 transition-colors ${rowBg} ${rowBorder}`}>
+
+                    {/* CE OI value */}
+                    <div className="text-right pr-3">
+                      <span className="text-xs font-mono text-red-400/80">{fmtOI(row.ce_oi)}</span>
+                    </div>
+
+                    {/* CE bar — grows left */}
+                    <div className="flex justify-end items-center h-5">
+                      <div className="flex justify-end w-full">
+                        <div
+                          className={`h-4 rounded-l-sm transition-all ${row.is_ce_wall ? 'bg-red-400' : row.is_poc ? 'bg-purple-500' : 'bg-red-600/60'}`}
+                          style={{ width: `${(row as any).ce_bar_pct}%`, minWidth: row.ce_oi > 0 ? '2px' : '0' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Strike label */}
+                    <div className="text-center px-1">
+                      <div className="flex flex-col items-center">
+                        <span className={`text-xs font-black ${
+                          row.is_atm     ? 'text-amber-400' :
+                          row.is_poc     ? 'text-purple-400' :
+                          row.is_ce_wall ? 'text-red-400' :
+                          row.is_pe_wall ? 'text-emerald-400' :
+                          'text-gray-300'
+                        }`}>
+                          {row.strike.toLocaleString()}
+                        </span>
+                        <div className="flex gap-0.5 mt-0.5">
+                          {row.is_atm     && <span className="text-[8px] text-amber-500 font-bold">ATM</span>}
+                          {row.is_poc     && <span className="text-[8px] text-purple-400 font-bold">POC</span>}
+                          {row.is_ce_wall && <span className="text-[8px] text-red-400 font-bold">WALL</span>}
+                          {row.is_pe_wall && <span className="text-[8px] text-emerald-400 font-bold">WALL</span>}
+                          {row.is_vacuum && showVacuum && <span className="text-[8px] text-amber-400 font-bold">⚡VAC</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PE bar — grows right */}
+                    <div className="flex items-center h-5">
+                      <div
+                        className={`h-4 rounded-r-sm transition-all ${row.is_pe_wall ? 'bg-emerald-400' : row.is_poc ? 'bg-purple-500' : 'bg-emerald-600/60'}`}
+                        style={{ width: `${(row as any).pe_bar_pct}%`, minWidth: row.pe_oi > 0 ? '2px' : '0' }}
+                      />
+                    </div>
+
+                    {/* PE OI value */}
+                    <div className="text-left pl-3">
+                      <span className="text-xs font-mono text-emerald-400/80">{fmtOI(row.pe_oi)}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Imbalance summary below chart */}
+            <div className="px-5 py-3 border-t border-gray-800 bg-gray-900/40 flex items-center gap-6">
+              <p className="text-xs text-gray-500">
+                {data?.symbol} · {data?.date} · {fmtDate(data?.expiry || '')} expiry
+              </p>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-purple-400"/>
+                <span className="text-xs text-gray-500">POC at {data?.poc_strike?.toLocaleString()}</span>
+              </div>
+              {data && data.ce_wall > data.pe_wall && (
+                <span className="text-xs text-red-400 font-semibold">🐻 Bearish structure — CE wall above PE wall</span>
+              )}
+              {data && data.pe_wall > data.ce_wall && (
+                <span className="text-xs text-emerald-400 font-semibold">🐂 Bullish structure — PE wall below CE wall</span>
+              )}
+            </div>
+          </div>
+
+        ) : (
+
+          /* ── WALL MIGRATION CHART ────────────────────────────────────────── */
+          <div className="bg-gray-900/20 border border-gray-800 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-bold text-white">🏔️ OI Wall Migration</h2>
+              <p className="text-xs text-gray-500">How support/resistance levels shifted over this expiry series</p>
+            </div>
+            <p className="text-xs text-gray-600 mb-6">
+              Red line = CE Wall (strongest resistance) · Green line = PE Wall (strongest support) · 
+              Convergence = range bound · Divergence = directional move
+            </p>
+
+            {data?.wall_migration && data.wall_migration.length > 1 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={data.wall_migration} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false}/>
+                  <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false}
+                    tickFormatter={fmtDate}/>
+                  <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false}
+                    domain={['auto', 'auto']}
+                    tickFormatter={v => v.toLocaleString()}/>
+                  <Tooltip content={<MigrationTooltip/>}/>
+                  {data.cmp && (
+                    <ReferenceLine y={data.cmp} stroke="#f59e0b" strokeDasharray="4 4"
+                      label={{ value: 'CMP', fill: '#f59e0b', fontSize: 10 }}/>
+                  )}
+                  <Line type="monotone" dataKey="ce_wall" name="CE Wall (Resistance)"
+                    stroke="#ef4444" strokeWidth={2} dot={{ fill: '#ef4444', r: 3 }}
+                    activeDot={{ r: 5 }}/>
+                  <Line type="monotone" dataKey="pe_wall" name="PE Wall (Support)"
+                    stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }}
+                    activeDot={{ r: 5 }}/>
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-gray-600 text-sm">
+                Need more trading days in current series for migration data
+              </div>
+            )}
+
+            {/* Migration insight */}
+            {data?.wall_migration && data.wall_migration.length > 1 && (() => {
+              const first = data.wall_migration[0]
+              const last  = data.wall_migration[data.wall_migration.length - 1]
+              const ce_moved = last.ce_wall - first.ce_wall
+              const pe_moved = last.pe_wall - first.pe_wall
+              return (
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className={`rounded-xl p-3 border ${ce_moved < 0 ? 'bg-red-950/20 border-red-800/30' : 'bg-emerald-950/20 border-emerald-800/30'}`}>
+                    <p className="text-xs text-gray-500 mb-1">CE Wall moved</p>
+                    <p className={`text-base font-black ${ce_moved < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {ce_moved < 0 ? '↓' : '↑'} {Math.abs(ce_moved).toLocaleString()} pts
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {first.ce_wall.toLocaleString()} → {last.ce_wall.toLocaleString()}
+                    </p>
+                    <p className="text-xs mt-1 text-gray-500">
+                      {ce_moved < 0 ? 'Resistance moving down — bears retreating' : 'Resistance moving up — bears pushing higher'}
+                    </p>
+                  </div>
+                  <div className={`rounded-xl p-3 border ${pe_moved > 0 ? 'bg-emerald-950/20 border-emerald-800/30' : 'bg-red-950/20 border-red-800/30'}`}>
+                    <p className="text-xs text-gray-500 mb-1">PE Wall moved</p>
+                    <p className={`text-base font-black ${pe_moved > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {pe_moved > 0 ? '↑' : '↓'} {Math.abs(pe_moved).toLocaleString()} pts
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {first.pe_wall.toLocaleString()} → {last.pe_wall.toLocaleString()}
+                    </p>
+                    <p className="text-xs mt-1 text-gray-500">
+                      {pe_moved > 0 ? 'Support rising — bulls building higher' : 'Support falling — bulls losing ground'}
+                    </p>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
+        <div className="mt-6 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
+          <p className="text-xs text-gray-600 leading-relaxed">
+            <span className="text-gray-400 font-semibold">How to read: </span>
+            <span className="text-purple-400">POC</span> = strike with highest total OI — strongest magnet for price ·
+            <span className="text-red-400"> CE Wall</span> = strike with most call writing — key resistance ·
+            <span className="text-emerald-400"> PE Wall</span> = strike with most put writing — key support ·
+            <span className="text-amber-400"> ⚡ Vacuum</span> = very low OI on both sides — price moves fast here ·
+            <span className="text-cyan-400"> Value Area</span> = strikes covering 70% of total OI
+            · Not investment advice
+          </p>
+        </div>
       </div>
     </div>
   )

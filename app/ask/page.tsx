@@ -7,8 +7,7 @@ const API = 'https://greeknova-backend-production.up.railway.app'
 
 // ── Simple markdown renderer — no external library needed ────────────────────
 function renderMarkdown(text: string) {
-  const lines = text.split('
-')
+  const lines = text.split('\n')
   const elements: React.ReactNode[] = []
 
   lines.forEach((line, i) => {

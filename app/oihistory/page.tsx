@@ -84,7 +84,6 @@ export default function OIHistory() {
   const isStock = STOCKS.includes(symbol)
   const atm = data?.atm_strike
 
-  // Chart data — top 20 strikes by total absolute change
   const chartData = data?.rows
     .map(r => ({
       strike: r.strike,
@@ -96,7 +95,6 @@ export default function OIHistory() {
     .slice(0, 20)
     .sort((a, b) => a.strike - b.strike) || []
 
-  // Summary stats
   const totalCEBuilt   = data?.rows.filter(r => r.ce_chg > 0).reduce((s, r) => s + r.ce_chg, 0) || 0
   const totalCEUnwound = data?.rows.filter(r => r.ce_chg < 0).reduce((s, r) => s + r.ce_chg, 0) || 0
   const totalPEBuilt   = data?.rows.filter(r => r.pe_chg > 0).reduce((s, r) => s + r.pe_chg, 0) || 0
@@ -114,7 +112,6 @@ export default function OIHistory() {
             <p className="text-gray-500 text-sm">Compare OI buildup vs unwinding between any two trading days</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* CMP Badge */}
             {data?.cmp && (
               <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-800/50 rounded-xl px-4 py-2">
                 <span className="text-xs text-gray-500">CMP</span>
@@ -147,36 +144,45 @@ export default function OIHistory() {
           </select>
         </div>
 
-        {/* Controls */}
-        <div className="flex flex-wrap items-center gap-4 mb-6">
-          <div className="flex items-center gap-2">
-  <div className="flex flex-col">
-    <span className="text-[10px] text-emerald-400 font-semibold mb-0.5">RECENT DATE</span>
-    <select value={dateA} onChange={e => setDateA(e.target.value)}
-      className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
-      {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+        {/* Controls — FIXED layout */}
+        <div className="flex flex-wrap items-end gap-4 mb-6">
+
+          {/* Recent date */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-emerald-400 font-bold tracking-wide">RECENT DATE</span>
+            <select value={dateA} onChange={e => setDateA(e.target.value)}
+              className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
+              {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
             </select>
           </div>
-          <div className="flex flex-col items-center">
-  <span className="text-[10px] text-gray-600 mb-0.5">change from</span>
-  <span className="text-gray-400 text-sm font-bold">→</span>
-</div>
-<div className="flex flex-col">
-  <span className="text-[10px] text-gray-500 font-semibold mb-0.5">BASE DATE</span>
-  <select value={dateB} onChange={e => setDateB(e.target.value)}
-    className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
-    {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
-  </select>
-</div>
+
+          {/* Arrow */}
+          <div className="flex flex-col items-center pb-1">
+            <span className="text-[10px] text-gray-600">change from</span>
+            <span className="text-gray-400 text-base font-bold">→</span>
+          </div>
+
+          {/* Base date */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-gray-500 font-bold tracking-wide">BASE DATE</span>
+            <select value={dateB} onChange={e => setDateB(e.target.value)}
+              className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
+              {data?.dates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+            </select>
+          </div>
+
+          {/* Expiry */}
           {data?.expiries && data.expiries.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Expiry:</span>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] text-gray-500 font-bold tracking-wide">EXPIRY</span>
               <select value={expiry} onChange={e => setExpiry(e.target.value)}
                 className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
                 {data.expiries.map(e => <option key={e} value={e}>{fmtDate(e)}</option>)}
               </select>
             </div>
           )}
+
+          {/* Chart/Table toggle */}
           <div className="flex items-center gap-1 ml-auto bg-gray-900 border border-gray-800 rounded-lg p-1">
             {(['chart', 'table'] as const).map(v => (
               <button key={v} onClick={() => setView(v)}
@@ -185,6 +191,7 @@ export default function OIHistory() {
               </button>
             ))}
           </div>
+
         </div>
 
         {/* Summary cards */}
@@ -235,7 +242,7 @@ export default function OIHistory() {
                   {atm && <span className="text-xs text-amber-400 bg-amber-950/30 border border-amber-800/40 px-2 py-1 rounded-lg">⭐ ATM = {atm.toLocaleString()}</span>}
                 </div>
                 <p className="text-xs text-gray-500 mb-5">
-                  {fmtDate(dateA)} vs {fmtDate(dateB)} · Top 20 strikes · Positive = buildup · Negative = unwinding
+                  Showing change from {fmtDate(dateB)} → {fmtDate(dateA)} · Top 20 strikes · Positive = buildup · Negative = unwinding
                 </p>
                 <ResponsiveContainer width="100%" height={350}>
                   <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>

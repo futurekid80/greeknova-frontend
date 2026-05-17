@@ -162,11 +162,12 @@ export default function OptionsJungle() {
   const aerialVol = volFiltered.filter(s => s.symbol === volFiltered[0]?.symbol)
   const aerialSym = isAerial ? (oiFiltered[0]?.symbol || volFiltered[0]?.symbol) : null
 
-  const oiBuilds  = (data?.oi_spikes || []).filter(s => s.direction === 'BUILD').length
-  const oiUnwinds = (data?.oi_spikes || []).filter(s => s.direction === 'UNWIND').length
-  const volFresh  = (data?.vol_spikes || []).filter(s => s.vol_signal === 'FRESH_BUILD').length
-  const volUnwind = (data?.vol_spikes || []).filter(s => s.vol_signal === 'UNWINDING').length
-  const volChurn  = (data?.vol_spikes || []).filter(s => s.vol_signal === 'CHURN').length
+  // Use filtered data for all counts — consistent with what's displayed
+  const oiBuilds  = oiFiltered.filter(s => s.direction === 'BUILD').length
+  const oiUnwinds = oiFiltered.filter(s => s.direction === 'UNWIND').length
+  const volFresh  = volFiltered.filter(s => s.vol_signal === 'FRESH_BUILD').length
+  const volUnwind = volFiltered.filter(s => s.vol_signal === 'UNWINDING').length
+  const volChurn  = volFiltered.filter(s => s.vol_signal === 'CHURN').length
 
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
@@ -391,11 +392,11 @@ export default function OptionsJungle() {
         <div className="flex items-center gap-1 mb-5 bg-gray-900/40 border border-gray-800 rounded-xl p-1 w-fit">
           <button onClick={() => setTab('oi')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'oi' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/60' : 'text-gray-500 hover:text-white'}`}>
-            🌊 OI Spikes <span className="text-xs opacity-70">{data?.oi_total || 0}</span>
+            🌊 OI Spikes <span className="text-xs opacity-70">{oiFiltered.length}</span>
           </button>
           <button onClick={() => setTab('vol')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'vol' ? 'bg-amber-950 text-amber-400 border border-amber-800/60' : 'text-gray-500 hover:text-white'}`}>
-            ⚡ Volume Spikes <span className="text-xs opacity-70">{data?.vol_total || 0}</span>
+            ⚡ Volume Spikes <span className="text-xs opacity-70">{volFiltered.length}</span>
           </button>
         </div>
 

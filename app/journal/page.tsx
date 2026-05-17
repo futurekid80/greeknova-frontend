@@ -263,34 +263,53 @@ export default function TradingJournal() {
     }))
 
     const prompt = `You are analyzing a trader's options journal from NSE India.
+Return ONLY a JSON object — no markdown, no explanation, no backticks.
 
-Here are their last ${tradeSummary.length} closed trades:
+Trades data:
 ${JSON.stringify(tradeSummary, null, 2)}
 
-Analyze and identify:
-1. Win rate and overall P&L pattern
-2. Which symbols/strategies are working vs not
-3. Pattern analysis — when IVR was high/low at entry, what happened?
-4. DTE patterns — do they perform better with more or less time to expiry?
-5. Max Pain relationship — did trades near Max Pain perform differently?
-6. Top 2-3 specific, actionable insights for this trader
-
-Keep it concise, data-driven, and specific to their actual trades.
-End with: "📊 Pattern analysis based on your journal data. Not investment advice."`
+Return this exact JSON structure:
+{
+  "stats": {
+    "win_rate": 40,
+    "total_pnl": -2400,
+    "winners": 2,
+    "losers": 3,
+    "avg_winner": 3200,
+    "avg_loser": -1800,
+    "best_trade": "NIFTY BUY +3200",
+    "worst_trade": "BANKNIFTY BUY -2100"
+  },
+  "patterns": [
+    {
+      "finding": "short title e.g. High IVR entries",
+      "detail": "specific observation with numbers e.g. 3 of 4 losses had IVR > 60 at entry",
+      "signal": "NEGATIVE" or "POSITIVE" or "NEUTRAL"
+    }
+  ],
+  "top_insight": "single most important pattern observed — specific and data-driven",
+  "disclaimer": "Pattern analysis based on journal data. Not investment advice."
+}`
 
     try {
       const res  = await fetch(`${API}/ask-claude`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          system:   'You are a trading journal analyst. Analyze options trade patterns objectively. Be specific and data-driven. Never give buy/sell recommendations.',
+          system:   'You are a trading journal analyst. Return ONLY valid JSON, no markdown fences, no explanation. Be specific and data-driven. Never give buy/sell/hold recommendations.',
           messages: [{ role: 'user', content: prompt }],
         }),
       })
       const data = await res.json()
-      setInsights(data.content || 'Could not generate insights')
+      try {
+        const parsed = JSON.parse(data.content)
+        setInsights(JSON.stringify(parsed))
+      } catch {
+        const match = data.content?.match(/\{[\s\S]*\}/)
+        setInsights(match ? match[0] : data.content || 'Could not generate insights')
+      }
     } catch {
-      setInsights('Failed to load insights. Please try again.')
+      setInsights('{"error": "Failed to load insights. Please try again."}')
     }
     setLoadingInsights(false)
   }
@@ -334,40 +353,66 @@ End with: "📊 Pattern analysis based on your journal data. Not investment advi
     )
 
     const prompt = `You are reviewing a trader's open options positions on NSE India.
+Return ONLY a JSON object — no markdown, no explanation, no backticks.
 
-For each position, I will give you: what they entered vs current market conditions.
+Data for each position:
+${JSON.stringify(positionReviews, null, 2)}
 
-${positionReviews.map(p => `
-POSITION: ${p.action} ${p.symbol} ${p.strike} ${p.option_type}
-- Entry price: ₹${p.entry_price} on ${p.entry_date}
-- IVR at entry: ${p.ivr_at_entry ?? 'unknown'} | Current IVR: ${p.current_ivr ?? 'unknown'}
-- IV at entry: ${p.iv_at_entry ?? 'unknown'}% | Current IV: ${p.current_iv ?? 'unknown'}%
-- DTE at entry: ${p.dte_at_entry ?? 'unknown'} days | Current DTE: ${p.current_dte ?? 'unknown'} days
-- Expected move by expiry: ±${p.expected_move ?? 'unknown'} pts (range: ${p.lower_range ?? '?'} – ${p.upper_range ?? '?'})
-- ATM straddle now: ₹${p.atm_straddle ?? 'unknown'}
-`).join('')}
-
-For each position:
-1. Describe what has changed since entry (IV, time decay, expected range)
-2. Where is the strike relative to expected move range?
-3. What does the current OI structure suggest about this level?
-
-Be factual and specific. Use actual numbers. Never say buy/sell/hold/exit.
-End with: "📊 Position review based on live GreekNova data. Not investment advice."`
+Return this exact JSON structure:
+{
+  "positions": [
+    {
+      "symbol": "SUNPHARMA",
+      "strike": 1900,
+      "option_type": "CE",
+      "action": "BUY",
+      "entry_price": 18.7,
+      "iv_change": {
+        "entry": 14.4,
+        "current": 19.0,
+        "direction": "UP",
+        "meaning": "one sentence — what this means for the position"
+      },
+      "dte_change": {
+        "entry": 9,
+        "current": 7,
+        "days_elapsed": 2,
+        "meaning": "one sentence about time decay impact"
+      },
+      "strike_vs_range": {
+        "position": "INSIDE" or "ABOVE" or "BELOW" or "AT_TOP" or "AT_BOTTOM",
+        "upper": 1912,
+        "lower": 1843,
+        "meaning": "one sentence — where strike sits in expected range"
+      },
+      "key_observation": "one concise factual observation about this position",
+      "signals": ["signal 1", "signal 2"]
+    }
+  ],
+  "summary": "one overall summary sentence"
+}`
 
     try {
       const res  = await fetch(`${API}/ask-claude`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          system:   'You are a trading position analyst. Review open options positions using current market data. Be specific with numbers. Never give directional advice or tell trader to exit/hold.',
+          system:   'You are a trading position analyst. Return ONLY valid JSON, no markdown fences, no explanation. Be factual with numbers. Never say buy/sell/hold/exit.',
           messages: [{ role: 'user', content: prompt }],
         }),
       })
       const data = await res.json()
-      setInsights(data.content || 'Could not generate review')
+      // Parse JSON response
+      try {
+        const parsed = JSON.parse(data.content)
+        setInsights(JSON.stringify(parsed))
+      } catch {
+        // Fallback: try to extract JSON from response
+        const match = data.content?.match(/\{[\s\S]*\}/)
+        setInsights(match ? match[0] : data.content || 'Could not generate review')
+      }
     } catch {
-      setInsights('Failed to load position review. Please try again.')
+      setInsights('{"error": "Failed to load position review. Please try again."}')
     }
     setLoadingInsights(false)
   }
@@ -469,6 +514,7 @@ End with: "📊 Position review based on live GreekNova data. Not investment adv
                 <X size={16}/>
               </button>
             </div>
+
             {loadingInsights ? (
               <div className="flex items-center gap-3 text-sm text-gray-500">
                 <div className="flex gap-1">
@@ -478,15 +524,196 @@ End with: "📊 Position review based on live GreekNova data. Not investment adv
                   ))}
                 </div>
                 {insightMode === 'live'
-                  ? `Reviewing ${openTrades.length} open position${openTrades.length > 1 ? 's' : ''} with live market data...`
-                  : `Analysing your ${closedTrades.length} closed trades...`
+                  ? `Fetching live data for ${openTrades.length} position${openTrades.length > 1 ? 's' : ''}...`
+                  : `Analysing ${closedTrades.length} closed trades...`
                 }
               </div>
-            ) : (
-              <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
-                {insights}
-              </div>
-            )}
+            ) : (() => {
+              try {
+                const data = JSON.parse(insights)
+                if (data.error) return <p className="text-sm text-red-400">{data.error}</p>
+
+                // ── LIVE POSITION REVIEW RENDERER ──────────────────────────
+                if (insightMode === 'live' && data.positions) {
+                  return (
+                    <div className="space-y-4">
+                      {data.positions.map((p: any, i: number) => (
+                        <div key={i} className="bg-gray-900/50 border border-gray-700 rounded-xl p-4">
+                          {/* Position header */}
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="text-base font-black text-white">{p.symbol}</span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${p.option_type==='CE' ? 'bg-red-950/50 text-red-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
+                              {p.strike} {p.option_type}
+                            </span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${p.action==='BUY' ? 'bg-emerald-950/50 text-emerald-400' : 'bg-red-950/50 text-red-400'}`}>
+                              {p.action}
+                            </span>
+                            <span className="text-xs text-gray-500 ml-auto">Entry ₹{p.entry_price}</span>
+                          </div>
+
+                          {/* Metrics table */}
+                          <div className="grid grid-cols-3 gap-3 mb-4">
+                            {/* IV Change */}
+                            {p.iv_change && (
+                              <div className="bg-gray-800/50 rounded-xl p-3">
+                                <p className="text-[10px] text-gray-500 mb-1">Implied Volatility</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-gray-400">{p.iv_change.entry}%</span>
+                                  <span className="text-xs text-gray-600">→</span>
+                                  <span className={`text-sm font-black ${p.iv_change.direction === 'UP' ? 'text-orange-400' : 'text-emerald-400'}`}>
+                                    {p.iv_change.current}%
+                                  </span>
+                                  <span className={`text-[10px] px-1 py-0.5 rounded font-bold ${p.iv_change.direction === 'UP' ? 'bg-orange-950/50 text-orange-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
+                                    {p.iv_change.direction}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1">{p.iv_change.meaning}</p>
+                              </div>
+                            )}
+
+                            {/* DTE Change */}
+                            {p.dte_change && (
+                              <div className="bg-gray-800/50 rounded-xl p-3">
+                                <p className="text-[10px] text-gray-500 mb-1">Days to Expiry</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-gray-400">{p.dte_change.entry}d</span>
+                                  <span className="text-xs text-gray-600">→</span>
+                                  <span className={`text-sm font-black ${p.dte_change.current <= 3 ? 'text-red-400' : 'text-white'}`}>
+                                    {p.dte_change.current}d
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1">{p.dte_change.days_elapsed}d elapsed · {p.dte_change.meaning}</p>
+                              </div>
+                            )}
+
+                            {/* Strike vs Range */}
+                            {p.strike_vs_range && (
+                              <div className="bg-gray-800/50 rounded-xl p-3">
+                                <p className="text-[10px] text-gray-500 mb-1">Strike vs Expected Range</p>
+                                <span className={`text-xs font-black px-2 py-1 rounded-lg ${
+                                  p.strike_vs_range.position === 'INSIDE'     ? 'bg-emerald-950/50 text-emerald-400' :
+                                  p.strike_vs_range.position === 'AT_TOP'     ? 'bg-amber-950/50 text-amber-400' :
+                                  p.strike_vs_range.position === 'AT_BOTTOM'  ? 'bg-amber-950/50 text-amber-400' :
+                                  'bg-red-950/50 text-red-400'
+                                }`}>
+                                  {p.strike_vs_range.position.replace('_', ' ')}
+                                </span>
+                                <p className="text-[10px] text-gray-500 mt-1">
+                                  Range: {p.strike_vs_range.lower} – {p.strike_vs_range.upper}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Key observation */}
+                          {p.key_observation && (
+                            <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl px-4 py-3 mb-3">
+                              <p className="text-xs text-blue-300">💡 {p.key_observation}</p>
+                            </div>
+                          )}
+
+                          {/* Signal tags */}
+                          {p.signals?.length > 0 && (
+                            <div className="flex gap-2 flex-wrap">
+                              {p.signals.map((s: string, j: number) => (
+                                <span key={j} className="text-[10px] px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Summary */}
+                      {data.summary && (
+                        <p className="text-xs text-gray-500 text-center pt-2">
+                          📊 {data.summary} · Not investment advice
+                        </p>
+                      )}
+                    </div>
+                  )
+                }
+
+                // ── PATTERN ANALYSIS RENDERER ──────────────────────────────
+                if (insightMode === 'pattern' && data.stats) {
+                  return (
+                    <div className="space-y-4">
+                      {/* Stats row */}
+                      <div className="grid grid-cols-4 gap-3">
+                        {[
+                          { label: 'Win Rate',    val: `${data.stats.win_rate}%`,   color: data.stats.win_rate >= 50 ? 'text-emerald-400' : 'text-red-400' },
+                          { label: 'Total P&L',   val: `${data.stats.total_pnl >= 0 ? '+' : ''}₹${Math.abs(data.stats.total_pnl).toLocaleString()}`, color: data.stats.total_pnl >= 0 ? 'text-emerald-400' : 'text-red-400' },
+                          { label: 'Avg Winner',  val: `+₹${data.stats.avg_winner?.toLocaleString() || '—'}`, color: 'text-emerald-400' },
+                          { label: 'Avg Loser',   val: `-₹${Math.abs(data.stats.avg_loser || 0).toLocaleString()}`, color: 'text-red-400' },
+                        ].map(({ label, val, color }) => (
+                          <div key={label} className="bg-gray-900/50 border border-gray-700 rounded-xl p-3 text-center">
+                            <p className="text-[10px] text-gray-500 mb-1">{label}</p>
+                            <p className={`text-lg font-black ${color}`}>{val}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Patterns */}
+                      {data.patterns?.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold text-gray-400 mb-2">Patterns Found:</p>
+                          {data.patterns.map((p: any, i: number) => (
+                            <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${
+                              p.signal === 'POSITIVE' ? 'bg-emerald-950/20 border-emerald-800/30' :
+                              p.signal === 'NEGATIVE' ? 'bg-red-950/20 border-red-800/30' :
+                              'bg-gray-800/30 border-gray-700'
+                            }`}>
+                              <span className="text-base flex-shrink-0">
+                                {p.signal === 'POSITIVE' ? '✅' : p.signal === 'NEGATIVE' ? '⚠️' : 'ℹ️'}
+                              </span>
+                              <div>
+                                <p className={`text-xs font-bold mb-0.5 ${
+                                  p.signal === 'POSITIVE' ? 'text-emerald-400' :
+                                  p.signal === 'NEGATIVE' ? 'text-red-400' : 'text-gray-300'
+                                }`}>{p.finding}</p>
+                                <p className="text-xs text-gray-500">{p.detail}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Top insight */}
+                      {data.top_insight && (
+                        <div className="bg-purple-950/30 border border-purple-800/40 rounded-xl p-4">
+                          <p className="text-xs font-bold text-purple-400 mb-1">🎯 Key Insight</p>
+                          <p className="text-sm text-gray-300">{data.top_insight}</p>
+                        </div>
+                      )}
+
+                      {/* Best/worst */}
+                      {(data.stats.best_trade || data.stats.worst_trade) && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-emerald-950/10 border border-emerald-800/20 rounded-xl p-3">
+                            <p className="text-[10px] text-gray-500 mb-1">Best Trade</p>
+                            <p className="text-xs font-bold text-emerald-400">{data.stats.best_trade}</p>
+                          </div>
+                          <div className="bg-red-950/10 border border-red-800/20 rounded-xl p-3">
+                            <p className="text-[10px] text-gray-500 mb-1">Worst Trade</p>
+                            <p className="text-xs font-bold text-red-400">{data.stats.worst_trade}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="text-[10px] text-gray-600 text-center">{data.disclaimer}</p>
+                    </div>
+                  )
+                }
+
+                // Fallback — raw text if JSON structure unexpected
+                return <p className="text-sm text-gray-300 whitespace-pre-wrap">{insights}</p>
+
+              } catch {
+                // Not JSON — render as plain text
+                return <p className="text-sm text-gray-300 whitespace-pre-wrap">{insights}</p>
+              }
+            })()}
           </div>
         )}
 

@@ -80,11 +80,11 @@ export default function OptionsJungle() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      // Always fetch with threshold=0 — filter on frontend
-      // This ensures button counts are always accurate
+      // Fetch with actual thresholds — avoids Supabase timeout
+      // null threshold = fetch with minimum meaningful threshold (2% OI, 10% Vol)
       const params = new URLSearchParams({
-        oi_threshold:  '0',
-        vol_threshold: '0',
+        oi_threshold:  String(oiRef.current ?? 2),
+        vol_threshold: String(volRef.current ?? 10),
       })
       if (dateRef.current) params.set('date', dateRef.current)
       const res  = await fetch(`${API}/options-jungle?${params}`)
@@ -118,12 +118,15 @@ export default function OptionsJungle() {
   }
 
   function handleOIPreset(v: number | null) {
-    setOiThreshold(v); oiRef.current = v
-    // No fetchData needed — filtering happens on frontend
+    setOiThreshold(v)
+    oiRef.current = v
+    fetchData()
   }
 
   function handleVolPreset(v: number | null) {
-    setVolThreshold(v); volRef.current = v
+    setVolThreshold(v)
+    volRef.current = v
+    fetchData()
   }
 
   function startAuto() {
@@ -298,7 +301,7 @@ export default function OptionsJungle() {
             </div>
 
             <p className="text-[10px] text-gray-600 ml-auto">
-              Lower % = more signals · Higher % = only strong moves
+              Lower % = more signals · All → = show everything fetched
             </p>
           </div>
         </div>

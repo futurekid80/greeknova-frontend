@@ -7,7 +7,8 @@ const API = 'https://greeknova-backend-production.up.railway.app'
 
 // ── Simple markdown renderer — no external library needed ────────────────────
 function renderMarkdown(text: string) {
-  const lines = text.split('\n')
+  const lines = text.split('
+')
   const elements: React.ReactNode[] = []
 
   lines.forEach((line, i) => {
@@ -52,6 +53,25 @@ function renderMarkdown(text: string) {
         </div>
       )
     }
+    // Table row: | col | col |
+    else if (line.startsWith('|') && line.endsWith('|')) {
+      const cells = line.split('|').filter(c => c.trim() !== '')
+      const isSeparator = cells.every(c => /^[-: ]+$/.test(c))
+      if (isSeparator) {
+        // Skip separator row
+      } else {
+        const isHeader = i > 0 && elements.length > 0
+        elements.push(
+          <div key={i} className="flex gap-0 border-b border-gray-800/50">
+            {cells.map((cell, j) => (
+              <div key={j} className="flex-1 text-xs px-3 py-1.5 text-gray-300 min-w-0">
+                {renderInline(cell.trim())}
+              </div>
+            ))}
+          </div>
+        )
+      }
+    }
     // Empty line
     else if (line.trim() === '') {
       elements.push(<div key={i} className="h-2"/>)
@@ -69,12 +89,19 @@ function renderMarkdown(text: string) {
   return elements
 }
 
-// Render inline bold (**text**) and other inline formatting
+// Render inline bold (**text**), italic (*text*), and code (`text`)
 function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  // Split on **bold**, *italic*, or `code` patterns
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/)
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i} className="text-white font-bold">{part.slice(2, -2)}</strong>
+    }
+    if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
+      return <em key={i} className="text-gray-300 italic">{part.slice(1, -1)}</em>
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={i} className="text-amber-400 bg-gray-800 px-1 py-0.5 rounded text-xs font-mono">{part.slice(1, -1)}</code>
     }
     return part
   })

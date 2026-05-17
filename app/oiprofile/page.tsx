@@ -51,6 +51,7 @@ interface ProfileData {
   total_ce_oi: number; total_pe_oi: number; pcr: number
   profile: ProfileRow[]; wall_migration: WallPoint[]
   vacuum_count: number
+  error?: string
 }
 
 const MigrationTooltip = ({ active, payload, label }: any) => {

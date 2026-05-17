@@ -77,6 +77,23 @@ export default function OptionsJungle() {
   const oiRef   = useRef<number|null>(5)
   const volRef  = useRef<number|null>(20)
 
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    try {
+      // Always fetch with threshold=0 — filter on frontend
+      // This ensures button counts are always accurate
+      const params = new URLSearchParams({
+        oi_threshold:  '0',
+        vol_threshold: '0',
+      })
+      if (dateRef.current) params.set('date', dateRef.current)
+      const res  = await fetch(`${API}/options-jungle?${params}`)
+      const json = await res.json()
+      setData(json)
+    } catch(e) { console.error(e) }
+    setLoading(false)
+  }, [])
+
   useEffect(() => {
     async function loadDates() {
       try {
@@ -95,22 +112,6 @@ export default function OptionsJungle() {
     loadDates()
   }, [fetchData])
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      // Always fetch with threshold=0 — filter on frontend
-      // This ensures button counts are always accurate
-      const params = new URLSearchParams({
-        oi_threshold:  '0',
-        vol_threshold: '0',
-      })
-      if (dateRef.current) params.set('date', dateRef.current)
-      const res  = await fetch(`${API}/options-jungle?${params}`)
-      const json = await res.json()
-      setData(json)
-    } catch(e) { console.error(e) }
-    setLoading(false)
-  }, [])
 
   function handleDateChange(d: string) {
     setDate(d); dateRef.current = d; fetchData()

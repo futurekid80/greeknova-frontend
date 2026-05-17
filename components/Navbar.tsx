@@ -7,14 +7,14 @@ import { supabase } from '@/lib/supabase'
 
 const NAV_GROUPS = [
   {
-    label: 'Market',
-    links: [
-      { href: '/',           label: 'Dashboard' },
-      { href: '/premarket',  label: 'Pre-Market' },
-      { href: '/watchlist',  label: 'Watchlist' },
-    ]
-  },
-  {
+  label: 'Market',
+  links: [
+    { href: '/',           label: 'Dashboard' },
+    { href: '/premarket',  label: 'Pre-Market' },
+    { href: '/watchlist',  label: 'Watchlist' },
+    { href: '/journal',    label: '📓 Journal' },  // ← add this
+  ]
+},
     label: 'OI Analysis',
     links: [
       { href: '/charts',     label: 'OI Charts' },

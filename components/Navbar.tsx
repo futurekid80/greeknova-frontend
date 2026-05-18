@@ -23,8 +23,8 @@ const NAV_GROUPS = [
       { href: '/oipulse',    label: 'OI Pulse' },
       { href: '/eod',        label: 'EOD Analysis' },
       { href: '/pcr',        label: 'PCR Trend' },
-      { href: '/oiprofile', label: '📊 OI Profile' },
-      { href: '/oiheatmap', label: '🌡️ OI Heatmap' },
+      { href: '/oiprofile',  label: '📊 OI Profile' },
+      { href: '/oiheatmap',  label: '🌡️ OI Heatmap' },
     ]
   },
   {
@@ -39,6 +39,7 @@ const NAV_GROUPS = [
     label: 'Signals',
     links: [
       { href: '/scanners',    label: 'Scanners' },
+      { href: '/vacuum',      label: '⚡ Vacuum Scanner' },
       { href: '/confluence',  label: 'Confluence' },
       { href: '/rs',          label: 'Rel. Strength' },
       { href: '/uoa',         label: 'UOA' },
@@ -237,7 +238,6 @@ function UserMenu() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) setEmail(session.user.email)
     })
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setEmail(session?.user?.email || '')
     })
@@ -263,7 +263,6 @@ function UserMenu() {
 
   if (!email) return null
 
-  // Show first part of email before @
   const displayName = email.split('@')[0]
 
   return (
@@ -278,19 +277,14 @@ function UserMenu() {
 
       {open && (
         <div className="absolute top-full right-0 mt-2 w-56 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50">
-          {/* Email display */}
           <div className="px-4 py-3 border-b border-gray-800">
             <p className="text-xs text-gray-500 mb-0.5">Logged in as</p>
             <p className="text-xs text-white font-semibold truncate">{email}</p>
           </div>
-
-          {/* Journal link */}
           <Link href="/journal" onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800/40 transition-colors">
             <span>📓</span> My Journal
           </Link>
-
-          {/* Logout */}
           <button
             onClick={handleLogout}
             disabled={loading}
@@ -337,7 +331,6 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
             ))}
           </div>
 
-          {/* Right side */}
           <div className="ml-auto flex items-center gap-2">
             <BellBadge />
             <button

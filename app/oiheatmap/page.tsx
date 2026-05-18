@@ -93,9 +93,9 @@ function HeatCell({ intensity, oi, isCE, isWall, isAtm, isVacuum }:
           W
         </div>
       )}
-      {/* Vacuum indicator */}
+      {/* Vacuum indicator — only show ⚡ on first cell of vacuum row, not every cell */}
       {isVacuum && intensity === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-[8px] text-amber-400">⚡</div>
+        <div className="absolute inset-0 bg-amber-950/20"/>
       )}
     </div>
   )
@@ -308,7 +308,7 @@ export default function OIHeatmap() {
                   <div className="flex">
                     {data.time_labels.map((t, i) => (
                       <div key={i} className="flex-1 text-center text-[9px] text-gray-600 py-1 border-r border-gray-800/30 last:border-0">
-                        {i % 3 === 0 ? t : ''}
+                        {i % 2 === 0 ? t : ''}
                       </div>
                     ))}
                   </div>
@@ -320,7 +320,7 @@ export default function OIHeatmap() {
                   <div className="flex">
                     {data.time_labels.map((t, i) => (
                       <div key={i} className="flex-1 text-center text-[9px] text-gray-600 py-1 border-r border-gray-800/30 last:border-0">
-                        {i % 3 === 0 ? t : ''}
+                        {i % 2 === 0 ? t : ''}
                       </div>
                     ))}
                   </div>
@@ -344,14 +344,14 @@ export default function OIHeatmap() {
                           ceWalls.includes(strike) && peWalls.includes(strike) ? 'text-purple-400' :
                           ceWalls.includes(strike) ? 'text-red-400' :
                           peWalls.includes(strike) ? 'text-emerald-400' :
-                          atmPerTime.includes(strike) ? 'text-amber-400' :
+                          atmPerTime[atmPerTime.length - 1] === strike ? 'text-amber-400' :
                           'text-gray-400'
                         }`}>
                           {strike.toLocaleString()}
                         </p>
                         {ceWalls.includes(strike) && <p className="text-[8px] text-red-500">CE WALL</p>}
                         {peWalls.includes(strike) && <p className="text-[8px] text-emerald-500">PE WALL</p>}
-                        {atmPerTime.includes(strike) && !ceWalls.includes(strike) && !peWalls.includes(strike) && (
+                        {atmPerTime[atmPerTime.length - 1] === strike && !ceWalls.includes(strike) && !peWalls.includes(strike) && (
                           <p className="text-[8px] text-amber-500">ATM</p>
                         )}
                       </div>
@@ -361,8 +361,8 @@ export default function OIHeatmap() {
                     {view !== 'PE' && (
                       <div className="flex-1 flex border-r border-gray-800">
                         {(ceRow?.values || []).map((cell, tIdx) => {
-                          const isWall  = ceWalls[tIdx] === strike
-                          const isAtm   = atmPerTime[tIdx] === strike
+                          const isWall  = ceWalls[tIdx] === strike && cell.intensity > 30
+                          const isAtm   = atmPerTime[atmPerTime.length - 1] === strike
                           const isVac   = cell.intensity < 5 && (peRow?.values[tIdx]?.intensity || 0) < 5
                           return (
                             <div key={tIdx} className="flex-1 border-r border-gray-800/20 last:border-0"
@@ -380,8 +380,8 @@ export default function OIHeatmap() {
                     {view !== 'CE' && (
                       <div className="flex-1 flex">
                         {(peRow?.values || []).map((cell, tIdx) => {
-                          const isWall  = peWalls[tIdx] === strike
-                          const isAtm   = atmPerTime[tIdx] === strike
+                          const isWall  = peWalls[tIdx] === strike && cell.intensity > 30
+                          const isAtm   = atmPerTime[atmPerTime.length - 1] === strike
                           const isVac   = cell.intensity < 5 && (ceRow?.values[tIdx]?.intensity || 0) < 5
                           return (
                             <div key={tIdx} className="flex-1 border-r border-gray-800/20 last:border-0"

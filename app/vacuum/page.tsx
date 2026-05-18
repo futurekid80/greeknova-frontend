@@ -1,0 +1,307 @@
+'use client'
+import Navbar from '@/components/Navbar'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { RefreshCw, Zap } from 'lucide-react'
+
+const API = 'https://greeknova-backend-production.up.railway.app'
+
+interface Vacuum {
+  strike: number
+  ce_oi: number; pe_oi: number
+  dist_pct: number; direction: 'ABOVE' | 'BELOW'
+}
+
+interface ScanResult {
+  symbol: string; cmp: number; is_index: boolean
+  vacuums: Vacuum[]
+  nearest_above: Vacuum | null
+  nearest_below: Vacuum | null
+  vacuum_count: number
+  expiry: string; data_date: string
+}
+
+interface ScanData {
+  scan_time: string; data_date: string
+  total: number; results: ScanResult[]
+}
+
+function fmtOI(n: number) {
+  if (Math.abs(n) >= 10000000) return `${(n/10000000).toFixed(1)}Cr`
+  if (Math.abs(n) >= 100000)   return `${(n/100000).toFixed(1)}L`
+  return n.toLocaleString()
+}
+
+function DistanceBadge({ pct, direction }: { pct: number; direction: 'ABOVE' | 'BELOW' }) {
+  const color = direction === 'ABOVE' ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/50'
+                                      : 'text-red-400 bg-red-950/40 border-red-800/50'
+  return (
+    <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${color}`}>
+      {direction === 'ABOVE' ? '↑' : '↓'} {Math.abs(pct)}%
+    </span>
+  )
+}
+
+export default function VacuumScanner() {
+  const [data, setData]           = useState<ScanData | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [maxDist, setMaxDist]     = useState(10)
+  const [dirFilter, setDirFilter] = useState<'all'|'ABOVE'|'BELOW'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all'|'index'|'stocks'>('all')
+  const [countdown, setCountdown] = useState(300)
+  const countdownRef = useRef<NodeJS.Timeout|null>(null)
+  const intervalRef  = useRef<NodeJS.Timeout|null>(null)
+
+  const fetchData = useCallback(async (dist?: number) => {
+    setLoading(true)
+    try {
+      const d = dist ?? maxDist
+      const res  = await fetch(`${API}/vacuum-scanner?max_distance_pct=${d}`)
+      const json = await res.json()
+      setData(json)
+    } catch(e) { console.error(e) }
+    setLoading(false)
+  }, [maxDist])
+
+  function startAuto() {
+    setCountdown(300)
+    if (intervalRef.current)  clearInterval(intervalRef.current)
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
+    countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
+  }
+
+  useEffect(() => {
+    fetchData()
+    startAuto()
+    return () => {
+      if (intervalRef.current)  clearInterval(intervalRef.current)
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
+  }, [])
+
+  function handleDist(d: number) {
+    setMaxDist(d)
+    fetchData(d)
+  }
+
+  const mins = Math.floor(countdown/60)
+  const secs = countdown % 60
+
+  const filtered = (data?.results || [])
+    .filter(r => typeFilter === 'all' || (typeFilter === 'index' ? r.is_index : !r.is_index))
+    .filter(r => {
+      if (dirFilter === 'all') return true
+      if (dirFilter === 'ABOVE') return r.nearest_above !== null
+      return r.nearest_below !== null
+    })
+
+  return (
+    <div className="min-h-screen bg-[#07070e] text-white">
+      <Navbar active="/vacuum"/>
+
+      <div className="max-w-7xl mx-auto px-6 py-8">
+
+        {/* Header */}
+        <div className="flex items-end justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight mb-1 flex items-center gap-3">
+              <Zap className="text-amber-400" size={28}/> Vacuum Zone Scanner
+            </h1>
+            <p className="text-gray-500 text-sm">
+              Strikes with very low OI on both sides — price moves FAST through these zones
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+              Auto refresh {mins}:{secs.toString().padStart(2,'0')}
+            </div>
+            <button onClick={() => fetchData()} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* How to use */}
+        <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl px-5 py-3 mb-5">
+          <p className="text-xs text-amber-400/80 leading-relaxed">
+            <span className="font-bold text-amber-400">⚡ What is a Vacuum Zone?</span> A strike where both CE and PE open interest is very low.
+            When price enters this zone — there are no strong positions to absorb the move — so price travels fast.
+            <span className="text-amber-300 font-semibold"> ↑ Above CMP = upside vacuum (fast rally potential) · ↓ Below CMP = downside vacuum (fast fall potential)</span>
+          </p>
+        </div>
+
+        {/* Filters */}
+        <div className="flex items-center gap-4 mb-5 flex-wrap">
+
+          {/* Distance filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Within:</span>
+            {[5, 10, 15].map(d => (
+              <button key={d} onClick={() => handleDist(d)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${maxDist===d
+                  ? 'bg-amber-950/60 text-amber-400 border-amber-700'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
+                {d}% of CMP
+              </button>
+            ))}
+          </div>
+
+          <div className="w-px h-5 bg-gray-800"/>
+
+          {/* Direction filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Direction:</span>
+            {([
+              { val: 'all',   label: 'All' },
+              { val: 'ABOVE', label: '↑ Above CMP' },
+              { val: 'BELOW', label: '↓ Below CMP' },
+            ] as const).map(({ val, label }) => (
+              <button key={val} onClick={() => setDirFilter(val)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${dirFilter===val
+                  ? val === 'ABOVE' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700'
+                  : val === 'BELOW' ? 'bg-red-950/60 text-red-400 border-red-700'
+                  : 'bg-white text-gray-900 border-white'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-px h-5 bg-gray-800"/>
+
+          {/* Type filter */}
+          {(['all','index','stocks'] as const).map(t => (
+            <button key={t} onClick={() => setTypeFilter(t)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${typeFilter===t
+                ? 'bg-white text-gray-900 border-white'
+                : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>
+              {t}
+            </button>
+          ))}
+
+          <span className="text-xs text-gray-600 ml-auto">
+            {filtered.length} stocks with vacuums · sorted by proximity
+          </span>
+        </div>
+
+        {/* Results */}
+        {loading ? (
+          <div className="space-y-3">
+            <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl px-4 py-3 flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"/>
+              <p className="text-xs text-blue-400">
+                Scanning all 66 F&O stocks for vacuum zones... this takes 20-30 seconds
+              </p>
+            </div>
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="h-20 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
+            <div className="text-5xl mb-4">⚡</div>
+            <h3 className="text-lg font-bold text-gray-400 mb-2">No vacuum zones found</h3>
+            <p className="text-sm text-gray-600">Try increasing the distance filter</p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-gray-800 overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-900/60 border-b border-gray-800">
+                  {['Symbol','CMP','↑ Nearest Above','↓ Nearest Below','All Vacuums','Action'].map((h,i) => (
+                    <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i===0?'pl-5 text-left':i<2?'text-left':'text-center'} ${i===5?'pr-5':''}`}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r, i) => (
+                  <tr key={r.symbol} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':'bg-gray-900/20'}`}>
+
+                    {/* Symbol */}
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-white">{r.symbol}</span>
+                        {r.is_index && <span className="text-[10px] px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded">IDX</span>}
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5">{r.vacuum_count} vacuum{r.vacuum_count>1?'s':''} found</p>
+                    </td>
+
+                    {/* CMP */}
+                    <td className="px-4 py-4">
+                      <p className="text-sm font-black text-amber-400">₹{r.cmp.toLocaleString('en-IN')}</p>
+                    </td>
+
+                    {/* Nearest Above */}
+                    <td className="px-4 py-4 text-center">
+                      {r.nearest_above ? (
+                        <div>
+                          <p className="text-sm font-black text-emerald-400">{r.nearest_above.strike.toLocaleString()}</p>
+                          <DistanceBadge pct={r.nearest_above.dist_pct} direction="ABOVE"/>
+                          <p className="text-[10px] text-gray-600 mt-1">
+                            CE: {fmtOI(r.nearest_above.ce_oi)} · PE: {fmtOI(r.nearest_above.pe_oi)}
+                          </p>
+                        </div>
+                      ) : <span className="text-xs text-gray-600">—</span>}
+                    </td>
+
+                    {/* Nearest Below */}
+                    <td className="px-4 py-4 text-center">
+                      {r.nearest_below ? (
+                        <div>
+                          <p className="text-sm font-black text-red-400">{r.nearest_below.strike.toLocaleString()}</p>
+                          <DistanceBadge pct={r.nearest_below.dist_pct} direction="BELOW"/>
+                          <p className="text-[10px] text-gray-600 mt-1">
+                            CE: {fmtOI(r.nearest_below.ce_oi)} · PE: {fmtOI(r.nearest_below.pe_oi)}
+                          </p>
+                        </div>
+                      ) : <span className="text-xs text-gray-600">—</span>}
+                    </td>
+
+                    {/* All Vacuums */}
+                    <td className="px-4 py-4 text-center">
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {r.vacuums.slice(0, 5).map((v, j) => (
+                          <span key={j} className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${
+                            v.direction === 'ABOVE'
+                              ? 'bg-emerald-950/30 text-emerald-400 border-emerald-800/40'
+                              : 'bg-red-950/30 text-red-400 border-red-800/40'
+                          }`}>
+                            {v.direction === 'ABOVE' ? '↑' : '↓'}{v.strike.toLocaleString()}
+                          </span>
+                        ))}
+                        {r.vacuums.length > 5 && (
+                          <span className="text-[10px] text-gray-600">+{r.vacuums.length - 5}</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Action */}
+                    <td className="px-5 py-4 text-center">
+                      <a href={`/oiprofile?symbol=${r.symbol}`}
+                        className="text-xs text-purple-400 hover:text-purple-300 border border-purple-800/50 px-2 py-1 rounded-lg transition-colors">
+                        📊 Profile →
+                      </a>
+                    </td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-6 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
+          <p className="text-xs text-gray-600 leading-relaxed">
+            <span className="text-gray-400 font-semibold">Disclaimer:</span> Vacuum zones show strikes with low OI concentration based on NSE data.
+            Low OI does not guarantee price movement — it indicates reduced friction if price reaches that level.
+            Always confirm with broader market context. Not investment advice.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}

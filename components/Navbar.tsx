@@ -24,6 +24,7 @@ const NAV_GROUPS = [
       { href: '/eod',        label: 'EOD Analysis' },
       { href: '/pcr',        label: 'PCR Trend' },
       { href: '/oiprofile', label: '📊 OI Profile' },
+      { href: '/oiheatmap', label: '🌡️ OI Heatmap' },
     ]
   },
   {

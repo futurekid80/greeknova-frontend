@@ -415,6 +415,152 @@ export default function OIHeatmap() {
           </div>
         )}
 
+        {/* ── Auto Interpretation Panel ─────────────────────────────── */}
+        {data && data.strikes.length > 0 && (() => {
+          const insights: { icon: string; text: string; color: string }[] = []
+          const lastIdx = data.timestamps.length - 1
+          const firstIdx = 0
+
+          // 1. Find conviction CE wall (held longest)
+          const cePeakStrike = (() => {
+            let maxDuration = 0, bestStrike = 0
+            data.ce_data.forEach(row => {
+              const duration = row.values.filter(v => v.intensity > 60).length
+              if (duration > maxDuration) { maxDuration = duration; bestStrike = row.strike }
+            })
+            return { strike: bestStrike, duration: maxDuration }
+          })()
+
+          if (cePeakStrike.duration > data.timestamps.length * 0.6) {
+            insights.push({
+              icon: '🔴',
+              text: `${cePeakStrike.strike.toLocaleString()} CE wall holding for ${cePeakStrike.duration} of ${data.timestamps.length} snapshots — strong institutional resistance`,
+              color: 'text-red-400'
+            })
+          }
+
+          // 2. Find conviction PE wall
+          const pePeakStrike = (() => {
+            let maxDuration = 0, bestStrike = 0
+            data.pe_data.forEach(row => {
+              const duration = row.values.filter(v => v.intensity > 60).length
+              if (duration > maxDuration) { maxDuration = duration; bestStrike = row.strike }
+            })
+            return { strike: bestStrike, duration: maxDuration }
+          })()
+
+          if (pePeakStrike.duration > data.timestamps.length * 0.6) {
+            insights.push({
+              icon: '🟢',
+              text: `${pePeakStrike.strike.toLocaleString()} PE wall holding for ${pePeakStrike.duration} of ${data.timestamps.length} snapshots — strong institutional support`,
+              color: 'text-emerald-400'
+            })
+          }
+
+          // 3. Check if CE wall is fading (peak OI vs latest OI)
+          if (cePeakStrike.strike > 0) {
+            const wallRow = data.ce_data.find(r => r.strike === cePeakStrike.strike)
+            if (wallRow) {
+              const peakOI  = Math.max(...wallRow.values.map(v => v.oi))
+              const latestOI = wallRow.values[lastIdx]?.oi || 0
+              const fadePct  = peakOI > 0 ? Math.round((peakOI - latestOI) / peakOI * 100) : 0
+              if (fadePct > 30) {
+                insights.push({
+                  icon: '⚠️',
+                  text: `${cePeakStrike.strike.toLocaleString()} CE wall fading — OI down ${fadePct}% from peak. Bears losing grip, watch for breakout`,
+                  color: 'text-amber-400'
+                })
+              }
+            }
+          }
+
+          // 4. Check if PE wall is fading
+          if (pePeakStrike.strike > 0) {
+            const wallRow = data.pe_data.find(r => r.strike === pePeakStrike.strike)
+            if (wallRow) {
+              const peakOI   = Math.max(...wallRow.values.map(v => v.oi))
+              const latestOI = wallRow.values[lastIdx]?.oi || 0
+              const fadePct  = peakOI > 0 ? Math.round((peakOI - latestOI) / peakOI * 100) : 0
+              if (fadePct > 30) {
+                insights.push({
+                  icon: '⚠️',
+                  text: `${pePeakStrike.strike.toLocaleString()} PE wall fading — OI down ${fadePct}% from peak. Bulls losing ground, watch for breakdown`,
+                  color: 'text-orange-400'
+                })
+              }
+            }
+          }
+
+          // 5. Nearest vacuum above current ATM
+          const lastAtm = atmPerTime[lastIdx]
+          if (lastAtm) {
+            const vacuumAbove = data.strikes
+              .filter(s => s > lastAtm)
+              .find(s => {
+                const ce = data.ce_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
+                const pe = data.pe_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
+                return ce < 5 && pe < 5
+              })
+            if (vacuumAbove) {
+              const distPct = Math.round((vacuumAbove - lastAtm) / lastAtm * 100 * 10) / 10
+              insights.push({
+                icon: '⚡',
+                text: `Vacuum at ${vacuumAbove.toLocaleString()} (+${distPct}% from ATM) — if ${cePeakStrike.strike.toLocaleString()} CE wall breaks, expect swift ${Math.round(vacuumAbove - lastAtm)}+ pt move`,
+                color: 'text-amber-400'
+              })
+            }
+
+            // Vacuum below
+            const vacuumBelow = [...data.strikes]
+              .filter(s => s < lastAtm)
+              .reverse()
+              .find(s => {
+                const ce = data.ce_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
+                const pe = data.pe_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
+                return ce < 5 && pe < 5
+              })
+            if (vacuumBelow) {
+              const distPct = Math.round((lastAtm - vacuumBelow) / lastAtm * 100 * 10) / 10
+              insights.push({
+                icon: '⚡',
+                text: `Vacuum at ${vacuumBelow.toLocaleString()} (-${distPct}% from ATM) — if ${pePeakStrike.strike.toLocaleString()} PE wall breaks, expect swift ${Math.round(lastAtm - vacuumBelow)}+ pt move`,
+                color: 'text-red-400'
+              })
+            }
+          }
+
+          // 6. ATM movement since open
+          const openAtm  = atmPerTime[firstIdx]
+          const closeAtm = atmPerTime[lastIdx]
+          if (openAtm && closeAtm && openAtm !== closeAtm) {
+            const moved = closeAtm - openAtm
+            insights.push({
+              icon: moved > 0 ? '📈' : '📉',
+              text: `ATM moved ${moved > 0 ? '+' : ''}${moved} pts since open (${openAtm.toLocaleString()} → ${closeAtm.toLocaleString()}) — ${moved > 0 ? 'bulls gaining ground' : 'bears in control'}`,
+              color: moved > 0 ? 'text-emerald-400' : 'text-red-400'
+            })
+          }
+
+          if (insights.length === 0) return null
+
+          return (
+            <div className="mt-4 bg-gray-900/30 border border-gray-700 rounded-xl overflow-hidden">
+              <div className="px-4 py-2 border-b border-gray-800 bg-gray-900/50 flex items-center gap-2">
+                <span className="text-xs font-bold text-white">🧠 Market Structure Read</span>
+                <span className="text-[10px] text-gray-500">· auto-generated from OI data · not investment advice</span>
+              </div>
+              <div className="divide-y divide-gray-800/50">
+                {insights.map((ins, i) => (
+                  <div key={i} className="flex items-start gap-3 px-4 py-2.5">
+                    <span className="text-base flex-shrink-0">{ins.icon}</span>
+                    <p className={`text-xs leading-relaxed ${ins.color}`}>{ins.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+
         <div className="mt-4 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
           <p className="text-xs text-gray-600 leading-relaxed">
             <span className="text-gray-400 font-semibold">How to read: </span>

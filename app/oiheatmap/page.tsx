@@ -118,7 +118,9 @@ export default function OIHeatmap() {
     try {
       const params = new URLSearchParams()
       if (expiry) params.set('expiry', expiry)
-      const res  = await fetch(`${API}/oi-heatmap/${symbol}?${params}`)
+      // Cache-busting: add timestamp so browser never serves stale response
+      params.set('_t', Date.now().toString())
+      const res  = await fetch(`${API}/oi-heatmap/${symbol}?${params}`, { cache: 'no-store' })
       const json = await res.json()
       setData(json)
       if (!expiry && json.expiry) setExpiry(json.expiry)
@@ -126,21 +128,31 @@ export default function OIHeatmap() {
     setLoading(false)
   }, [symbol, expiry])
 
+  // ── FIX: keep a ref always pointing to latest fetchData ──────────────
+  // This prevents the stale closure bug where the interval calls an old
+  // version of fetchData that has outdated symbol/expiry in its closure.
+  const fetchDataRef = useRef(fetchData)
+  useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
+  // ─────────────────────────────────────────────────────────────────────
+
   useEffect(() => { setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
 
-  // Auto refresh every 5 mins
+  // Auto refresh every 5 mins — uses ref so interval never goes stale
   useEffect(() => {
     setCountdown(300)
     if (intervalRef.current)  clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
-    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
+
+    // Use fetchDataRef.current() so each tick always calls the LATEST fetchData
+    intervalRef.current  = setInterval(() => { fetchDataRef.current(); setCountdown(300) }, 5*60*1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
+
     return () => {
       if (intervalRef.current)  clearInterval(intervalRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
     }
-  }, [fetchData])
+  }, []) // Empty deps — interval set once; fetchDataRef handles staying current
 
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60

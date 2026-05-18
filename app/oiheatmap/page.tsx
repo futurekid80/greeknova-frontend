@@ -35,7 +35,7 @@ interface HeatmapData {
   strikes: number[]
   ce_data: HeatRow[]; pe_data: HeatRow[]
   cmp_series: CmpPoint[]
-  mid_cmp: number; snapshot_count: number
+  mid_cmp: number; latest_cmp: number; snapshot_count: number
 }
 
 function fmtOI(n: number) {
@@ -202,10 +202,10 @@ export default function OIHeatmap() {
                 </select>
               </div>
             )}
-            {data?.mid_cmp && (
+            {data?.latest_cmp && (
               <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-800/50 rounded-xl px-4 py-2">
-                <span className="text-xs text-gray-500">Mid CMP</span>
-                <span className="text-base font-black text-amber-400">₹{data.mid_cmp.toLocaleString('en-IN')}</span>
+                <span className="text-xs text-gray-500">CMP</span>
+                <span className="text-base font-black text-amber-400">₹{data.latest_cmp.toLocaleString('en-IN', {maximumFractionDigits: 2})}</span>
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">

@@ -1,7 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { RefreshCw, Clock, AlertTriangle, Search, X } from 'lucide-react'
+import { RefreshCw, Clock, AlertTriangle, Search, X, MoonStar } from 'lucide-react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
@@ -23,6 +23,8 @@ interface UOAData {
   open_timestamp: string
   snapshot_count: number
   mins_to_close: number
+  is_post_market: boolean
+  market_close_time: string
 }
 
 const SIGNAL_META: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
@@ -78,7 +80,6 @@ function ScoreMeter({ score }: { score: number }) {
   )
 }
 
-// FIX: Renamed from "Day High" to "Stock at High" to clarify it's the underlying stock, not the option
 function StockAtHighBadge({ atDayHigh, pct }: { atDayHigh: boolean; pct: number | null }) {
   if (atDayHigh) return (
     <span className="text-xs px-1.5 py-0.5 rounded-md bg-orange-950/60 text-orange-400 border border-orange-800/50 font-bold"
@@ -138,6 +139,8 @@ export default function UOA() {
       setData(json)
       if (json.timestamp) setCaptureTime(toIST(json.timestamp))
       if (json.open_timestamp) setOpenTime(toIST(json.open_timestamp))
+      // Auto-disable refresh if post-market
+      if (json.is_post_market) stopAuto()
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [])
@@ -167,8 +170,9 @@ export default function UOA() {
 
   const allSignals = data?.signals || []
   const minsToClose = data?.mins_to_close || 0
+  const isPostMarket = data?.is_post_market || false
 
-  // Two-way detection — find all symbols with both CE and PE signals
+  // Two-way detection
   const symbolSides: Record<string, Set<string>> = {}
   allSignals.forEach(s => {
     if (!symbolSides[s.symbol]) symbolSides[s.symbol] = new Set()
@@ -179,7 +183,7 @@ export default function UOA() {
       .filter(([_, sides]) => sides.has('CE') && sides.has('PE'))
       .map(([sym]) => sym)
   )
-  const twoWayList = [...twoWaySymbols] // ordered list for display
+  const twoWayList = [...twoWaySymbols]
 
   const searchTerm = stockSearch.trim().toUpperCase()
   const filtered = allSignals
@@ -190,7 +194,6 @@ export default function UOA() {
     .filter(s => biasFilter === 'all' || s.bias === biasFilter)
     .filter(s => s.score >= minScore)
 
-  // Aerial view
   const isAerialView = searchTerm.length >= 2 && filtered.length > 0
   const aerialSymbol = isAerialView ? filtered[0]?.symbol : null
   const aerialSignals = isAerialView ? filtered.filter(s => s.symbol === aerialSymbol) : []
@@ -235,20 +238,38 @@ export default function UOA() {
             )}
             {openTime && captureTime && (
               <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
-                <Clock size={11}/>Open: {openTime} → Now: {captureTime} IST
+                <Clock size={11}/>Open: {openTime} → {isPostMarket ? 'Close' : 'Now'}: {captureTime} IST
               </div>
             )}
-            <button onClick={() => autoEnabled ? stopAuto() : startAuto()}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${autoEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
-              {autoEnabled ? `${mins}:${secs.toString().padStart(2,'0')}` : 'Auto OFF'}
-            </button>
+            {/* Hide auto-refresh toggle post-market */}
+            {!isPostMarket && (
+              <button onClick={() => autoEnabled ? stopAuto() : startAuto()}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${autoEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
+                {autoEnabled ? `${mins}:${secs.toString().padStart(2,'0')}` : 'Auto OFF'}
+              </button>
+            )}
             <button onClick={fetchData} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all disabled:opacity-50">
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
             </button>
           </div>
         </div>
+
+        {/* POST-MARKET BANNER */}
+        {isPostMarket && (
+          <div className="bg-gray-900/60 border border-gray-700 rounded-xl px-4 py-3 mb-6 flex items-center gap-3">
+            <MoonStar size={16} className="text-gray-400 flex-shrink-0"/>
+            <div>
+              <p className="text-sm font-bold text-gray-300">
+                📊 EOD Snapshot · Market Closed
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Showing final state as of {captureTime} IST · Signals reflect patterns observed at market close · Auto-refresh disabled · Not for intraday use
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* SEBI disclaimer */}
         <div className="bg-amber-950/10 border border-amber-800/30 rounded-xl px-4 py-3 mb-6 flex items-center gap-3">
@@ -265,21 +286,22 @@ export default function UOA() {
             <span className="text-cyan-400">OI momentum</span> = change in open interest over last 30 mins ·
             <span className="text-amber-400"> Price direction</span> = option LTP vs today's open ({openTime || '—'} IST) ·
             <span className="text-orange-400"> 🏔️ Stock at High</span> = underlying stock price near today's high (not the option price)
+            {isPostMarket && <span className="text-gray-600"> · 📊 EOD = signals from market close snapshot</span>}
           </p>
         </div>
 
-        {/* FIX: Two-way alert — shows ALL two-way symbols as clickable links */}
+        {/* Two-way alert */}
         {twoWayList.length > 0 && (
           <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-4 mb-6 flex items-start gap-3">
             <span className="text-2xl">⚡</span>
             <div className="flex-1">
               <p className="text-sm font-bold text-amber-400 mb-2">
                 Two-Way Activity Observed ({twoWayList.length} {twoWayList.length === 1 ? 'stock' : 'stocks'})
+                {isPostMarket && <span className="text-xs font-normal text-amber-600 ml-2">· as of market close</span>}
               </p>
               <p className="text-xs text-gray-400 mb-3">
                 Both CE and PE showing significant activity for the same underlying — elevated activity on both sides. Informational only.
               </p>
-              {/* Clickable chips for every two-way symbol */}
               <div className="flex flex-wrap gap-2">
                 {twoWayList.map(sym => {
                   const ceSignals = allSignals.filter(s => s.symbol === sym && s.option_type === 'CE')
@@ -287,9 +309,7 @@ export default function UOA() {
                   const ceSig = ceSignals[0]
                   const peSig = peSignals[0]
                   return (
-                    <button
-                      key={sym}
-                      onClick={() => setStockSearch(sym)}
+                    <button key={sym} onClick={() => setStockSearch(sym)}
                       className="flex items-center gap-2 px-3 py-2 bg-amber-950/40 border border-amber-800/60 rounded-xl hover:bg-amber-950/60 transition-all group">
                       <span className="text-sm font-black text-white group-hover:text-amber-400 transition-colors">{sym}</span>
                       {ceSig && (
@@ -335,7 +355,7 @@ export default function UOA() {
           </div>
         </div>
 
-        {/* Stock Search — Aerial View */}
+        {/* Stock Search */}
         <div className="relative mb-5">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
           <input
@@ -358,6 +378,7 @@ export default function UOA() {
               <h2 className="text-xl font-black text-white">{aerialSymbol}</h2>
               <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded-lg">Aerial View</span>
               {isAerialTwoWay && <span className="text-xs px-2 py-1 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-lg">⚡ Two-Way Activity</span>}
+              {isPostMarket && <span className="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded-lg">📊 EOD Snapshot</span>}
               <a href={`/stock/${aerialSymbol}`} className="ml-auto text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 px-2 py-1 rounded-lg transition-colors">
                 Full Stock Page →
               </a>
@@ -376,6 +397,7 @@ export default function UOA() {
                               <span className="text-sm font-black text-white">{s.strike.toLocaleString()} CE</span>
                               <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.color} ${m.bg} border ${m.border}`}>{m.icon} {m.label}</span>
                               {s.at_day_high && <StockAtHighBadge atDayHigh={s.at_day_high} pct={s.day_high_pct}/>}
+                              {isPostMarket && <span className="text-xs px-1 py-0.5 bg-gray-800 text-gray-500 rounded">📊 EOD</span>}
                             </div>
                             <span className={`text-sm font-black ${s.ltp_chg_from_open > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                               {s.ltp_chg_from_open > 0 ? '+' : ''}{s.ltp_chg_from_open}% from open
@@ -405,6 +427,7 @@ export default function UOA() {
                               <span className="text-sm font-black text-white">{s.strike.toLocaleString()} PE</span>
                               <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.color} ${m.bg} border ${m.border}`}>{m.icon} {m.label}</span>
                               {s.at_day_high && <StockAtHighBadge atDayHigh={s.at_day_high} pct={s.day_high_pct}/>}
+                              {isPostMarket && <span className="text-xs px-1 py-0.5 bg-gray-800 text-gray-500 rounded">📊 EOD</span>}
                             </div>
                             <span className={`text-sm font-black ${s.ltp_chg_from_open > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                               {s.ltp_chg_from_open > 0 ? '+' : ''}{s.ltp_chg_from_open}% from open
@@ -466,7 +489,9 @@ export default function UOA() {
           </div>
         </div>
 
-        <p className="text-xs text-gray-600 mb-4">{filtered.length} signals · {openTime} open → {captureTime} now · Informational only</p>
+        <p className="text-xs text-gray-600 mb-4">
+          {filtered.length} signals · {openTime} open → {captureTime} {isPostMarket ? 'close' : 'now'} · {isPostMarket ? '📊 EOD snapshot · ' : ''}Informational only
+        </p>
 
         {loading ? (
           <div className="space-y-2">{[1,2,3,4,5].map(i=><div key={i} className="h-14 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>)}</div>
@@ -486,6 +511,7 @@ export default function UOA() {
                   const isCE = sig.option_type === 'CE'
                   const isTwoWay = twoWaySymbols.has(sig.symbol)
                   const obs = getObservation(sig)
+                  const isEOD = sig.time_tag === 'post_market'
 
                   return (
                     <tr key={`${sig.tradingsymbol}-${i}`}
@@ -499,12 +525,15 @@ export default function UOA() {
                           </button>
                           {sig.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
                           {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">⚡ 2-WAY</span>}
-                          {/* FIX: renamed to StockAtHighBadge with tooltip */}
                           {sig.at_day_high && <StockAtHighBadge atDayHigh={sig.at_day_high} pct={sig.day_high_pct}/>}
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{sig.cmp.toLocaleString()}</p>
                         {sig.day_high && !sig.at_day_high && sig.day_high_pct !== null && sig.day_high_pct < 2 && (
                           <p className="text-xs text-gray-600">{sig.day_high_pct.toFixed(1)}% to stock high</p>
+                        )}
+                        {/* Time tags */}
+                        {isEOD && (
+                          <span className="text-xs text-gray-500 flex items-center gap-1">📊 EOD snapshot</span>
                         )}
                         {sig.time_tag === 'market_closing' && (
                           <span className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle size={9}/> Market closing</span>

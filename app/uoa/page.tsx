@@ -78,15 +78,18 @@ function ScoreMeter({ score }: { score: number }) {
   )
 }
 
-function DayHighBadge({ atDayHigh, pct }: { atDayHigh: boolean; pct: number | null }) {
+// FIX: Renamed from "Day High" to "Stock at High" to clarify it's the underlying stock, not the option
+function StockAtHighBadge({ atDayHigh, pct }: { atDayHigh: boolean; pct: number | null }) {
   if (atDayHigh) return (
-    <span className="text-xs px-1.5 py-0.5 rounded-md bg-orange-950/60 text-orange-400 border border-orange-800/50 font-bold">
-      📈 Day High
+    <span className="text-xs px-1.5 py-0.5 rounded-md bg-orange-950/60 text-orange-400 border border-orange-800/50 font-bold"
+      title="The underlying stock price is near its day high — not the option price">
+      🏔️ Stock at High
     </span>
   )
   if (pct !== null && pct < 2) return (
-    <span className="text-xs px-1.5 py-0.5 rounded-md bg-gray-800 text-gray-500 border border-gray-700">
-      {pct.toFixed(1)}% to high
+    <span className="text-xs px-1.5 py-0.5 rounded-md bg-gray-800 text-gray-500 border border-gray-700"
+      title="Stock price is within 2% of its day high">
+      {pct.toFixed(1)}% to stock high
     </span>
   )
   return null
@@ -100,7 +103,7 @@ export default function UOA() {
   const [signalFilter, setSignalFilter] = useState<string>('all')
   const [biasFilter, setBiasFilter] = useState<'all'|'BULLISH'|'BEARISH'>('all')
   const [minScore, setMinScore] = useState(3)
-  const [stockSearch, setStockSearch] = useState('')   // ← stock search
+  const [stockSearch, setStockSearch] = useState('')
   const [date, setDate] = useState<string>('')
   const [availDates, setAvailDates] = useState<string[]>([])
   const [captureTime, setCaptureTime] = useState('')
@@ -165,7 +168,7 @@ export default function UOA() {
   const allSignals = data?.signals || []
   const minsToClose = data?.mins_to_close || 0
 
-  // Two-way detection
+  // Two-way detection — find all symbols with both CE and PE signals
   const symbolSides: Record<string, Set<string>> = {}
   allSignals.forEach(s => {
     if (!symbolSides[s.symbol]) symbolSides[s.symbol] = new Set()
@@ -176,8 +179,8 @@ export default function UOA() {
       .filter(([_, sides]) => sides.has('CE') && sides.has('PE'))
       .map(([sym]) => sym)
   )
+  const twoWayList = [...twoWaySymbols] // ordered list for display
 
-  // All filters including stock search
   const searchTerm = stockSearch.trim().toUpperCase()
   const filtered = allSignals
     .filter(s => !searchTerm || s.symbol.includes(searchTerm))
@@ -187,7 +190,7 @@ export default function UOA() {
     .filter(s => biasFilter === 'all' || s.bias === biasFilter)
     .filter(s => s.score >= minScore)
 
-  // Aerial view: when searching a specific stock, group CE and PE together
+  // Aerial view
   const isAerialView = searchTerm.length >= 2 && filtered.length > 0
   const aerialSymbol = isAerialView ? filtered[0]?.symbol : null
   const aerialSignals = isAerialView ? filtered.filter(s => s.symbol === aerialSymbol) : []
@@ -198,7 +201,6 @@ export default function UOA() {
   const bullishCount  = allSignals.filter(s => s.bias === 'BULLISH').length
   const bearishCount  = allSignals.filter(s => s.bias === 'BEARISH').length
   const highConvCount = allSignals.filter(s => s.score >= 4).length
-  const atDayHighCount = allSignals.filter(s => s.at_day_high).length
 
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
@@ -262,26 +264,49 @@ export default function UOA() {
             <span className="text-gray-300 font-semibold">How signals are derived: </span>
             <span className="text-cyan-400">OI momentum</span> = change in open interest over last 30 mins ·
             <span className="text-amber-400"> Price direction</span> = option LTP vs today's open ({openTime || '—'} IST) ·
-            <span className="text-orange-400"> Day High</span> = underlying stock price vs today's high (Kite OHLC)
+            <span className="text-orange-400"> 🏔️ Stock at High</span> = underlying stock price near today's high (not the option price)
           </p>
         </div>
 
-        {/* Two-way alert */}
-        {twoWaySymbols.size > 0 && (
+        {/* FIX: Two-way alert — shows ALL two-way symbols as clickable links */}
+        {twoWayList.length > 0 && (
           <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-4 mb-6 flex items-start gap-3">
             <span className="text-2xl">⚡</span>
-            <div>
-              <p className="text-sm font-bold text-amber-400 mb-1">
-                Two-Way Activity Observed — {[...twoWaySymbols].join(', ')}
+            <div className="flex-1">
+              <p className="text-sm font-bold text-amber-400 mb-2">
+                Two-Way Activity Observed ({twoWayList.length} {twoWayList.length === 1 ? 'stock' : 'stocks'})
               </p>
-              <p className="text-xs text-gray-400">
-                Both CE and PE showing significant activity for the same underlying.
-                Elevated activity on both sides — informational only.
-                <button onClick={() => setStockSearch([...twoWaySymbols][0])}
-                  className="ml-2 text-amber-400 underline hover:text-amber-300 text-xs">
-                  View {[...twoWaySymbols][0]} →
-                </button>
+              <p className="text-xs text-gray-400 mb-3">
+                Both CE and PE showing significant activity for the same underlying — elevated activity on both sides. Informational only.
               </p>
+              {/* Clickable chips for every two-way symbol */}
+              <div className="flex flex-wrap gap-2">
+                {twoWayList.map(sym => {
+                  const ceSignals = allSignals.filter(s => s.symbol === sym && s.option_type === 'CE')
+                  const peSignals = allSignals.filter(s => s.symbol === sym && s.option_type === 'PE')
+                  const ceSig = ceSignals[0]
+                  const peSig = peSignals[0]
+                  return (
+                    <button
+                      key={sym}
+                      onClick={() => setStockSearch(sym)}
+                      className="flex items-center gap-2 px-3 py-2 bg-amber-950/40 border border-amber-800/60 rounded-xl hover:bg-amber-950/60 transition-all group">
+                      <span className="text-sm font-black text-white group-hover:text-amber-400 transition-colors">{sym}</span>
+                      {ceSig && (
+                        <span className="text-xs px-1.5 py-0.5 bg-red-950/60 text-red-400 border border-red-800/50 rounded-md">
+                          {SIGNAL_META[ceSig.signal_type]?.icon} CE
+                        </span>
+                      )}
+                      {peSig && (
+                        <span className="text-xs px-1.5 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 rounded-md">
+                          {SIGNAL_META[peSig.signal_type]?.icon} PE
+                        </span>
+                      )}
+                      <span className="text-xs text-amber-600 group-hover:text-amber-400">View →</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -310,7 +335,7 @@ export default function UOA() {
           </div>
         </div>
 
-        {/* ── Stock Search — Aerial View ───────────────────────────────────── */}
+        {/* Stock Search — Aerial View */}
         <div className="relative mb-5">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
           <input
@@ -326,7 +351,7 @@ export default function UOA() {
           )}
         </div>
 
-        {/* Aerial view panel — shown when stock is searched */}
+        {/* Aerial view panel */}
         {isAerialView && aerialSymbol && (
           <div className={`rounded-2xl border p-5 mb-6 ${isAerialTwoWay ? 'border-amber-800/50 bg-amber-950/10' : 'border-gray-700 bg-gray-900/40'}`}>
             <div className="flex items-center gap-3 mb-4">
@@ -347,10 +372,10 @@ export default function UOA() {
                       return (
                         <div key={i} className={`rounded-xl p-3 border ${m.bg} ${m.border}`}>
                           <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-black text-white">{s.strike.toLocaleString()} CE</span>
                               <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.color} ${m.bg} border ${m.border}`}>{m.icon} {m.label}</span>
-                              {s.at_day_high && <DayHighBadge atDayHigh={s.at_day_high} pct={s.day_high_pct}/>}
+                              {s.at_day_high && <StockAtHighBadge atDayHigh={s.at_day_high} pct={s.day_high_pct}/>}
                             </div>
                             <span className={`text-sm font-black ${s.ltp_chg_from_open > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                               {s.ltp_chg_from_open > 0 ? '+' : ''}{s.ltp_chg_from_open}% from open
@@ -376,10 +401,10 @@ export default function UOA() {
                       return (
                         <div key={i} className={`rounded-xl p-3 border ${m.bg} ${m.border}`}>
                           <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-black text-white">{s.strike.toLocaleString()} PE</span>
                               <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.color} ${m.bg} border ${m.border}`}>{m.icon} {m.label}</span>
-                              {s.at_day_high && <DayHighBadge atDayHigh={s.at_day_high} pct={s.day_high_pct}/>}
+                              {s.at_day_high && <StockAtHighBadge atDayHigh={s.at_day_high} pct={s.day_high_pct}/>}
                             </div>
                             <span className={`text-sm font-black ${s.ltp_chg_from_open > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                               {s.ltp_chg_from_open > 0 ? '+' : ''}{s.ltp_chg_from_open}% from open
@@ -473,12 +498,13 @@ export default function UOA() {
                             {sig.symbol}
                           </button>
                           {sig.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
-                          {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">2-WAY</span>}
-                          {sig.at_day_high && <DayHighBadge atDayHigh={sig.at_day_high} pct={sig.day_high_pct}/>}
+                          {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">⚡ 2-WAY</span>}
+                          {/* FIX: renamed to StockAtHighBadge with tooltip */}
+                          {sig.at_day_high && <StockAtHighBadge atDayHigh={sig.at_day_high} pct={sig.day_high_pct}/>}
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{sig.cmp.toLocaleString()}</p>
                         {sig.day_high && !sig.at_day_high && sig.day_high_pct !== null && sig.day_high_pct < 2 && (
-                          <p className="text-xs text-gray-600">{sig.day_high_pct.toFixed(1)}% from day high</p>
+                          <p className="text-xs text-gray-600">{sig.day_high_pct.toFixed(1)}% to stock high</p>
                         )}
                         {sig.time_tag === 'market_closing' && (
                           <span className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle size={9}/> Market closing</span>
@@ -506,23 +532,17 @@ export default function UOA() {
                       </td>
 
                       <td className="px-4 py-3.5 text-right"><ScoreMeter score={sig.score}/></td>
-
                       <td className={`px-4 py-3.5 text-right text-sm font-black ${sig.vol_oi_ratio > 5 ? 'text-orange-400' : sig.vol_oi_ratio > 2 ? 'text-amber-400' : 'text-gray-400'}`}>{sig.vol_oi_ratio}x</td>
-
                       <td className="px-4 py-3.5 text-right text-sm text-gray-300">{(sig.volume/100000).toFixed(1)}L</td>
-
                       <td className={`px-4 py-3.5 text-right text-sm font-semibold ${sig.oi_chg_30min > 0 ? 'text-emerald-400' : sig.oi_chg_30min < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                         {sig.oi_chg_30min > 0 ? '+' : ''}{sig.oi_chg_30min}%
                       </td>
-
                       <td className={`px-4 py-3.5 text-right text-sm font-semibold ${sig.ltp_chg_from_open > 0 ? 'text-emerald-400' : sig.ltp_chg_from_open < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                         {sig.ltp_chg_from_open > 0 ? '+' : ''}{sig.ltp_chg_from_open}%
                       </td>
-
                       <td className="px-4 py-3.5 text-right">
                         {sig.is_otm ? <span className="text-xs font-bold text-violet-400">{sig.otm_pct}% OTM</span> : <span className="text-xs text-gray-600">ITM/ATM</span>}
                       </td>
-
                       <td className="px-5 py-3.5 text-right">
                         <p className="text-sm font-bold text-amber-400">₹{sig.ltp}</p>
                         <p className="text-xs text-gray-600">Open: ₹{sig.open_ltp}</p>
@@ -541,7 +561,6 @@ export default function UOA() {
           </div>
         )}
 
-        {/* Bottom disclaimer */}
         <div className="mt-8 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
           <p className="text-xs text-gray-600 leading-relaxed">
             <span className="text-gray-400 font-semibold">Disclaimer:</span> GreekNova UOA is an observational tool that identifies patterns in publicly available NSE options data.

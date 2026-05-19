@@ -26,14 +26,32 @@ interface ScanData {
 }
 
 function fmtOI(n: number) {
+  if (n === 0) return '0'
   if (Math.abs(n) >= 10000000) return `${(n/10000000).toFixed(1)}Cr`
   if (Math.abs(n) >= 100000)   return `${(n/100000).toFixed(1)}L`
+  if (Math.abs(n) >= 1000)     return `${(n/1000).toFixed(0)}K`
   return n.toLocaleString()
 }
 
+// Vacuum OI display — shows CE+PE with clear "near-zero" context
+function VacuumOIBadge({ ceOI, peOI }: { ceOI: number; peOI: number }) {
+  const total = ceOI + peOI
+  return (
+    <div className="flex items-center gap-1 justify-center mt-1">
+      <span className="text-[10px] text-red-400/70">CE:{fmtOI(ceOI)}</span>
+      <span className="text-[10px] text-gray-700">·</span>
+      <span className="text-[10px] text-emerald-400/70">PE:{fmtOI(peOI)}</span>
+      {total < 50000 && (
+        <span className="text-[9px] text-amber-500/60 ml-0.5">⚡low</span>
+      )}
+    </div>
+  )
+}
+
 function DistanceBadge({ pct, direction }: { pct: number; direction: 'ABOVE' | 'BELOW' }) {
-  const color = direction === 'ABOVE' ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/50'
-                                      : 'text-red-400 bg-red-950/40 border-red-800/50'
+  const color = direction === 'ABOVE'
+    ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/50'
+    : 'text-red-400 bg-red-950/40 border-red-800/50'
   return (
     <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${color}`}>
       {direction === 'ABOVE' ? '↑' : '↓'} {Math.abs(pct)}%
@@ -41,15 +59,33 @@ function DistanceBadge({ pct, direction }: { pct: number; direction: 'ABOVE' | '
   )
 }
 
+function toIST(isoStr: string) {
+  try {
+    const dt = new Date(isoStr)
+    const ist = dt.getTime() + (5.5 * 60 * 60 * 1000)
+    const d = new Date(ist)
+    return `${d.getUTCHours().toString().padStart(2,'0')}:${d.getUTCMinutes().toString().padStart(2,'0')} IST`
+  } catch { return '' }
+}
+
+function isPostMarket(): boolean {
+  const now = new Date()
+  const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes()
+  const day = now.getUTCDay()
+  if (day === 0 || day === 6) return true
+  return utcMins > 10 * 60 // after 3:30 PM IST = 10:00 AM UTC
+}
+
 export default function VacuumScanner() {
   const [data, setData]           = useState<ScanData | null>(null)
   const [loading, setLoading]     = useState(true)
-  const [maxDist, setMaxDist]     = useState(10)
+  const [maxDist, setMaxDist]     = useState(5)
   const [dirFilter, setDirFilter] = useState<'all'|'ABOVE'|'BELOW'>('all')
   const [typeFilter, setTypeFilter] = useState<'all'|'index'|'stocks'>('all')
   const [countdown, setCountdown] = useState(300)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
+  const postMarket   = isPostMarket()
 
   const fetchData = useCallback(async (dist?: number) => {
     setLoading(true)
@@ -63,6 +99,7 @@ export default function VacuumScanner() {
   }, [maxDist])
 
   function startAuto() {
+    if (postMarket) return // no auto-refresh post-market
     setCountdown(300)
     if (intervalRef.current)  clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
@@ -112,16 +149,37 @@ export default function VacuumScanner() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
-              Auto refresh {mins}:{secs.toString().padStart(2,'0')}
-            </div>
+            {/* Show scan time */}
+            {data?.scan_time && (
+              <div className="text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+                Scanned: {toIST(data.scan_time)}
+              </div>
+            )}
+            {!postMarket && (
+              <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+                Auto {mins}:{secs.toString().padStart(2,'0')}
+              </div>
+            )}
             <button onClick={() => fetchData()} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
             </button>
           </div>
         </div>
+
+        {/* Post-market banner */}
+        {postMarket && (
+          <div className="bg-gray-900/60 border border-gray-700 rounded-xl px-4 py-3 mb-5 flex items-center gap-3">
+            <span className="text-gray-400">🌙</span>
+            <div>
+              <p className="text-sm font-bold text-gray-300">📊 EOD Snapshot · Market Closed</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Showing vacuum zones from last capture · Data date: {data?.data_date || '—'} · Auto-refresh disabled
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* How to use */}
         <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl px-5 py-3 mb-5">
@@ -132,10 +190,17 @@ export default function VacuumScanner() {
           </p>
         </div>
 
+        {/* How to read OI values */}
+        <div className="bg-gray-900/20 border border-gray-800/40 rounded-xl px-4 py-2.5 mb-5">
+          <p className="text-xs text-gray-500">
+            <span className="text-gray-300 font-semibold">Reading OI values: </span>
+            CE and PE OI shown under each vacuum strike are intentionally tiny — that's what makes it a vacuum.
+            <span className="text-amber-400"> ⚡low</span> = under 50K total OI at that strike = minimal resistance if price reaches it.
+          </p>
+        </div>
+
         {/* Filters */}
         <div className="flex items-center gap-4 mb-5 flex-wrap">
-
-          {/* Distance filter */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">Within:</span>
             {[5, 10, 15].map(d => (
@@ -150,7 +215,6 @@ export default function VacuumScanner() {
 
           <div className="w-px h-5 bg-gray-800"/>
 
-          {/* Direction filter */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">Direction:</span>
             {([
@@ -171,7 +235,6 @@ export default function VacuumScanner() {
 
           <div className="w-px h-5 bg-gray-800"/>
 
-          {/* Type filter */}
           {(['all','index','stocks'] as const).map(t => (
             <button key={t} onClick={() => setTypeFilter(t)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${typeFilter===t
@@ -202,8 +265,8 @@ export default function VacuumScanner() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
             <div className="text-5xl mb-4">⚡</div>
-            <h3 className="text-lg font-bold text-gray-400 mb-2">No vacuum zones found</h3>
-            <p className="text-sm text-gray-600">Try increasing the distance filter</p>
+            <h3 className="text-lg font-bold text-gray-400 mb-2">No vacuum zones found within {maxDist}%</h3>
+            <p className="text-sm text-gray-600">Try increasing the distance filter to 10% or 15%</p>
           </div>
         ) : (
           <div className="rounded-2xl border border-gray-800 overflow-hidden">
@@ -228,6 +291,7 @@ export default function VacuumScanner() {
                         {r.is_index && <span className="text-[10px] px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded">IDX</span>}
                       </div>
                       <p className="text-xs text-gray-600 mt-0.5">{r.vacuum_count} vacuum{r.vacuum_count>1?'s':''} found</p>
+                      {r.expiry && <p className="text-[10px] text-gray-700 mt-0.5">Expiry: {r.expiry}</p>}
                     </td>
 
                     {/* CMP */}
@@ -241,9 +305,7 @@ export default function VacuumScanner() {
                         <div>
                           <p className="text-sm font-black text-emerald-400">{r.nearest_above.strike.toLocaleString()}</p>
                           <DistanceBadge pct={r.nearest_above.dist_pct} direction="ABOVE"/>
-                          <p className="text-[10px] text-gray-600 mt-1">
-                            CE: {fmtOI(r.nearest_above.ce_oi)} · PE: {fmtOI(r.nearest_above.pe_oi)}
-                          </p>
+                          <VacuumOIBadge ceOI={r.nearest_above.ce_oi} peOI={r.nearest_above.pe_oi}/>
                         </div>
                       ) : <span className="text-xs text-gray-600">—</span>}
                     </td>
@@ -254,9 +316,7 @@ export default function VacuumScanner() {
                         <div>
                           <p className="text-sm font-black text-red-400">{r.nearest_below.strike.toLocaleString()}</p>
                           <DistanceBadge pct={r.nearest_below.dist_pct} direction="BELOW"/>
-                          <p className="text-[10px] text-gray-600 mt-1">
-                            CE: {fmtOI(r.nearest_below.ce_oi)} · PE: {fmtOI(r.nearest_below.pe_oi)}
-                          </p>
+                          <VacuumOIBadge ceOI={r.nearest_below.ce_oi} peOI={r.nearest_below.pe_oi}/>
                         </div>
                       ) : <span className="text-xs text-gray-600">—</span>}
                     </td>

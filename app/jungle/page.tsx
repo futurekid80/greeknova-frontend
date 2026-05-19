@@ -80,8 +80,6 @@ export default function OptionsJungle() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      // Fetch with actual thresholds — avoids Supabase timeout
-      // null threshold = fetch with minimum meaningful threshold (2% OI, 10% Vol)
       const params = new URLSearchParams({
         oi_threshold:  String(oiRef.current ?? 2),
         vol_threshold: String(volRef.current ?? 10),
@@ -104,7 +102,6 @@ export default function OptionsJungle() {
         if (dates.length > 0 && !dateRef.current) {
           setDate(dates[0])
           dateRef.current = dates[0]
-          // Trigger fetch now that we have a date
           fetchData()
         }
       } catch(e) { console.error(e) }
@@ -112,22 +109,9 @@ export default function OptionsJungle() {
     loadDates()
   }, [fetchData])
 
-
-  function handleDateChange(d: string) {
-    setDate(d); dateRef.current = d; fetchData()
-  }
-
-  function handleOIPreset(v: number | null) {
-    setOiThreshold(v)
-    oiRef.current = v
-    fetchData()
-  }
-
-  function handleVolPreset(v: number | null) {
-    setVolThreshold(v)
-    volRef.current = v
-    fetchData()
-  }
+  function handleDateChange(d: string) { setDate(d); dateRef.current = d; fetchData() }
+  function handleOIPreset(v: number | null) { setOiThreshold(v); oiRef.current = v; fetchData() }
+  function handleVolPreset(v: number | null) { setVolThreshold(v); volRef.current = v; fetchData() }
 
   function startAuto() {
     setAutoEnabled(true); setCountdown(300)
@@ -164,12 +148,37 @@ export default function OptionsJungle() {
     .filter(s => volSigFilter === 'all' || s.vol_signal === volSigFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
 
+  // ── Two-way detection for OI spikes ──────────────────────────────────────
+  const oiSymbolSides: Record<string, Set<string>> = {}
+  oiFiltered.forEach(s => {
+    if (!oiSymbolSides[s.symbol]) oiSymbolSides[s.symbol] = new Set()
+    oiSymbolSides[s.symbol].add(s.option_type)
+  })
+  const oiTwoWaySymbols = new Set(
+    Object.entries(oiSymbolSides)
+      .filter(([_, sides]) => sides.has('CE') && sides.has('PE'))
+      .map(([sym]) => sym)
+  )
+  const oiTwoWayList = [...oiTwoWaySymbols]
+
+  // ── Two-way detection for Vol spikes ─────────────────────────────────────
+  const volSymbolSides: Record<string, Set<string>> = {}
+  volFiltered.forEach(s => {
+    if (!volSymbolSides[s.symbol]) volSymbolSides[s.symbol] = new Set()
+    volSymbolSides[s.symbol].add(s.option_type)
+  })
+  const volTwoWaySymbols = new Set(
+    Object.entries(volSymbolSides)
+      .filter(([_, sides]) => sides.has('CE') && sides.has('PE'))
+      .map(([sym]) => sym)
+  )
+  const volTwoWayList = [...volTwoWaySymbols]
+
   const isAerial  = searchTerm.length >= 2
   const aerialOI  = oiFiltered.filter(s => s.symbol === oiFiltered[0]?.symbol)
   const aerialVol = volFiltered.filter(s => s.symbol === volFiltered[0]?.symbol)
   const aerialSym = isAerial ? (oiFiltered[0]?.symbol || volFiltered[0]?.symbol) : null
 
-  // Use filtered data for all counts — consistent with what's displayed
   const oiBuilds  = oiFiltered.filter(s => s.direction === 'BUILD').length
   const oiUnwinds = oiFiltered.filter(s => s.direction === 'UNWIND').length
   const volFresh  = volFiltered.filter(s => s.vol_signal === 'FRESH_BUILD').length
@@ -178,6 +187,10 @@ export default function OptionsJungle() {
 
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
+
+  // Active two-way list based on current tab
+  const activeTwoWayList = tab === 'oi' ? oiTwoWayList : volTwoWayList
+  const activeTwoWaySymbols = tab === 'oi' ? oiTwoWaySymbols : volTwoWaySymbols
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -250,11 +263,9 @@ export default function OptionsJungle() {
           </div>
         </div>
 
-        {/* ── Threshold presets — replaces sliders ────────────────────────── */}
+        {/* Threshold presets */}
         <div className="bg-gray-900/30 border border-gray-800 rounded-2xl px-5 py-4 mb-5">
           <div className="flex items-center gap-8 flex-wrap">
-
-            {/* OI Threshold */}
             <div className="flex items-center gap-3">
               <span className="text-xs text-gray-500 whitespace-nowrap">🌊 OI threshold:</span>
               <div className="flex gap-1.5">
@@ -275,10 +286,7 @@ export default function OptionsJungle() {
                 })}
               </div>
             </div>
-
             <div className="w-px h-8 bg-gray-800"/>
-
-            {/* Vol Threshold */}
             <div className="flex items-center gap-3">
               <span className="text-xs text-gray-500 whitespace-nowrap">⚡ Vol threshold:</span>
               <div className="flex gap-1.5">
@@ -299,10 +307,7 @@ export default function OptionsJungle() {
                 })}
               </div>
             </div>
-
-            <p className="text-[10px] text-gray-600 ml-auto">
-              Lower % = more signals · All → = show everything fetched
-            </p>
+            <p className="text-[10px] text-gray-600 ml-auto">Lower % = more signals · All → = show everything fetched</p>
           </div>
         </div>
 
@@ -407,6 +412,55 @@ export default function OptionsJungle() {
           </button>
         </div>
 
+        {/* FIX: Two-way alert panel — per tab, all symbols clickable */}
+        {activeTwoWayList.length > 0 && (
+          <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-4 mb-4 flex items-start gap-3">
+            <span className="text-xl">⚡</span>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-amber-400 mb-2">
+                Two-Way Activity — {activeTwoWayList.length} {activeTwoWayList.length === 1 ? 'stock' : 'stocks'} showing both CE + PE signals
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {activeTwoWayList.map(sym => {
+                  const ceRows = tab === 'oi'
+                    ? oiFiltered.filter(s => s.symbol === sym && s.option_type === 'CE')
+                    : volFiltered.filter(s => s.symbol === sym && s.option_type === 'CE')
+                  const peRows = tab === 'oi'
+                    ? oiFiltered.filter(s => s.symbol === sym && s.option_type === 'PE')
+                    : volFiltered.filter(s => s.symbol === sym && s.option_type === 'PE')
+                  const ceSig = ceRows[0]
+                  const peSig = peRows[0]
+                  const ceMeta = tab === 'oi'
+                    ? (INTERP_META[(ceSig as OISpike)?.interpretation] || INTERP_META['BUILD'])
+                    : (VOL_META[(ceSig as VolSpike)?.vol_signal] || VOL_META['CHURN'])
+                  const peMeta = tab === 'oi'
+                    ? (INTERP_META[(peSig as OISpike)?.interpretation] || INTERP_META['BUILD'])
+                    : (VOL_META[(peSig as VolSpike)?.vol_signal] || VOL_META['CHURN'])
+                  return (
+                    <button
+                      key={sym}
+                      onClick={() => setStockSearch(sym)}
+                      className="flex items-center gap-2 px-3 py-2 bg-amber-950/40 border border-amber-800/60 rounded-xl hover:bg-amber-950/60 transition-all group">
+                      <span className="text-sm font-black text-white group-hover:text-amber-400 transition-colors">{sym}</span>
+                      {ceSig && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded-md border ${ceMeta.color} ${ceMeta.bg} ${ceMeta.border}`}>
+                          {ceMeta.icon} CE
+                        </span>
+                      )}
+                      {peSig && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded-md border ${peMeta.color} ${peMeta.bg} ${peMeta.border}`}>
+                          {peMeta.icon} PE
+                        </span>
+                      )}
+                      <span className="text-xs text-amber-600 group-hover:text-amber-400">View →</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tab filters */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {tab === 'oi' ? (
@@ -460,12 +514,14 @@ export default function OptionsJungle() {
                   {oiFiltered.map((s, i) => {
                     const m = INTERP_META[s.interpretation] || INTERP_META[s.direction]
                     const isCE = s.option_type === 'CE'
+                    const isTwoWay = oiTwoWaySymbols.has(s.symbol)
                     return (
-                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':`bg-gray-900/20`}`}>
+                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${isTwoWay ? 'bg-amber-950/10' : i%2===0?'':`bg-gray-900/20`}`}>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-2">
                             <button onClick={() => setStockSearch(s.symbol)} className="text-sm font-black text-white hover:text-emerald-400 transition-colors">{s.symbol}</button>
                             {s.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
+                            {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">⚡ 2-WAY</span>}
                           </div>
                           <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{s.cmp.toLocaleString()}</p>
                         </td>
@@ -516,12 +572,14 @@ export default function OptionsJungle() {
                   {volFiltered.map((s, i) => {
                     const m = VOL_META[s.vol_signal]
                     const isCE = s.option_type === 'CE'
+                    const isTwoWay = volTwoWaySymbols.has(s.symbol)
                     return (
-                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':`bg-gray-900/20`}`}>
+                      <tr key={`${s.tradingsymbol}-${i}`} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${isTwoWay ? 'bg-amber-950/10' : i%2===0?'':`bg-gray-900/20`}`}>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-2">
                             <button onClick={() => setStockSearch(s.symbol)} className="text-sm font-black text-white hover:text-emerald-400 transition-colors">{s.symbol}</button>
                             {s.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
+                            {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">⚡ 2-WAY</span>}
                           </div>
                           <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{s.cmp.toLocaleString()}</p>
                         </td>

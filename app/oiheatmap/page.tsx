@@ -189,9 +189,9 @@ export default function OIHeatmap() {
   const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
   const ceRow = data.ce_data.find(r => r.strike === strike)
   const peRow = data.pe_data.find(r => r.strike === strike)
-  const ceHasOI = ceRow?.values.some(v => v.oi > 0) ?? false
-  const peHasOI = peRow?.values.some(v => v.oi > 0) ?? false
-  return ceHasOI || peHasOI
+  const maxCeOI = Math.max(...(ceRow?.values.map(v => v.oi) ?? [0]))
+  const maxPeOI = Math.max(...(peRow?.values.map(v => v.oi) ?? [0]))
+  return maxCeOI > 10000 || maxPeOI > 10000  // only show strikes with meaningful OI
 }) : []
 
   return (

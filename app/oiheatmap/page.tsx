@@ -186,7 +186,13 @@ export default function OIHeatmap() {
   }) || []
 
   // Reverse strikes for display (highest on top)
-  const displayStrikes = data ? [...data.strikes].reverse() : []
+  const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
+  const ceRow = data.ce_data.find(r => r.strike === strike)
+  const peRow = data.pe_data.find(r => r.strike === strike)
+  const ceHasOI = ceRow?.values.some(v => v.oi > 0) ?? false
+  const peHasOI = peRow?.values.some(v => v.oi > 0) ?? false
+  return ceHasOI || peHasOI
+}) : []
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">

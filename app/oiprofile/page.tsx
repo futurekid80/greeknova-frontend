@@ -387,7 +387,7 @@ export default function OIProfile() {
                   <Tooltip content={<MigrationTooltip/>}/>
                   {data.cmp && (
                     <ReferenceLine y={data.cmp} stroke="#f59e0b" strokeDasharray="4 4"
-                      label={{ value: 'CMP', fill: '#f59e0b', fontSize: 10 }}/>
+                      label={{ value: `CMP ₹${data.cmp.toLocaleString()}`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 10, fontWeight: 'bold' }}/>
                   )}
                   <Line type="monotone" dataKey="ce_wall" name="CE Wall (Resistance)"
                     stroke="#ef4444" strokeWidth={2} dot={{ fill: '#ef4444', r: 3 }}

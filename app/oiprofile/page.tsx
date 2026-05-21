@@ -2,7 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
@@ -42,6 +42,7 @@ interface ProfileRow {
 interface WallPoint {
   date: string; ce_wall: number; pe_wall: number
   ce_wall_oi: number; pe_wall_oi: number
+  cmp?: number
 }
 
 interface ProfileData {
@@ -94,8 +95,6 @@ export default function OIProfile() {
   useEffect(() => { setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
 
-  // Backend already filters to ±20% of CMP
-  // Just normalize bars against same max and reverse for display
   const profile = data?.profile || []
 
   const maxCombined = Math.max(
@@ -108,7 +107,7 @@ export default function OIProfile() {
       ce_bar_pct: Math.round(p.ce_oi / maxCombined * 100),
       pe_bar_pct: Math.round(p.pe_oi / maxCombined * 100),
     }))
-    .reverse() // higher strikes on top
+    .reverse()
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -263,7 +262,6 @@ export default function OIProfile() {
 
           /* ── OI PROFILE CHART ───────────────────────────────────────────── */
           <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden">
-            {/* Column headers */}
             <div className="grid grid-cols-[80px_1fr_80px_1fr_80px] gap-0 px-4 py-2 border-b border-gray-800 bg-gray-900/40">
               <div className="text-[10px] text-red-400 font-bold text-right pr-2">CE OI</div>
               <div className="text-[10px] text-gray-600 text-right">←</div>
@@ -274,7 +272,6 @@ export default function OIProfile() {
 
             <div className="divide-y divide-gray-800/40">
               {displayProfile.map((row) => {
-                const isSpecial = row.is_poc || row.is_atm || row.is_ce_wall || row.is_pe_wall
                 const rowBg = row.is_poc       ? 'bg-purple-950/20'
                   : row.is_vacuum && showVacuum ? 'bg-amber-950/10'
                   : row.in_value_area && showValueArea ? 'bg-cyan-950/5'
@@ -289,13 +286,9 @@ export default function OIProfile() {
                 return (
                   <div key={row.strike}
                     className={`grid grid-cols-[80px_1fr_80px_1fr_80px] gap-0 items-center px-4 py-1.5 hover:bg-gray-800/20 transition-colors ${rowBg} ${rowBorder}`}>
-
-                    {/* CE OI value */}
                     <div className="text-right pr-3">
                       <span className="text-xs font-mono text-red-400/80">{fmtOI(row.ce_oi)}</span>
                     </div>
-
-                    {/* CE bar — grows left */}
                     <div className="flex justify-end items-center h-5">
                       <div className="flex justify-end w-full">
                         <div
@@ -304,8 +297,6 @@ export default function OIProfile() {
                         />
                       </div>
                     </div>
-
-                    {/* Strike label */}
                     <div className="text-center px-1">
                       <div className="flex flex-col items-center">
                         <span className={`text-xs font-black ${
@@ -326,16 +317,12 @@ export default function OIProfile() {
                         </div>
                       </div>
                     </div>
-
-                    {/* PE bar — grows right */}
                     <div className="flex items-center h-5">
                       <div
                         className={`h-4 rounded-r-sm transition-all ${row.is_pe_wall ? 'bg-emerald-400' : row.is_poc ? 'bg-purple-500' : 'bg-emerald-600/60'}`}
                         style={{ width: `${(row as any).pe_bar_pct}%`, minWidth: row.pe_oi > 0 ? '2px' : '0' }}
                       />
                     </div>
-
-                    {/* PE OI value */}
                     <div className="text-left pl-3">
                       <span className="text-xs font-mono text-emerald-400/80">{fmtOI(row.pe_oi)}</span>
                     </div>
@@ -344,7 +331,6 @@ export default function OIProfile() {
               })}
             </div>
 
-            {/* Imbalance summary below chart */}
             <div className="px-5 py-3 border-t border-gray-800 bg-gray-900/40 flex items-center gap-6">
               <p className="text-xs text-gray-500">
                 {data?.symbol} · {data?.date} · {fmtDate(data?.expiry || '')} expiry
@@ -370,10 +356,24 @@ export default function OIProfile() {
               <h2 className="text-base font-bold text-white">🏔️ OI Wall Migration</h2>
               <p className="text-xs text-gray-500">How support/resistance levels shifted over this expiry series</p>
             </div>
-            <p className="text-xs text-gray-600 mb-6">
+            <p className="text-xs text-gray-600 mb-2">
               Red line = CE Wall (strongest resistance) · Green line = PE Wall (strongest support) · 
-              Convergence = range bound · Divergence = directional move
+              Amber dashed = Price (closing CMP each day) · Convergence = range bound · Divergence = directional move
             </p>
+
+            {/* Chart legend */}
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="w-4 h-0.5 bg-red-500"/>CE Wall
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="w-4 h-0.5 bg-emerald-500"/>PE Wall
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="w-4 h-0.5 bg-amber-400" style={{borderTop: '2px dashed #f59e0b', height: 0}}/>
+                <span>Price</span>
+              </div>
+            </div>
 
             {data?.wall_migration && data.wall_migration.length > 1 ? (
               <ResponsiveContainer width="100%" height={320}>
@@ -385,16 +385,16 @@ export default function OIProfile() {
                     domain={['auto', 'auto']}
                     tickFormatter={v => v.toLocaleString()}/>
                   <Tooltip content={<MigrationTooltip/>}/>
-                  {data.cmp && (
-                    <ReferenceLine y={data.cmp} stroke="#f59e0b" strokeDasharray="4 4"
-                      label={{ value: `CMP ₹${data.cmp.toLocaleString()}`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 10, fontWeight: 'bold' }}/>
-                  )}
-                  <Line type="monotone" dataKey="ce_wall" name="CE Wall (Resistance)"
+                  <Line type="monotone" dataKey="ce_wall" name="CE Wall"
                     stroke="#ef4444" strokeWidth={2} dot={{ fill: '#ef4444', r: 3 }}
-                    activeDot={{ r: 5 }}/>
-                  <Line type="monotone" dataKey="pe_wall" name="PE Wall (Support)"
+                    activeDot={{ r: 5 }} connectNulls/>
+                  <Line type="monotone" dataKey="pe_wall" name="PE Wall"
                     stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }}
-                    activeDot={{ r: 5 }}/>
+                    activeDot={{ r: 5 }} connectNulls/>
+                  <Line type="monotone" dataKey="cmp" name="Price"
+                    stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 3"
+                    dot={{ fill: '#f59e0b', r: 2 }} activeDot={{ r: 4 }}
+                    connectNulls/>
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -403,7 +403,6 @@ export default function OIProfile() {
               </div>
             )}
 
-            {/* Migration insight */}
             {data?.wall_migration && data.wall_migration.length > 1 && (() => {
               const first = data.wall_migration[0]
               const last  = data.wall_migration[data.wall_migration.length - 1]

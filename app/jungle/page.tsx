@@ -175,9 +175,9 @@ export default function OptionsJungle() {
   const volTwoWayList = [...volTwoWaySymbols]
 
   const isAerial  = searchTerm.length >= 2
-  const aerialOI  = oiFiltered.filter(s => s.symbol === oiFiltered[0]?.symbol)
-  const aerialVol = volFiltered.filter(s => s.symbol === volFiltered[0]?.symbol)
-  const aerialSym = isAerial ? (oiFiltered[0]?.symbol || volFiltered[0]?.symbol) : null
+  const aerialOI  = oiFiltered.filter(s => s.symbol === searchTerm)
+  const aerialVol = volFiltered.filter(s => s.symbol === searchTerm)
+  const aerialSym = isAerial ? searchTerm : null
 
   const oiBuilds  = oiFiltered.filter(s => s.direction === 'BUILD').length
   const oiUnwinds = oiFiltered.filter(s => s.direction === 'UNWIND').length

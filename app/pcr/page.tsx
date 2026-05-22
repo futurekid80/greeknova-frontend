@@ -183,7 +183,7 @@ export default function PCRTrend() {
                 <Tooltip content={<CustomTooltip/>} cursor={{ stroke: 'rgba(255,255,255,0.1)' }}/>
                 <ReferenceLine y={1.0} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '1.0 Bullish', fill: '#10b981', fontSize: 10, position: 'insideRight' }}/>
                 <ReferenceLine y={0.8} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '0.8 Bearish', fill: '#ef4444', fontSize: 10, position: 'insideRight' }}/>
-                <Line type="monotone" dataKey="pcr_smooth" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }}/>
+                <Line type="stepAfter" dataKey="pcr_smooth" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }}/>
               </LineChart>
             </ResponsiveContainer>
           ) : (

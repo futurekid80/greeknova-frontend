@@ -195,7 +195,7 @@ export default function UOA() {
     .filter(s => s.score >= minScore)
 
   const isAerialView = searchTerm.length >= 2 && filtered.length > 0
-  const aerialSymbol = isAerialView ? filtered[0]?.symbol : null
+  const aerialSymbol = isAerialView ? searchTerm : null
   const aerialSignals = isAerialView ? filtered.filter(s => s.symbol === aerialSymbol) : []
   const aerialCE = aerialSignals.filter(s => s.option_type === 'CE')
   const aerialPE = aerialSignals.filter(s => s.option_type === 'PE')

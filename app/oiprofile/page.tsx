@@ -1,6 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
@@ -17,6 +17,18 @@ const STOCKS = [
   'BANKBARODA','BEL','CANBK','CHOLAFIN','DLF','GAIL','HAVELLS','HAL','INDIGO','PFC',
   'RECLTD','SAIL','TATAPOWER','VEDL',
 ]
+
+const MARKET_OPEN_IST  = 9 * 60 + 15
+const MARKET_CLOSE_IST = 15 * 60 + 30
+
+function isMarketHours(): boolean {
+  const now = new Date()
+  const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000))
+  const day = ist.getUTCDay()
+  if (day === 0 || day === 6) return false
+  const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes()
+  return mins >= MARKET_OPEN_IST && mins <= MARKET_CLOSE_IST
+}
 
 function fmtOI(n: number) {
   if (Math.abs(n) >= 10000000) return `${(n/10000000).toFixed(1)}Cr`
@@ -77,6 +89,10 @@ export default function OIProfile() {
   const [view, setView]         = useState<'profile'|'migration'>('profile')
   const [showVacuum, setShowVacuum] = useState(true)
   const [showValueArea, setShowValueArea] = useState(true)
+  const [autoEnabled, setAutoEnabled] = useState(false)
+  const [countdown, setCountdown] = useState(300)
+  const intervalRef  = useRef<NodeJS.Timeout|null>(null)
+  const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const isStock = STOCKS.includes(symbol)
 
   const fetchData = useCallback(async () => {
@@ -92,8 +108,30 @@ export default function OIProfile() {
     setLoading(false)
   }, [symbol, expiry])
 
+  function startAuto() {
+    setAutoEnabled(true); setCountdown(300)
+    if (intervalRef.current)  clearInterval(intervalRef.current)
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
+    countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
+  }
+  function stopAuto() {
+    setAutoEnabled(false)
+    if (intervalRef.current)  { clearInterval(intervalRef.current);  intervalRef.current  = null }
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
+  }
+
   useEffect(() => { setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
+
+  // Auto-start during market hours
+  useEffect(() => {
+    if (isMarketHours()) startAuto()
+    return () => {
+      if (intervalRef.current)  clearInterval(intervalRef.current)
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
+  }, [])
 
   const profile = data?.profile || []
 
@@ -108,6 +146,9 @@ export default function OIProfile() {
       pe_bar_pct: Math.round(p.pe_oi / maxCombined * 100),
     }))
     .reverse()
+
+  const mins = Math.floor(countdown/60)
+  const secs = countdown % 60
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -124,6 +165,7 @@ export default function OIProfile() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Expiry dropdown — always visible when data available */}
             {data?.expiries && data.expiries.length > 0 && (
               <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-500">Expiry:</span>
@@ -141,6 +183,14 @@ export default function OIProfile() {
                 <span className="text-lg font-black text-amber-400">₹{data.cmp.toLocaleString()}</span>
                 {data.atm_strike && <span className="text-xs text-gray-500">ATM <span className="text-amber-300 font-bold">{data.atm_strike.toLocaleString()}</span></span>}
               </div>
+            )}
+            {/* Auto-refresh toggle — market hours only */}
+            {isMarketHours() && (
+              <button onClick={() => autoEnabled ? stopAuto() : startAuto()}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${autoEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
+                {autoEnabled ? `${mins}:${secs.toString().padStart(2,'0')}` : 'Auto OFF'}
+              </button>
             )}
             <button onClick={fetchData} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
@@ -357,11 +407,10 @@ export default function OIProfile() {
               <p className="text-xs text-gray-500">How support/resistance levels shifted over this expiry series</p>
             </div>
             <p className="text-xs text-gray-600 mb-2">
-              Red line = CE Wall (strongest resistance) · Green line = PE Wall (strongest support) · 
+              Red line = CE Wall (strongest resistance) · Green line = PE Wall (strongest support) ·
               Amber dashed = Price (closing CMP each day) · Convergence = range bound · Divergence = directional move
             </p>
 
-            {/* Chart legend */}
             <div className="flex items-center gap-4 mb-4">
               <div className="flex items-center gap-1.5 text-xs text-gray-500">
                 <div className="w-4 h-0.5 bg-red-500"/>CE Wall
@@ -370,8 +419,7 @@ export default function OIProfile() {
                 <div className="w-4 h-0.5 bg-emerald-500"/>PE Wall
               </div>
               <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <div className="w-4 h-0.5 bg-amber-400" style={{borderTop: '2px dashed #f59e0b', height: 0}}/>
-                <span>Price</span>
+                <div className="w-4 h-0.5 bg-amber-400 border-dashed"/>Price
               </div>
             </div>
 

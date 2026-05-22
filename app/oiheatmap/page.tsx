@@ -186,12 +186,17 @@ export default function OIHeatmap() {
   }) || []
 
   // Reverse strikes for display (highest on top)
-  const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
-  const ceRow = data.ce_data.find(r => r.strike === strike)
-  const peRow = data.pe_data.find(r => r.strike === strike)
-  const maxCeOI = Math.max(...(ceRow?.values.map(v => v.oi) ?? [0]))
-  const maxPeOI = Math.max(...(peRow?.values.map(v => v.oi) ?? [0]))
-  return maxCeOI > 10000 || maxPeOI > 10000  // only show strikes with meaningful OI
+  const atmStrike = data?.latest_cmp 
+  ? data.strikes.reduce((prev, curr) => 
+      Math.abs(curr - data.latest_cmp) < Math.abs(prev - data.latest_cmp) ? curr : prev
+    )
+  : null
+
+const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
+  if (!atmStrike) return true
+  const strikeInterval = symbol === 'BANKNIFTY' ? 100 : 50
+  const range = 15 * strikeInterval  // ±15 strikes from ATM
+  return Math.abs(strike - atmStrike) <= range
 }) : []
 
   return (

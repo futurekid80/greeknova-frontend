@@ -193,23 +193,6 @@ export default function PCRTrend() {
             </div>
           )}
         </div>
-
-        <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-6">
-          <h2 className="text-base font-bold text-white mb-1">CE vs PE OI — {symbol}</h2>
-          <p className="text-xs text-gray-500 mb-5">When PE OI rises faster than CE OI — bullish momentum building</p>
-          {!loading && smoothedPoints.length ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={smoothedPoints} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false}/>
-                <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false}/>
-                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/10000000).toFixed(1)}Cr`}/>
-                <Tooltip content={<CustomTooltip/>} cursor={{ stroke: 'rgba(255,255,255,0.1)' }}/>
-                <Line type="monotone" dataKey="ce_oi" name="CE OI" stroke="#ef4444" strokeWidth={2} dot={false}/>
-                <Line type="monotone" dataKey="pe_oi" name="PE OI" stroke="#10b981" strokeWidth={2} dot={false}/>
-              </LineChart>
-            </ResponsiveContainer>
-          ) : null}
-        </div>
       </div>
     </div>
   )

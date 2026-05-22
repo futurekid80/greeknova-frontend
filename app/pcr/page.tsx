@@ -37,7 +37,6 @@ export default function PCRTrend() {
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState('')
   const [expiries, setExpiries] = useState<string[]>([])
-  // FIX: default to empty string; will be set to nearest expiry once fetched
   const [selectedExpiry, setSelectedExpiry] = useState<string>('')
 
   const fetchExpiries = useCallback(async (sym: string) => {
@@ -46,8 +45,6 @@ export default function PCRTrend() {
       const json = await res.json()
       const list: string[] = json.expiries || []
       setExpiries(list)
-      // FIX: Auto-select nearest expiry (first in sorted list) instead of 'all'
-      // This makes PCR Trend consistent with dashboard and stock page methodology
       if (list.length > 0) {
         setSelectedExpiry(list[0])
       } else {
@@ -59,7 +56,6 @@ export default function PCRTrend() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      // FIX: only fetch 'all' if truly no expiry available; otherwise always use selected
       const url = !selectedExpiry || selectedExpiry === 'all'
         ? `${API}/pcr-trend/${symbol}`
         : `${API}/pcr-trend/${symbol}?expiry=${selectedExpiry}`
@@ -71,13 +67,11 @@ export default function PCRTrend() {
     setLoading(false)
   }, [symbol, selectedExpiry])
 
-  // When symbol changes, re-fetch expiries (which will auto-select nearest)
   useEffect(() => {
-    setSelectedExpiry('') // reset while loading new expiries
+    setSelectedExpiry('')
     fetchExpiries(symbol)
   }, [symbol, fetchExpiries])
 
-  // Fetch data whenever expiry is resolved
   useEffect(() => {
     if (selectedExpiry !== '') fetchData()
   }, [fetchData, selectedExpiry])
@@ -89,6 +83,13 @@ export default function PCRTrend() {
   const pcrChange = latest && first ? (latest.pcr - first.pcr).toFixed(3) : '0'
   const pcrTrend = Number(pcrChange) > 0 ? 'RISING' : Number(pcrChange) < 0 ? 'FALLING' : 'FLAT'
   const bull = latest && latest.pcr > 1
+
+  // ── 3-point rolling average to smooth PCR zigzag ──────────────────────────
+  const smoothedPoints = (data?.points || []).map((p, i, arr) => {
+    const window = arr.slice(Math.max(0, i - 2), i + 1)
+    const avgPcr = window.reduce((sum, w) => sum + w.pcr, 0) / window.length
+    return { ...p, pcr_smooth: Math.round(avgPcr * 1000) / 1000 }
+  })
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -126,7 +127,6 @@ export default function PCRTrend() {
         {expiries.length > 0 && (
           <div className="flex items-center gap-2 mb-6">
             <span className="text-xs text-gray-500 mr-1">Expiry:</span>
-            {/* Keep 'All' as an option but don't default to it */}
             <button
               onClick={() => setSelectedExpiry('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${selectedExpiry === 'all' ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
@@ -171,19 +171,19 @@ export default function PCRTrend() {
 
         <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-6 mb-6">
           <h2 className="text-base font-bold text-white mb-1">PCR Through the Day — {symbol}</h2>
-          <p className="text-xs text-gray-500 mb-5">Above 1.0 = bullish · Below 0.8 = bearish · Each point = 5 min snapshot</p>
+          <p className="text-xs text-gray-500 mb-5">Above 1.0 = bullish · Below 0.8 = bearish · Each point = 5 min snapshot · Smoothed 3-point average</p>
           {loading ? (
             <div className="h-72 flex items-center justify-center"><RefreshCw size={24} className="text-gray-600 animate-spin"/></div>
-          ) : data?.points.length ? (
+          ) : smoothedPoints.length ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.points} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+              <LineChart data={smoothedPoints} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false}/>
                 <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false}/>
                 <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} domain={['auto', 'auto']}/>
                 <Tooltip content={<CustomTooltip/>} cursor={{ stroke: 'rgba(255,255,255,0.1)' }}/>
                 <ReferenceLine y={1.0} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '1.0 Bullish', fill: '#10b981', fontSize: 10, position: 'insideRight' }}/>
                 <ReferenceLine y={0.8} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '0.8 Bearish', fill: '#ef4444', fontSize: 10, position: 'insideRight' }}/>
-                <Line type="monotone" dataKey="pcr" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }}/>
+                <Line type="monotone" dataKey="pcr_smooth" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }}/>
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -197,9 +197,9 @@ export default function PCRTrend() {
         <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-6">
           <h2 className="text-base font-bold text-white mb-1">CE vs PE OI — {symbol}</h2>
           <p className="text-xs text-gray-500 mb-5">When PE OI rises faster than CE OI — bullish momentum building</p>
-          {!loading && data?.points.length ? (
+          {!loading && smoothedPoints.length ? (
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={data.points} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+              <LineChart data={smoothedPoints} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false}/>
                 <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false}/>
                 <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v/10000000).toFixed(1)}Cr`}/>

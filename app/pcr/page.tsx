@@ -86,7 +86,7 @@ export default function PCRTrend() {
 
   // ── 3-point rolling average to smooth PCR zigzag ──────────────────────────
   const smoothedPoints = (data?.points || []).map((p, i, arr) => {
-    const window = arr.slice(Math.max(0, i - 2), i + 1)
+    const window = arr.slice(Math.max(0, i - 4), i + 1)
     const avgPcr = window.reduce((sum, w) => sum + w.pcr, 0) / window.length
     return { ...p, pcr_smooth: Math.round(avgPcr * 1000) / 1000 }
   })

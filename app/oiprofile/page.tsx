@@ -456,29 +456,66 @@ export default function OIProfile() {
               const last  = data.wall_migration[data.wall_migration.length - 1]
               const ce_moved = last.ce_wall - first.ce_wall
               const pe_moved = last.pe_wall - first.pe_wall
+
+              // Series low and recovery
+              const ce_series_low = Math.min(...data.wall_migration.map(w => w.ce_wall))
+              const pe_series_low = Math.min(...data.wall_migration.map(w => w.pe_wall))
+              const ce_recovery = last.ce_wall - ce_series_low
+              const pe_recovery = last.pe_wall - pe_series_low
+              const ce_low_date = data.wall_migration.find(w => w.ce_wall === ce_series_low)?.date
+              const pe_low_date = data.wall_migration.find(w => w.pe_wall === pe_series_low)?.date
+
               return (
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <div className={`rounded-xl p-3 border ${ce_moved < 0 ? 'bg-red-950/20 border-red-800/30' : 'bg-emerald-950/20 border-emerald-800/30'}`}>
-                    <p className="text-xs text-gray-500 mb-1">CE Wall moved</p>
+                    <p className="text-xs text-gray-500 mb-1">CE Wall — Series Journey</p>
                     <p className={`text-base font-black ${ce_moved < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                       {ce_moved < 0 ? '↓' : '↑'} {Math.abs(ce_moved).toLocaleString()} pts
                     </p>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-gray-600 mb-2">
                       {first.ce_wall.toLocaleString()} → {last.ce_wall.toLocaleString()}
                     </p>
-                    <p className="text-xs mt-1 text-gray-500">
+                    <div className="flex gap-3 text-xs">
+                      <div>
+                        <p className="text-gray-600">Series low</p>
+                        <p className="text-red-400 font-bold">{ce_series_low.toLocaleString()}</p>
+                        <p className="text-gray-700">{ce_low_date ? fmtDate(ce_low_date) : '—'}</p>
+                      </div>
+                      {ce_recovery > 0 && (
+                        <div>
+                          <p className="text-gray-600">Recovery</p>
+                          <p className="text-emerald-400 font-bold">+{ce_recovery.toLocaleString()} pts</p>
+                          <p className="text-gray-700">from low</p>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs mt-2 text-gray-500">
                       {ce_moved < 0 ? 'Resistance moving down — bears retreating' : 'Resistance moving up — bears pushing higher'}
                     </p>
                   </div>
                   <div className={`rounded-xl p-3 border ${pe_moved > 0 ? 'bg-emerald-950/20 border-emerald-800/30' : 'bg-red-950/20 border-red-800/30'}`}>
-                    <p className="text-xs text-gray-500 mb-1">PE Wall moved</p>
+                    <p className="text-xs text-gray-500 mb-1">PE Wall — Series Journey</p>
                     <p className={`text-base font-black ${pe_moved > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {pe_moved > 0 ? '↑' : '↓'} {Math.abs(pe_moved).toLocaleString()} pts
                     </p>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-gray-600 mb-2">
                       {first.pe_wall.toLocaleString()} → {last.pe_wall.toLocaleString()}
                     </p>
-                    <p className="text-xs mt-1 text-gray-500">
+                    <div className="flex gap-3 text-xs">
+                      <div>
+                        <p className="text-gray-600">Series low</p>
+                        <p className="text-red-400 font-bold">{pe_series_low.toLocaleString()}</p>
+                        <p className="text-gray-700">{pe_low_date ? fmtDate(pe_low_date) : '—'}</p>
+                      </div>
+                      {pe_recovery > 0 && (
+                        <div>
+                          <p className="text-gray-600">Recovery</p>
+                          <p className="text-emerald-400 font-bold">+{pe_recovery.toLocaleString()} pts</p>
+                          <p className="text-gray-700">from low</p>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs mt-2 text-gray-500">
                       {pe_moved > 0 ? 'Support rising — bulls building higher' : 'Support falling — bulls losing ground'}
                     </p>
                   </div>

@@ -45,6 +45,8 @@ const NAV_GROUPS = [
       { href: '/uoa',         label: 'UOA' },
       { href: '/jungle',      label: '🌿 Options Jungle' },
       { href: '/positional',  label: '📈 Positional Radar' },
+      { href: '/signals/intraday', label: '📋 Intraday Log' },
+      
     ]
   },
 ]

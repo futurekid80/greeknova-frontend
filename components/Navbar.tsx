@@ -46,6 +46,7 @@ const NAV_GROUPS = [
       { href: '/jungle',      label: '🌿 Options Jungle' },
       { href: '/positional',  label: '📈 Positional Radar' },
       { href: '/signals/intraday', label: '📋 Intraday Log' },
+      { href: '/signals/cpr', label: '📐 CPR Scanner' },
       
     ]
   },

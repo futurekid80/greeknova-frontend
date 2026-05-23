@@ -2,10 +2,10 @@
 import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 import { useEffect, useState, useCallback } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import { RefreshCw, Clock } from 'lucide-react'
 
-interface PCRPoint { time: string; pcr: number; ce_oi: number; pe_oi: number }
+interface PCRPoint { time: string; pcr: number; vol_pcr?: number; ce_oi: number; pe_oi: number; ce_vol?: number; pe_vol?: number }
 interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number; expiry: string | null }
 
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
@@ -17,9 +17,20 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 shadow-xl">
       <p className="text-white font-bold mb-2">{label}</p>
-      <p className={`text-sm font-black mb-1 ${d.pcr > 1 ? 'text-emerald-400' : d.pcr < 0.8 ? 'text-red-400' : 'text-amber-400'}`}>PCR: {d.pcr}</p>
-      <p className="text-xs text-red-400">CE OI: {(d.ce_oi/100000).toFixed(1)}L</p>
-      <p className="text-xs text-emerald-400">PE OI: {(d.pe_oi/100000).toFixed(1)}L</p>
+      <p className={`text-sm font-black mb-1 ${d.pcr > 1 ? 'text-emerald-400' : d.pcr < 0.8 ? 'text-red-400' : 'text-amber-400'}`}>
+        OI PCR: {d.pcr}
+      </p>
+      {d.vol_pcr !== undefined && (
+        <p className={`text-sm font-black mb-1 ${d.vol_pcr > 1 ? 'text-cyan-400' : d.vol_pcr < 0.8 ? 'text-pink-400' : 'text-blue-400'}`}>
+          Vol PCR: {d.vol_pcr}
+        </p>
+      )}
+      <div className="border-t border-gray-800 mt-2 pt-2">
+        <p className="text-xs text-red-400">CE OI: {(d.ce_oi/100000).toFixed(1)}L</p>
+        <p className="text-xs text-emerald-400">PE OI: {(d.pe_oi/100000).toFixed(1)}L</p>
+        {d.ce_vol !== undefined && <p className="text-xs text-red-300">CE Vol: {(d.ce_vol/100000).toFixed(1)}L</p>}
+        {d.pe_vol !== undefined && <p className="text-xs text-emerald-300">PE Vol: {(d.pe_vol/100000).toFixed(1)}L</p>}
+      </div>
     </div>
   )
 }
@@ -38,6 +49,7 @@ export default function PCRTrend() {
   const [lastUpdate, setLastUpdate] = useState('')
   const [expiries, setExpiries] = useState<string[]>([])
   const [selectedExpiry, setSelectedExpiry] = useState<string>('')
+  const [showVolPCR, setShowVolPCR] = useState(true)
 
   const fetchExpiries = useCallback(async (sym: string) => {
     try {
@@ -84,11 +96,25 @@ export default function PCRTrend() {
   const pcrTrend = Number(pcrChange) > 0 ? 'RISING' : Number(pcrChange) < 0 ? 'FALLING' : 'FLAT'
   const bull = latest && latest.pcr > 1
 
-  // ── 3-point rolling average to smooth PCR zigzag ──────────────────────────
+  // Vol PCR trend
+  const latestVolPcr = latest?.vol_pcr
+  const firstVolPcr = first?.vol_pcr
+  const volPcrChange = latestVolPcr !== undefined && firstVolPcr !== undefined
+    ? (latestVolPcr - firstVolPcr).toFixed(3) : '0'
+  const volPcrTrend = Number(volPcrChange) > 0 ? 'RISING' : Number(volPcrChange) < 0 ? 'FALLING' : 'FLAT'
+
+  // ── 5-point rolling average to smooth PCR zigzag ──────────────────────────
   const smoothedPoints = (data?.points || []).map((p, i, arr) => {
     const window = arr.slice(Math.max(0, i - 4), i + 1)
     const avgPcr = window.reduce((sum, w) => sum + w.pcr, 0) / window.length
-    return { ...p, pcr_smooth: Math.round(avgPcr * 1000) / 1000 }
+    const avgVolPcr = p.vol_pcr !== undefined
+      ? window.reduce((sum, w) => sum + (w.vol_pcr || 0), 0) / window.length
+      : undefined
+    return {
+      ...p,
+      pcr_smooth:     Math.round(avgPcr * 1000) / 1000,
+      vol_pcr_smooth: avgVolPcr !== undefined ? Math.round(avgVolPcr * 1000) / 1000 : undefined,
+    }
   })
 
   return (
@@ -99,7 +125,7 @@ export default function PCRTrend() {
         <div className="flex items-end justify-between mb-8">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">PCR Trend</h1>
-            <p className="text-gray-500 text-sm">Put-Call Ratio through the trading day · Rising = bullish sentiment building</p>
+            <p className="text-gray-500 text-sm">OI PCR + Volume PCR through the trading day · Rising = bullish sentiment building</p>
           </div>
           <div className="flex items-center gap-3">
             {lastUpdate && <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2"><Clock size={11}/>Last: {lastUpdate}</div>}
@@ -127,14 +153,12 @@ export default function PCRTrend() {
         {expiries.length > 0 && (
           <div className="flex items-center gap-2 mb-6">
             <span className="text-xs text-gray-500 mr-1">Expiry:</span>
-            <button
-              onClick={() => setSelectedExpiry('all')}
+            <button onClick={() => setSelectedExpiry('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${selectedExpiry === 'all' ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
               All
             </button>
             {expiries.map((exp, i) => (
-              <button key={exp}
-                onClick={() => setSelectedExpiry(exp)}
+              <button key={exp} onClick={() => setSelectedExpiry(exp)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${selectedExpiry === exp ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
                 {formatExpiry(exp)}
                 {i === 0 && <span className="ml-1 text-[9px] text-cyan-600">Weekly</span>}
@@ -144,34 +168,53 @@ export default function PCRTrend() {
           </div>
         )}
 
+        {/* Summary cards */}
         {latest && (
           <div className="grid grid-cols-4 gap-3 mb-6">
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-1">Current PCR</p>
+              <p className="text-xs text-gray-500 mb-1">OI PCR</p>
               <p className={`text-2xl font-black ${bull ? 'text-emerald-400' : 'text-red-400'}`}>{latest.pcr}</p>
               <p className="text-xs text-gray-600">{bull ? 'Bullish bias' : 'Bearish bias'}</p>
             </div>
+            <div className="bg-gray-900/30 border border-blue-900/40 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-1">Vol PCR</p>
+              <p className={`text-2xl font-black ${(latestVolPcr || 0) > 1 ? 'text-cyan-400' : 'text-pink-400'}`}>
+                {latestVolPcr?.toFixed(3) || '—'}
+              </p>
+              <p className="text-xs text-gray-600">{volPcrTrend} today</p>
+            </div>
             <div className={`rounded-xl p-4 border ${pcrTrend === 'RISING' ? 'bg-emerald-950/20 border-emerald-800/40' : pcrTrend === 'FALLING' ? 'bg-red-950/20 border-red-800/40' : 'bg-gray-900/30 border-gray-800'}`}>
-              <p className="text-xs text-gray-500 mb-1">PCR Trend Today</p>
+              <p className="text-xs text-gray-500 mb-1">OI PCR Trend</p>
               <p className={`text-2xl font-black ${pcrTrend === 'RISING' ? 'text-emerald-400' : pcrTrend === 'FALLING' ? 'text-red-400' : 'text-amber-400'}`}>{pcrTrend}</p>
               <p className="text-xs text-gray-600">Change: {Number(pcrChange) > 0 ? '+' : ''}{pcrChange}</p>
             </div>
-            <div className="bg-red-950/20 border border-red-800/40 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-1">Total CE OI</p>
-              <p className="text-2xl font-black text-red-400">{(latest.ce_oi/10000000).toFixed(2)}Cr</p>
-              <p className="text-xs text-gray-600">Call writers</p>
-            </div>
-            <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-1">Total PE OI</p>
-              <p className="text-2xl font-black text-emerald-400">{(latest.pe_oi/10000000).toFixed(2)}Cr</p>
-              <p className="text-xs text-gray-600">Put writers</p>
+            <div className={`rounded-xl p-4 border ${volPcrTrend === 'RISING' ? 'bg-cyan-950/20 border-cyan-800/40' : volPcrTrend === 'FALLING' ? 'bg-pink-950/20 border-pink-800/40' : 'bg-gray-900/30 border-gray-800'}`}>
+              <p className="text-xs text-gray-500 mb-1">Vol PCR Trend</p>
+              <p className={`text-2xl font-black ${volPcrTrend === 'RISING' ? 'text-cyan-400' : volPcrTrend === 'FALLING' ? 'text-pink-400' : 'text-amber-400'}`}>{volPcrTrend}</p>
+              <p className="text-xs text-gray-600">Change: {Number(volPcrChange) > 0 ? '+' : ''}{volPcrChange}</p>
             </div>
           </div>
         )}
 
+        {/* Chart */}
         <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-6 mb-6">
-          <h2 className="text-base font-bold text-white mb-1">PCR Through the Day — {symbol}</h2>
-          <p className="text-xs text-gray-500 mb-5">Above 1.0 = bullish · Below 0.8 = bearish · Each point = 5 min snapshot · Smoothed 3-point average</p>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-base font-bold text-white">PCR Through the Day — {symbol}</h2>
+            <button onClick={() => setShowVolPCR(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${showVolPCR ? 'bg-cyan-950/40 text-cyan-400 border-cyan-800/50' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
+              {showVolPCR ? '👁 Vol PCR ON' : '👁 Vol PCR OFF'}
+            </button>
+          </div>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-4 h-0.5 bg-amber-400"/>OI PCR (position commitment)
+            </div>
+            {showVolPCR && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="w-4 h-0.5 bg-cyan-400 border-dashed"/>Vol PCR (intraday activity)
+              </div>
+            )}
+          </div>
           {loading ? (
             <div className="h-72 flex items-center justify-center"><RefreshCw size={24} className="text-gray-600 animate-spin"/></div>
           ) : smoothedPoints.length ? (
@@ -183,7 +226,10 @@ export default function PCRTrend() {
                 <Tooltip content={<CustomTooltip/>} cursor={{ stroke: 'rgba(255,255,255,0.1)' }}/>
                 <ReferenceLine y={1.0} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '1.0 Bullish', fill: '#10b981', fontSize: 10, position: 'insideRight' }}/>
                 <ReferenceLine y={0.8} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '0.8 Bearish', fill: '#ef4444', fontSize: 10, position: 'insideRight' }}/>
-                <Line type="stepAfter" dataKey="pcr_smooth" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }}/>
+                <Line type="stepAfter" dataKey="pcr_smooth" name="OI PCR" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }}/>
+                {showVolPCR && (
+                  <Line type="stepAfter" dataKey="vol_pcr_smooth" name="Vol PCR" stroke="#22d3ee" strokeWidth={1.5} strokeDasharray="5 3" dot={false} activeDot={{ r: 4 }}/>
+                )}
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -192,6 +238,11 @@ export default function PCRTrend() {
               <p className="text-gray-500 text-sm">No data yet — snapshots build up during market hours</p>
             </div>
           )}
+          <p className="text-xs text-gray-600 mt-3">
+            <span className="text-amber-400 font-semibold">OI PCR</span> = open positions (slower, institutional) ·
+            <span className="text-cyan-400 font-semibold"> Vol PCR</span> = contracts traded today (faster, intraday activity) ·
+            When both rise together = strong bullish conviction · When they diverge = mixed signals
+          </p>
         </div>
       </div>
     </div>

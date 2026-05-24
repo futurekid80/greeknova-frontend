@@ -576,6 +576,7 @@ async function fetchData() {
 
       const cprRows: CPRRow[] = cprJson?.data || []
       setCprData(cprRows)
+      
 
       // Fix 3 — Update cache
       try {
@@ -753,10 +754,10 @@ async function fetchData() {
         {searchedSymbol && <StockCommandCentre symbol={searchedSymbol} onClose={() => { setSearchedSymbol(null); setSearchQuery('') }}/>}
 
         {/* Index cards */}
-        {loading ? (
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            {[1,2,3].map(i => (
-              <div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4">
+        {loading && analyses.length === 0 ? (
+  <div className="grid grid-cols-3 gap-4 mb-6">
+    {[1,2,3].map(i => (
+      <div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4">
                 <div className="flex justify-between"><div className="h-5 w-24 bg-gray-800 rounded"/><div className="h-6 w-20 bg-gray-800 rounded-full"/></div>
                 <div className="grid grid-cols-3 gap-2">{[1,2,3].map(j=><div key={j} className="h-16 bg-gray-800 rounded-xl"/>)}</div>
               </div>
@@ -771,10 +772,11 @@ async function fetchData() {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-16 text-center mb-6 border border-gray-800/50 rounded-2xl">
-            <Database size={28} className="text-gray-700 mb-4"/>
-            <h3 className="text-lg font-bold text-gray-400 mb-2">Waiting for market data</h3>
-            <p className="text-sm text-gray-600">OI capture runs weekdays 9:15 AM – 3:30 PM IST</p>
+          <div className="flex flex-col items-center justify-center py-8 text-center mb-6">
+            <div className="flex items-center gap-2 text-gray-600 text-sm">
+              <RefreshCw size={14} className="animate-spin"/>
+              Loading index data...
+            </div>
           </div>
         )}
 

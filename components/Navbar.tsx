@@ -9,8 +9,7 @@ const NAV_GROUPS = [
   {
     label: 'Market',
     links: [
-      { href: '/',           label: 'Dashboard' },
-      { href: '/premarket',  label: 'Pre-Market' },
+      { href: '/',           label: '📡 Market Pulse' },
       { href: '/watchlist',  label: 'Watchlist' },
       { href: '/journal',    label: '📓 Journal' },
     ]
@@ -20,7 +19,6 @@ const NAV_GROUPS = [
     links: [
       { href: '/charts',     label: 'OI Charts' },
       { href: '/oihistory',  label: 'OI History' },
-      { href: '/oipulse',    label: 'OI Pulse' },
       { href: '/eod',        label: 'EOD Analysis' },
       { href: '/pcr',        label: 'PCR Trend' },
       { href: '/oiprofile',  label: '📊 OI Profile' },
@@ -36,18 +34,16 @@ const NAV_GROUPS = [
     ]
   },
   {
+    {
     label: 'Signals',
     links: [
-      { href: '/scanners',    label: 'Scanners' },
       { href: '/vacuum',      label: '⚡ Vacuum Scanner' },
-      { href: '/confluence',  label: 'Confluence' },
       { href: '/rs',          label: 'Rel. Strength' },
       { href: '/uoa',         label: 'UOA' },
       { href: '/jungle',      label: '🌿 Options Jungle' },
       { href: '/positional',  label: '📈 Positional Radar' },
       { href: '/signals/intraday', label: '📋 Intraday Log' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
-      
     ]
   },
 ]

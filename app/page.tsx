@@ -1,9 +1,9 @@
 'use client'
 import Navbar from '@/components/Navbar'
 export const dynamic = 'force-dynamic'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X, Zap, Eye, Moon } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X, Zap, Eye, Moon, ChevronDown, ChevronUp, Flame, BarChart2, Volume2 } from 'lucide-react'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 
 const API = 'https://greeknova-backend-production.up.railway.app'
@@ -22,8 +22,8 @@ const ALL_SYMBOLS = [
 
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
 interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }
-interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean }
-interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean }
+interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
+interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number }
 
 function fmtOI(n: number) {
   const abs = Math.abs(n)
@@ -69,18 +69,15 @@ function analyzeIndex(data: OIRecord[], symbol: string, cmp: number = 0): IndexA
   return { symbol, pcr: Math.round(pcr * 100) / 100, totalCEOI, totalPEOI, maxPain, posture, postureStrength: Math.round(postureStrength), topCEStrike: topCE?.strike || 0, topPEStrike: topPE?.strike || 0 }
 }
 
-// ── War Zone tag ──────────────────────────────────────────────────────────────
-function getWarZoneTag(stock: PulseStock): { label: string; icon: React.ReactNode; color: string; bg: string; border: string } {
-  const isNarrowCPR = (stock.width_pct || 1) < 0.3
+function getWarZoneTag(stock: PulseStock) {
+  const isNarrow = (stock.width_pct || 1) < 0.3
   const hasSignal = stock.has_oi_signal
-  const isAbove = stock.cpr_position === 'ABOVE_CPR'
-  const isBelow = stock.cpr_position === 'BELOW_CPR'
-
-  if (isNarrowCPR && hasSignal) return { label: 'War Zone', icon: <Zap size={10} />, color: 'text-orange-300', bg: 'bg-orange-950/50', border: 'border-orange-700/60' }
-  if (isNarrowCPR) return { label: 'Watch', icon: <Eye size={10} />, color: 'text-amber-400', bg: 'bg-amber-950/30', border: 'border-amber-800/40' }
-  return { label: 'Quiet', icon: <Moon size={10} />, color: 'text-gray-500', bg: 'bg-gray-900/20', border: 'border-gray-800/30' }
+  if (isNarrow && hasSignal) return { label: 'War Zone', icon: '⚡', color: 'text-orange-300', bg: 'bg-orange-950/50', border: 'border-orange-700/60' }
+  if (isNarrow) return { label: 'Watch', icon: '👀', color: 'text-amber-400', bg: 'bg-amber-950/30', border: 'border-amber-800/40' }
+  return { label: 'Quiet', icon: '😴', color: 'text-gray-600', bg: 'bg-gray-900/10', border: 'border-gray-800/20' }
 }
 
+// ── Expiry Countdown ──────────────────────────────────────────────────────────
 function ExpiryCountdown() {
   const [timeLeft, setTimeLeft] = useState('')
   const [daysLeft, setDaysLeft] = useState(0)
@@ -115,41 +112,27 @@ function ExpiryCountdown() {
   )
 }
 
-// ── Index Card with CPR context ───────────────────────────────────────────────
+// ── Index Card ────────────────────────────────────────────────────────────────
 function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: number }) {
   const bull = a.posture === 'BULLISH', bear = a.posture === 'BEARISH'
   const ceP = Math.round((a.totalCEOI / (a.totalCEOI + a.totalPEOI)) * 100)
-
-  const cprTrendLabel: Record<string, { label: string; color: string }> = {
-    ASCENDING:  { label: '↑ Ascending', color: 'text-emerald-400' },
-    DESCENDING: { label: '↓ Descending', color: 'text-red-400' },
-    SIDEWAYS:   { label: '→ Sideways', color: 'text-gray-400' },
-    UNKNOWN:    { label: '— Unknown', color: 'text-gray-600' },
-  }
-  const cprPosLabel: Record<string, { label: string; color: string }> = {
-    ABOVE_CPR:  { label: '↑ Above CPR', color: 'text-emerald-400' },
-    BELOW_CPR:  { label: '↓ Below CPR', color: 'text-red-400' },
-    INSIDE_CPR: { label: '⟷ Inside CPR', color: 'text-amber-400' },
-  }
-  const trendInfo = cprTrendLabel[cpr?.cpr_trend || 'UNKNOWN']
-  const posInfo = cprPosLabel[cpr?.cpr_position || '']
-
+  const cprTrendColor: Record<string,string> = { ASCENDING:'text-emerald-400', DESCENDING:'text-red-400', SIDEWAYS:'text-gray-400', UNKNOWN:'text-gray-600' }
+  const cprTrendLabel: Record<string,string> = { ASCENDING:'↑ Ascending', DESCENDING:'↓ Descending', SIDEWAYS:'→ Sideways', UNKNOWN:'— Unknown' }
+  const cprPosColor: Record<string,string> = { ABOVE_CPR:'text-emerald-400', BELOW_CPR:'text-red-400', INSIDE_CPR:'text-amber-400' }
+  const cprPosLabel: Record<string,string> = { ABOVE_CPR:'↑ Above CPR', BELOW_CPR:'↓ Below CPR', INSIDE_CPR:'⟷ Inside CPR' }
   return (
-    <div className={`relative rounded-2xl border bg-gray-900/40 p-5 overflow-hidden hover:bg-gray-900/60 transition-all duration-300 ${bull ? 'border-emerald-800/40' : bear ? 'border-red-800/40' : 'border-gray-800'}`}>
+    <div className={`relative rounded-2xl border bg-gray-900/40 p-5 overflow-hidden hover:bg-gray-900/60 transition-all duration-300 cursor-pointer ${bull ? 'border-emerald-800/40' : bear ? 'border-red-800/40' : 'border-gray-800'}`}>
       <div className={`absolute -top-8 -right-8 w-32 h-32 rounded-full blur-2xl opacity-10 ${bull ? 'bg-emerald-500' : bear ? 'bg-red-500' : 'bg-amber-500'}`} />
       <div className="relative z-10">
-        {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-base font-bold text-white tracking-wide">{a.symbol}</h3>
+            <h3 className="text-base font-bold text-white">{a.symbol}</h3>
             {cmp && <p className="text-lg font-black text-amber-400">₹{cmp.toLocaleString()}</p>}
           </div>
           <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${bull ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : bear ? 'bg-red-950/80 text-red-400 border-red-800/60' : 'bg-amber-950/80 text-amber-400 border-amber-800/60'}`}>
             {bull ? <TrendingUp size={11}/> : bear ? <TrendingDown size={11}/> : <Minus size={11}/>}{a.posture}
           </span>
         </div>
-
-        {/* OI Metrics */}
         <div className="grid grid-cols-3 gap-2 mb-3">
           {[
             { label: 'PCR', value: a.pcr.toFixed(2), colored: true },
@@ -162,20 +145,16 @@ function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: numb
             </div>
           ))}
         </div>
-
-        {/* OI split bar */}
         <div className="mb-3">
           <div className="flex justify-between text-xs mb-1">
             <span className="text-red-400 font-medium">CE {ceP}%</span>
             <span className="text-emerald-400 font-medium">PE {100-ceP}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden flex">
-            <div className="bg-red-500/80 h-full rounded-l-full transition-all duration-700" style={{ width: `${ceP}%` }}/>
-            <div className="bg-emerald-500/80 h-full rounded-r-full transition-all duration-700" style={{ width: `${100-ceP}%` }}/>
+            <div className="bg-red-500/80 h-full rounded-l-full transition-all duration-700" style={{width:`${ceP}%`}}/>
+            <div className="bg-emerald-500/80 h-full rounded-r-full transition-all duration-700" style={{width:`${100-ceP}%`}}/>
           </div>
         </div>
-
-        {/* CE/PE walls */}
         <div className="flex gap-2 mb-3">
           <div className="flex-1 flex items-center justify-between bg-red-950/20 border border-red-900/30 rounded-lg px-3 py-1.5">
             <span className="text-xs text-gray-500">CE Wall</span>
@@ -186,16 +165,14 @@ function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: numb
             <span className="text-xs font-bold text-emerald-400">{a.topPEStrike.toLocaleString()}</span>
           </div>
         </div>
-
-        {/* CPR context — one line only */}
         {cpr && (
           <div className="flex items-center justify-between bg-gray-800/30 border border-gray-700/30 rounded-lg px-3 py-2">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">CPR</span>
               {cpr.is_virgin && <span className="text-xs text-blue-400 font-bold">🔵 Virgin</span>}
-              {posInfo && <span className={`text-xs font-bold ${posInfo.color}`}>{posInfo.label}</span>}
+              {cpr.cpr_position && <span className={`text-xs font-bold ${cprPosColor[cpr.cpr_position] || 'text-gray-500'}`}>{cprPosLabel[cpr.cpr_position]}</span>}
             </div>
-            {trendInfo && <span className={`text-xs font-semibold ${trendInfo.color}`}>{trendInfo.label}</span>}
+            <span className={`text-xs font-semibold ${cprTrendColor[cpr.cpr_trend] || 'text-gray-600'}`}>{cprTrendLabel[cpr.cpr_trend] || '—'}</span>
           </div>
         )}
       </div>
@@ -203,69 +180,107 @@ function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: numb
   )
 }
 
-// ── Market Pulse Stock Feed ───────────────────────────────────────────────────
+// ── Today's Spotlight ─────────────────────────────────────────────────────────
+function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
+  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
+  const topOIBuilder  = [...stocksOnly].sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))[0]
+  const topOIUnwinder = [...stocksOnly].sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))[0]
+  const narrowestCPR  = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
+
+  const cards = [
+    {
+      label: '🔥 Highest OI Buildup',
+      symbol: topOIBuilder?.symbol,
+      value: topOIBuilder?.oi_chg_pct !== undefined ? `+${topOIBuilder.oi_chg_pct.toFixed(1)}% OI` : '—',
+      sub: topOIBuilder?.cmp ? `₹${topOIBuilder.cmp.toLocaleString()}` : '',
+      color: 'text-emerald-400', bg: 'bg-emerald-950/20', border: 'border-emerald-800/30',
+    },
+    {
+      label: '📉 Highest OI Unwind',
+      symbol: topOIUnwinder?.symbol,
+      value: topOIUnwinder?.oi_chg_pct !== undefined ? `${topOIUnwinder.oi_chg_pct.toFixed(1)}% OI` : '—',
+      sub: topOIUnwinder?.cmp ? `₹${topOIUnwinder.cmp.toLocaleString()}` : '',
+      color: 'text-red-400', bg: 'bg-red-950/20', border: 'border-red-800/30',
+    },
+    {
+      label: '⚡ Narrowest CPR',
+      symbol: narrowestCPR?.symbol,
+      value: narrowestCPR?.width_pct !== undefined ? `${narrowestCPR.width_pct.toFixed(3)}% wide` : '—',
+      sub: narrowestCPR?.width_pts !== undefined ? `${narrowestCPR.width_pts.toFixed(1)} pts` : '',
+      color: 'text-orange-400', bg: 'bg-orange-950/20', border: 'border-orange-800/30',
+    },
+  ]
+
+  if (!topOIBuilder && !narrowestCPR) return null
+
+  return (
+    <div className="grid grid-cols-3 gap-4 mb-6">
+      {cards.map(c => (
+        <div key={c.label} className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
+          <p className="text-xs text-gray-500 mb-2">{c.label}</p>
+          <p className="text-xl font-black text-white">{c.symbol || '—'}</p>
+          <p className={`text-sm font-bold ${c.color} mt-1`}>{c.value}</p>
+          {c.sub && <p className="text-xs text-gray-600 mt-0.5">{c.sub}</p>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Market Pulse Feed ─────────────────────────────────────────────────────────
 function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
-  const [filter, setFilter] = useState<'all'|'warzone'|'watch'|'indices'|'stocks'>('all')
+  const [tab, setTab] = useState<'warzone'|'oi_build'|'oi_unwind'|'all'>('warzone')
   const [search, setSearch] = useState('')
 
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))
 
-  const enriched = stocks.map(s => {
-    const cpr = cprMap[s.symbol]
-    return {
-      ...s,
-      width_pct: cpr?.width_pct,
-      width_emoji: cpr?.width_emoji,
-      cpr_position: cpr?.cpr_position,
-      has_oi_signal: cpr?.has_oi_signal || false,
-      confluence: cpr?.confluence || false,
-    }
+  const enriched = stocks.map(s => ({
+    ...s,
+    width_pct:    s.width_pct    ?? cprMap[s.symbol]?.width_pct,
+    width_pts:    s.width_pts    ?? cprMap[s.symbol]?.width_pts,
+    width_emoji:  s.width_emoji  ?? cprMap[s.symbol]?.width_emoji,
+    cpr_position: s.cpr_position ?? cprMap[s.symbol]?.cpr_position,
+    has_oi_signal: s.has_oi_signal ?? cprMap[s.symbol]?.has_oi_signal ?? false,
+    confluence:   s.confluence   ?? cprMap[s.symbol]?.confluence ?? false,
+  }))
+
+  const warZone   = enriched.filter(s => (s.width_pct||1) < 0.3 && s.has_oi_signal)
+  const oiBuild   = [...enriched].filter(s => (s.oi_chg_pct||0) > 0).sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))
+  const oiUnwind  = [...enriched].filter(s => (s.oi_chg_pct||0) < 0).sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))
+  const all       = [...enriched].sort((a,b) => {
+    const aW = (a.width_pct||1)<0.3 && a.has_oi_signal ? 0 : (a.width_pct||1)<0.3 ? 1 : 2
+    const bW = (b.width_pct||1)<0.3 && b.has_oi_signal ? 0 : (b.width_pct||1)<0.3 ? 1 : 2
+    if (aW !== bW) return aW - bW
+    return Math.abs(b.oi_chg_pct||0) - Math.abs(a.oi_chg_pct||0)
   })
 
-  const filtered = enriched
-    .filter(s => {
-      if (search) return s.symbol.includes(search.toUpperCase())
-      if (filter === 'warzone') return (s.width_pct || 1) < 0.3 && s.has_oi_signal
-      if (filter === 'watch') return (s.width_pct || 1) < 0.3
-      if (filter === 'indices') return ['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol)
-      if (filter === 'stocks') return !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol)
-      return true
-    })
-    .sort((a, b) => {
-      // War zone first, then by OI change magnitude
-      const aWar = (a.width_pct || 1) < 0.3 && a.has_oi_signal ? 0 : (a.width_pct || 1) < 0.3 ? 1 : 2
-      const bWar = (b.width_pct || 1) < 0.3 && b.has_oi_signal ? 0 : (b.width_pct || 1) < 0.3 ? 1 : 2
-      if (aWar !== bWar) return aWar - bWar
-      return Math.abs(b.oi_chg_pct || 0) - Math.abs(a.oi_chg_pct || 0)
-    })
+  const tabData: Record<string, PulseStock[]> = { warzone: warZone, oi_build: oiBuild, oi_unwind: oiUnwind, all }
 
-  const warZoneCount = enriched.filter(s => (s.width_pct || 1) < 0.3 && s.has_oi_signal).length
-  const watchCount = enriched.filter(s => (s.width_pct || 1) < 0.3).length
+  const filtered = (tabData[tab] || all).filter(s =>
+    search ? s.symbol.includes(search.toUpperCase()) : true
+  )
 
   const signalColors: Record<string, string> = {
-    LONG_BUILDUP:   'text-emerald-400',
-    SHORT_BUILDUP:  'text-red-400',
-    SHORT_COVERING: 'text-cyan-400',
-    LONG_UNWINDING: 'text-amber-400',
-    PUT_WRITING:    'text-emerald-400',
-    CALL_WRITING:   'text-red-400',
-    NEUTRAL:        'text-gray-500',
+    LONG_BUILDUP:'text-emerald-400', SHORT_BUILDUP:'text-red-400',
+    SHORT_COVERING:'text-cyan-400', LONG_UNWINDING:'text-amber-400',
+    PUT_WRITING:'text-emerald-400', CALL_WRITING:'text-red-400', NEUTRAL:'text-gray-500',
   }
+
+  const tabs = [
+    { key: 'warzone',   label: `⚡ War Zone`,     count: warZone.length },
+    { key: 'oi_build',  label: `📈 OI Builders`,  count: oiBuild.length },
+    { key: 'oi_unwind', label: `📉 OI Unwinders`,  count: oiUnwind.length },
+    { key: 'all',       label: `📊 All`,           count: all.length },
+  ]
 
   return (
     <div>
-      {/* Filter bar */}
+      {/* Tabs + search */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {[
-          { key: 'all', label: `All (${enriched.length})` },
-          { key: 'warzone', label: `🔥 War Zone (${warZoneCount})` },
-          { key: 'watch', label: `👀 Watch (${watchCount})` },
-          { key: 'indices', label: 'Indices' },
-          { key: 'stocks', label: 'Stocks' },
-        ].map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key as any)}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium ${filter === f.key ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-            {f.label}
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key as any)}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium ${tab === t.key ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+            {t.label} <span className="opacity-60">({t.count})</span>
           </button>
         ))}
         <div className="relative ml-auto">
@@ -277,6 +292,14 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
         </div>
       </div>
 
+      {/* Tab description */}
+      <p className="text-xs text-gray-600 mb-3">
+        {tab === 'warzone'   && 'Narrow CPR (<0.30%) + active OI signal — highest conviction setups'}
+        {tab === 'oi_build'  && 'Stocks with increasing Open Interest today — fresh positioning'}
+        {tab === 'oi_unwind' && 'Stocks with decreasing Open Interest today — positions being squared off'}
+        {tab === 'all'       && 'All 66 F&O symbols ranked by War Zone status then OI activity'}
+      </p>
+
       {/* Table header */}
       <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
         <div className="col-span-2">Symbol</div>
@@ -287,67 +310,58 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
         <div className="col-span-2 text-right">Zone</div>
       </div>
 
-      {/* Stock rows */}
+      {/* Rows */}
       <div className="space-y-0.5">
         {filtered.length === 0 ? (
-          <div className="text-center py-10 text-gray-600 text-sm">No stocks match current filter</div>
+          <div className="text-center py-10 text-gray-600 text-sm">
+            {tab === 'warzone' ? 'No War Zone stocks right now — market may be closed or no narrow CPR + OI confluence today' : 'No data available'}
+          </div>
         ) : filtered.map(s => {
           const tag = getWarZoneTag(s)
           const isIndex = ['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol)
-          const cprPos = s.cpr_position
-          const cprPosColor = cprPos === 'ABOVE_CPR' ? 'text-emerald-400' : cprPos === 'BELOW_CPR' ? 'text-red-400' : cprPos === 'INSIDE_CPR' ? 'text-amber-400' : 'text-gray-600'
-          const cprPosShort = cprPos === 'ABOVE_CPR' ? '↑ Above' : cprPos === 'BELOW_CPR' ? '↓ Below' : cprPos === 'INSIDE_CPR' ? '⟷ Inside' : '—'
-
+          const cprPosColor: Record<string,string> = { ABOVE_CPR:'text-emerald-400', BELOW_CPR:'text-red-400', INSIDE_CPR:'text-amber-400' }
+          const cprPosShort: Record<string,string> = { ABOVE_CPR:'↑ Above', BELOW_CPR:'↓ Below', INSIDE_CPR:'⟷ Inside' }
           return (
-            <div key={s.symbol}
-              className={`grid grid-cols-12 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors text-sm ${isIndex ? 'bg-gray-900/20' : ''}`}>
-              {/* Symbol */}
+            <div key={s.symbol} className={`grid grid-cols-12 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors ${isIndex ? 'bg-gray-900/20' : ''}`}>
               <div className="col-span-2 flex items-center gap-1.5">
                 <span className="font-bold text-white text-xs">{s.symbol}</span>
-                {isIndex && <span className="text-xs text-gray-600 bg-gray-800 px-1 rounded text-[10px]">IDX</span>}
+                {isIndex && <span className="text-[10px] text-gray-600 bg-gray-800 px-1 rounded">IDX</span>}
               </div>
-
-              {/* CMP */}
               <div className="col-span-2 text-right">
-                <span className="text-xs font-bold text-amber-400">
-                  {s.cmp ? `₹${s.cmp.toLocaleString()}` : '—'}
-                </span>
-                {s.price_chg_pct !== undefined && (
+                <span className="text-xs font-bold text-amber-400">{s.cmp ? `₹${s.cmp.toLocaleString()}` : '—'}</span>
+                {s.price_chg_pct !== undefined && s.price_chg_pct !== 0 && (
                   <div className={`text-[10px] ${s.price_chg_pct >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                     {s.price_chg_pct >= 0 ? '+' : ''}{s.price_chg_pct?.toFixed(1)}%
                   </div>
                 )}
               </div>
-
-              {/* OI Change */}
               <div className="col-span-2 text-right">
-                {s.oi_chg_pct !== undefined ? (
-                  <span className={`text-xs font-bold ${s.oi_chg_pct > 0 ? 'text-emerald-400' : s.oi_chg_pct < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                {s.oi_chg_pct !== undefined && s.oi_chg_pct !== 0 ? (
+                  <span className={`text-xs font-bold ${s.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {s.oi_chg_pct > 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}%
                   </span>
                 ) : <span className="text-gray-700 text-xs">—</span>}
               </div>
-
-              {/* Signal */}
               <div className="col-span-2">
-                <span className={`text-xs font-medium ${signalColors[s.signal] || 'text-gray-500'}`}>
-                  {s.label || '—'}
-                </span>
+                <span className={`text-xs font-medium ${signalColors[s.signal] || 'text-gray-500'}`}>{s.label || '—'}</span>
               </div>
-
-              {/* CPR position */}
               <div className="col-span-2">
                 <div className="flex items-center gap-1">
                   {s.width_emoji && <span className="text-xs">{s.width_emoji}</span>}
-                  <span className={`text-xs font-medium ${cprPosColor}`}>{cprPosShort}</span>
+                  <span className={`text-xs font-medium ${cprPosColor[s.cpr_position||''] || 'text-gray-600'}`}>
+                    {cprPosShort[s.cpr_position||''] || '—'}
+                  </span>
                 </div>
+                {s.width_pts !== undefined && s.width_pts > 0 && (
+                  <div className="text-[10px] text-gray-600">{s.width_pts.toFixed(1)} pts</div>
+                )}
               </div>
-
-              {/* War Zone tag */}
               <div className="col-span-2 flex justify-end">
-                <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${tag.color} ${tag.bg} ${tag.border}`}>
-                  {tag.icon}{tag.label}
-                </span>
+                {tag.label !== 'Quiet' ? (
+                  <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${tag.color} ${tag.bg} ${tag.border}`}>
+                    {tag.icon} {tag.label}
+                  </span>
+                ) : <span className="text-[10px] text-gray-700">—</span>}
               </div>
             </div>
           )
@@ -357,20 +371,85 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
   )
 }
 
-// ── Stock Command Centre (unchanged, kept for search) ─────────────────────────
+// ── Extended Market View (collapsed drawer) ───────────────────────────────────
+function ExtendedView({ stocks }: { stocks: PulseStock[] }) {
+  const [open, setOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'gainers'|'losers'|'active'>('gainers')
+
+  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
+  const gainers = [...stocksOnly].filter(s => (s.price_chg_pct||0) > 0).sort((a,b) => (b.price_chg_pct||0) - (a.price_chg_pct||0)).slice(0,10)
+  const losers  = [...stocksOnly].filter(s => (s.price_chg_pct||0) < 0).sort((a,b) => (a.price_chg_pct||0) - (b.price_chg_pct||0)).slice(0,10)
+  const active  = [...stocksOnly].sort((a,b) => Math.abs(b.oi_chg_pct||0) - Math.abs(a.oi_chg_pct||0)).slice(0,10)
+
+  const tabData = { gainers, losers, active }
+  const rows = tabData[activeTab] || []
+
+  return (
+    <div className="border border-gray-800/50 rounded-2xl overflow-hidden mt-4">
+      <button onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-900/30 hover:bg-gray-900/60 transition-colors">
+        <div className="flex items-center gap-2">
+          <BarChart2 size={14} className="text-gray-500"/>
+          <span className="text-sm font-bold text-gray-400">Extended Market View</span>
+          <span className="text-xs text-gray-600">Gainers · Losers · Most Active</span>
+        </div>
+        {open ? <ChevronUp size={14} className="text-gray-500"/> : <ChevronDown size={14} className="text-gray-500"/>}
+      </button>
+      {open && (
+        <div className="p-5 bg-gray-900/10">
+          <div className="flex gap-2 mb-4">
+            {[
+              { key: 'gainers', label: '📈 Top Gainers' },
+              { key: 'losers',  label: '📉 Top Losers' },
+              { key: 'active',  label: '🔄 Most Active OI' },
+            ].map(t => (
+              <button key={t.key} onClick={() => setActiveTab(t.key as any)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${activeTab === t.key ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {rows.length === 0 ? (
+            <p className="text-center text-gray-600 text-sm py-6">No intraday data — market may be closed</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {rows.map((s, i) => (
+                <div key={s.symbol} className="flex items-center justify-between bg-gray-900/30 border border-gray-800/50 rounded-lg px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600 w-4">{i+1}</span>
+                    <span className="text-sm font-bold text-white">{s.symbol}</span>
+                    {s.cmp > 0 && <span className="text-xs text-gray-500">₹{s.cmp.toLocaleString()}</span>}
+                  </div>
+                  <div className="text-right">
+                    {activeTab !== 'active' ? (
+                      <span className={`text-sm font-black ${(s.price_chg_pct||0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {(s.price_chg_pct||0) >= 0 ? '+' : ''}{s.price_chg_pct?.toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span className={`text-sm font-black ${(s.oi_chg_pct||0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {(s.oi_chg_pct||0) >= 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}% OI
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Stock Command Centre ──────────────────────────────────────────────────────
 function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () => void }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-
   useEffect(() => {
     async function load() {
       setLoading(true)
       try {
-        const [mpRes, oiRes, uoaRes] = await Promise.all([
-          fetch(`${API}/max-pain`),
-          fetch(`${API}/oi-history/${symbol}`),
-          fetch(`${API}/uoa`),
-        ])
+        const [mpRes, oiRes, uoaRes] = await Promise.all([fetch(`${API}/max-pain`), fetch(`${API}/oi-history/${symbol}`), fetch(`${API}/uoa`)])
         const [mp, oi, uoa] = await Promise.all([mpRes.json(), oiRes.json(), uoaRes.json()])
         const mpItem = mp.symbols?.find((i: any) => i.symbol === symbol)
         const uoaItems = uoa.signals?.filter((i: any) => i.symbol === symbol) || []
@@ -378,15 +457,14 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
         const totalCE = rows.reduce((s: number, r: any) => s + (r.ce_a || 0), 0)
         const totalPE = rows.reduce((s: number, r: any) => s + (r.pe_a || 0), 0)
         const pcr = totalCE > 0 ? Math.round((totalPE/totalCE)*100)/100 : null
-        const topCEStrikes = [...rows].sort((a: any, b: any) => b.ce_a - a.ce_a).slice(0, 5)
-        const topPEStrikes = [...rows].sort((a: any, b: any) => b.pe_a - a.pe_a).slice(0, 5)
-        setData({ mpItem, oi, pcr, topCEStrikes, topPEStrikes, uoaItems, rows })
-      } catch (e) { console.error(e) }
+        const topCEStrikes = [...rows].sort((a: any, b: any) => b.ce_a - a.ce_a).slice(0,5)
+        const topPEStrikes = [...rows].sort((a: any, b: any) => b.pe_a - a.pe_a).slice(0,5)
+        setData({ mpItem, oi, pcr, topCEStrikes, topPEStrikes, uoaItems })
+      } catch(e) { console.error(e) }
       setLoading(false)
     }
     load()
   }, [symbol])
-
   return (
     <div className="bg-gray-900/60 border border-gray-700 rounded-2xl mb-6 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-gray-900/80">
@@ -397,70 +475,41 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
         <button onClick={onClose} className="text-gray-600 hover:text-white p-1"><X size={16}/></button>
       </div>
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <RefreshCw size={20} className="text-gray-600 animate-spin"/>
-          <span className="ml-3 text-gray-500 text-sm">Loading…</span>
-        </div>
+        <div className="flex items-center justify-center py-12"><RefreshCw size={20} className="text-gray-600 animate-spin"/><span className="ml-3 text-gray-500 text-sm">Loading…</span></div>
       ) : (
         <div className="p-5 grid grid-cols-2 gap-4">
-          {/* Max Pain */}
           <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-2">🎯 Max Pain</p>
-            {data?.mpItem ? (
-              <>
-                <p className="text-2xl font-black text-white">₹{data.mpItem.max_pain?.toLocaleString()}</p>
-                <p className={`text-xs mt-1 font-bold ${data.mpItem.direction === 'BELOW' ? 'text-emerald-400' : 'text-orange-400'}`}>
-                  CMP {data.mpItem.direction === 'ABOVE' ? `↑ ${data.mpItem.dist_from_mp?.toFixed(1)}% above` : `↓ ${Math.abs(data.mpItem.dist_from_mp ?? 0).toFixed(1)}% below`} Max Pain
-                </p>
-              </>
-            ) : <p className="text-gray-600 text-sm">No data</p>}
+            {data?.mpItem ? (<>
+              <p className="text-2xl font-black text-white">₹{data.mpItem.max_pain?.toLocaleString()}</p>
+              <p className={`text-xs mt-1 font-bold ${data.mpItem.direction === 'BELOW' ? 'text-emerald-400' : 'text-orange-400'}`}>
+                CMP {data.mpItem.direction === 'ABOVE' ? `↑ ${data.mpItem.dist_from_mp?.toFixed(1)}% above` : `↓ ${Math.abs(data.mpItem.dist_from_mp??0).toFixed(1)}% below`} Max Pain
+              </p>
+            </>) : <p className="text-gray-600 text-sm">No data</p>}
           </div>
-
-          {/* PCR */}
           <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-2">📊 PCR</p>
-            <p className={`text-2xl font-black ${data?.pcr && data.pcr > 1 ? 'text-emerald-400' : 'text-red-400'}`}>{data?.pcr?.toFixed(2) ?? '—'}</p>
+            <p className={`text-2xl font-black ${data?.pcr && data.pcr > 1 ? 'text-emerald-400' : 'text-red-400'}`}>{data?.pcr?.toFixed(2)??'—'}</p>
             <p className="text-xs text-gray-600 mt-1">{data?.pcr && data.pcr > 1 ? 'PE OI > CE OI' : 'CE OI > PE OI'}</p>
           </div>
-
-          {/* Top CE strikes */}
           <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-red-400 font-bold mb-2">🔴 CE Strikes</p>
-            <div className="space-y-1">
-              {data?.topCEStrikes?.slice(0,3).map((r: any, i: number) => (
-                <div key={r.strike} className="flex justify-between text-xs">
-                  <span className="text-white font-bold">{r.strike.toLocaleString()}</span>
-                  <span className="text-red-400">{fmtOI(r.ce_a)}</span>
-                </div>
-              ))}
-            </div>
+            <div className="space-y-1">{data?.topCEStrikes?.slice(0,3).map((r: any) => (
+              <div key={r.strike} className="flex justify-between text-xs"><span className="text-white font-bold">{r.strike.toLocaleString()}</span><span className="text-red-400">{fmtOI(r.ce_a)}</span></div>
+            ))}</div>
           </div>
-
-          {/* Top PE strikes */}
           <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-emerald-400 font-bold mb-2">🟢 PE Strikes</p>
-            <div className="space-y-1">
-              {data?.topPEStrikes?.slice(0,3).map((r: any, i: number) => (
-                <div key={r.strike} className="flex justify-between text-xs">
-                  <span className="text-white font-bold">{r.strike.toLocaleString()}</span>
-                  <span className="text-emerald-400">{fmtOI(r.pe_a)}</span>
-                </div>
-              ))}
-            </div>
+            <div className="space-y-1">{data?.topPEStrikes?.slice(0,3).map((r: any) => (
+              <div key={r.strike} className="flex justify-between text-xs"><span className="text-white font-bold">{r.strike.toLocaleString()}</span><span className="text-emerald-400">{fmtOI(r.pe_a)}</span></div>
+            ))}</div>
           </div>
-
-          {/* UOA */}
           {data?.uoaItems?.length > 0 && (
             <div className="col-span-2 bg-yellow-950/20 border border-yellow-800/30 rounded-xl p-4">
               <p className="text-xs text-yellow-400 font-bold mb-2">🐋 Unusual Options Activity</p>
-              <div className="space-y-1">
-                {data.uoaItems.slice(0,3).map((u: any, i: number) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-white">{u.tradingsymbol} · {u.signal_desc}</span>
-                    <span className="text-yellow-400">Score {u.score}/5</span>
-                  </div>
-                ))}
-              </div>
+              <div className="space-y-1">{data.uoaItems.slice(0,3).map((u: any, i: number) => (
+                <div key={i} className="flex justify-between text-xs"><span className="text-white">{u.tradingsymbol} · {u.signal_desc}</span><span className="text-yellow-400">Score {u.score}/5</span></div>
+              ))}</div>
             </div>
           )}
         </div>
@@ -469,16 +518,16 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MarketPulse() {
   const [analyses, setAnalyses]       = useState<IndexAnalysis[]>([])
-  const [cmps, setCmps]               = useState<Record<string, number>>({})
+  const [cmps, setCmps]               = useState<Record<string,number>>({})
   const [cprData, setCprData]         = useState<CPRRow[]>([])
   const [pulseStocks, setPulseStocks] = useState<PulseStock[]>([])
-  const [breadth, setBreadth]         = useState({ bullish: 0, bearish: 0, neutral: 0, total: 0 })
+  const [breadth, setBreadth]         = useState({ bullish:0, bearish:0, neutral:0, total:0 })
   const [loading, setLoading]         = useState(true)
   const [lastUpdate, setLastUpdate]   = useState('')
-  const [searchedSymbol, setSearchedSymbol] = useState<string | null>(null)
+  const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
@@ -492,74 +541,65 @@ export default function MarketPulse() {
   async function fetchData() {
     setLoading(true)
     try {
-      // ── Parallel fetch: OI snapshot + CPR + OI Pulse ─────────────────────
-      const [cprRes, pulseRes] = await Promise.all([
-        fetch(`${API}/cpr-scanner`),
-        fetch(`${API}/oi-pulse`),
-      ])
+      const [cprRes, pulseRes] = await Promise.all([fetch(`${API}/cpr-scanner`), fetch(`${API}/oi-pulse`)])
       const [cprJson, pulseJson] = await Promise.all([cprRes.json(), pulseRes.json()])
 
-      // CPR data
       const cprRows: CPRRow[] = cprJson?.data || []
       setCprData(cprRows)
-
-      // OI Pulse stocks
-      const pulseItems = pulseJson?.items || []
       const cprMap = Object.fromEntries(cprRows.map((c: CPRRow) => [c.symbol, c]))
 
+      const pulseItems = pulseJson?.items || []
       const enrichedPulse: PulseStock[] = pulseItems.map((p: any) => ({
-        symbol:       p.symbol,
-        cmp:          p.ltp || p.cmp || 0,
-        oi_chg_pct:   p.oi_chg_pct || 0,
+        symbol:        p.symbol,
+        cmp:           p.ltp || p.cmp || 0,
+        oi_chg_pct:    p.oi_chg_pct || 0,
         price_chg_pct: p.price_chg_pct || 0,
-        signal:       p.signal || 'NEUTRAL',
-        label:        p.label || '—',
+        signal:        p.signal || 'NEUTRAL',
+        label:         p.label || '—',
+        oi_now:        p.oi_now,
+        oi_prev:       p.oi_prev,
         has_oi_signal: (cprMap[p.symbol] as CPRRow)?.has_oi_signal || false,
-        width_pct:    (cprMap[p.symbol] as CPRRow)?.width_pct,
-        width_emoji:  (cprMap[p.symbol] as CPRRow)?.width_emoji,
-        cpr_position: (cprMap[p.symbol] as CPRRow)?.cpr_position,
-        confluence:   (cprMap[p.symbol] as CPRRow)?.confluence || false,
+        width_pct:     (cprMap[p.symbol] as CPRRow)?.width_pct,
+        width_pts:     (cprMap[p.symbol] as CPRRow)?.width_pts,
+        width_emoji:   (cprMap[p.symbol] as CPRRow)?.width_emoji,
+        cpr_position:  (cprMap[p.symbol] as CPRRow)?.cpr_position,
+        confluence:    (cprMap[p.symbol] as CPRRow)?.confluence || false,
       }))
       setPulseStocks(enrichedPulse)
 
-      // Breadth
-      let bull = 0, bear = 0, neut = 0
+      let bull=0, bear=0, neut=0
       pulseItems.forEach((s: any) => {
         if (s.price_chg_pct > 0 && s.oi_chg_pct > 0) bull++
         else if (s.price_chg_pct < 0 && s.oi_chg_pct > 0) bear++
         else neut++
       })
-      setBreadth({ bullish: bull, bearish: bear, neutral: neut, total: pulseItems.length })
+      setBreadth({ bullish:bull, bearish:bear, neutral:neut, total:pulseItems.length })
 
-      // ── OI Snapshots for index cards ─────────────────────────────────────
-      const { data: latest } = await supabase
-        .from('oi_snapshots').select('timestamp').eq('symbol','NIFTY')
+      // Index cards from Supabase
+      const { data: latest } = await supabase.from('oi_snapshots').select('timestamp').eq('symbol','NIFTY')
         .gte('timestamp', new Date(Date.now()-2*24*60*60*1000).toISOString().slice(0,10)+'T00:00:00+00:00')
         .order('timestamp',{ascending:false}).limit(1)
 
       if (latest?.length) {
         const ts = latest[0].timestamp
         setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))
-
         const { data: cmpData } = await supabase.from('cmp_prices').select('*').order('timestamp',{ascending:false}).limit(200)
-        const cmpMap: Record<string,number> = {}
+        const cmpMap2: Record<string,number> = {}
         const seen = new Set<string>()
-        cmpData?.forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap[c.symbol]=c.cmp;seen.add(c.symbol)} })
-        setCmps(cmpMap)
+        cmpData?.forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
+        setCmps(cmpMap2)
 
         let data: any[] = []
-        for (let offset = 0; offset < 200000; offset += 1000) {
+        for (let offset=0; offset<200000; offset+=1000) {
           const { data: batch } = await supabase.from('oi_snapshots').select('*').eq('timestamp',ts).range(offset,offset+999)
           if (!batch?.length) break
           data = [...data, ...batch]
           if (batch.length < 1000) break
         }
-        const results = ['NIFTY','BANKNIFTY','FINNIFTY']
-          .map(s => analyzeIndex(data as OIRecord[], s, cmpMap[s]||0))
-          .filter(Boolean) as IndexAnalysis[]
+        const results = ['NIFTY','BANKNIFTY','FINNIFTY'].map(s => analyzeIndex(data as OIRecord[], s, cmpMap2[s]||0)).filter(Boolean) as IndexAnalysis[]
         setAnalyses(results)
       }
-    } catch (e) { console.error(e) }
+    } catch(e) { console.error(e) }
     setLoading(false)
   }
 
@@ -567,12 +607,21 @@ export default function MarketPulse() {
   useEffect(() => { fetchData() }, [])
 
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))
-  const warZoneCount = pulseStocks.filter(s => (s.width_pct||1) < 0.3 && s.has_oi_signal).length
+  const warZoneCount = pulseStocks.filter(s => (s.width_pct||1)<0.3 && s.has_oi_signal).length
+
+  // Feed source — pulse during market, CPR fallback post-market
+  const feedStocks: PulseStock[] = pulseStocks.length > 0 ? pulseStocks : cprData.map(c => ({
+    symbol: c.symbol, cmp: c.last_cmp||c.cmp||0, oi_chg_pct:0, price_chg_pct:0,
+    signal:'NEUTRAL', label:'—', has_oi_signal:c.has_oi_signal||false,
+    width_pct:c.width_pct, width_pts:c.width_pts, width_emoji:c.width_emoji,
+    cpr_position:c.cpr_position, confluence:c.confluence||false,
+  }))
+
   const suggestions = searchQuery.length >= 1 ? ALL_SYMBOLS.filter(s => s.startsWith(searchQuery.toUpperCase())).slice(0,8) : []
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
-      <Navbar active="/" />
+      <Navbar active="/"/>
 
       {/* Live ticker */}
       <div className="bg-gray-950 border-b border-gray-800/50 overflow-hidden">
@@ -585,7 +634,7 @@ export default function MarketPulse() {
               <button key={a.symbol} onClick={() => setSearchedSymbol(a.symbol)} className="flex items-center gap-2 flex-shrink-0 hover:opacity-80">
                 <span className="text-xs font-black text-white">{a.symbol}</span>
                 <span className="text-xs font-bold text-amber-400">₹{cmps[a.symbol]?.toLocaleString()||'—'}</span>
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${a.pcr > 1 ? 'text-emerald-400 bg-emerald-950' : 'text-red-400 bg-red-950'}`}>PCR {a.pcr.toFixed(2)}</span>
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${a.pcr>1?'text-emerald-400 bg-emerald-950':'text-red-400 bg-red-950'}`}>PCR {a.pcr.toFixed(2)}</span>
               </button>
             ))}
             {warZoneCount > 0 && (
@@ -594,7 +643,7 @@ export default function MarketPulse() {
               </span>
             )}
           </div>
-          <ExpiryCountdown />
+          <ExpiryCountdown/>
         </div>
       </div>
 
@@ -612,23 +661,23 @@ export default function MarketPulse() {
                 <Clock size={11}/>📸 {lastUpdate}
               </div>
             )}
-            <button onClick={toggleAuto} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${autoEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}/>
+            <button onClick={toggleAuto} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled?'bg-emerald-950/60 text-emerald-400 border-emerald-800/60':'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${autoEnabled?'bg-emerald-400 animate-pulse':'bg-gray-600'}`}/>
               {autoEnabled ? countdownStr : 'Auto'}
             </button>
             <button onClick={fetchData} disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all">
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
+              <RefreshCw size={13} className={loading?'animate-spin':''}/>Refresh
             </button>
           </div>
         </div>
 
-        {/* Stock search */}
+        {/* Search */}
         <div className="relative mb-6">
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
               <input value={searchQuery} onChange={e => setSearchQuery(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === 'Enter' && searchQuery && setSearchedSymbol(searchQuery)}
+                onKeyDown={e => e.key==='Enter' && searchQuery && setSearchedSymbol(searchQuery)}
                 placeholder="Deep dive any F&O stock… RELIANCE, TCS, NIFTY"
                 className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-xl pl-9 pr-4 py-3 focus:outline-none focus:border-emerald-500 placeholder:text-gray-600"/>
               {suggestions.length > 0 && (
@@ -652,7 +701,7 @@ export default function MarketPulse() {
 
         {/* Index cards */}
         {loading ? (
-          <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             {[1,2,3].map(i => (
               <div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4">
                 <div className="flex justify-between"><div className="h-5 w-24 bg-gray-800 rounded"/><div className="h-6 w-20 bg-gray-800 rounded-full"/></div>
@@ -661,7 +710,7 @@ export default function MarketPulse() {
             ))}
           </div>
         ) : analyses.length > 0 ? (
-          <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             {analyses.map(a => (
               <div key={a.symbol} onClick={() => setSearchedSymbol(a.symbol)} className="cursor-pointer">
                 <IndexCard a={a} cpr={cprMap[a.symbol]} cmp={cmps[a.symbol]}/>
@@ -669,17 +718,20 @@ export default function MarketPulse() {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center mb-8 border border-gray-800/50 rounded-2xl">
+          <div className="flex flex-col items-center justify-center py-16 text-center mb-6 border border-gray-800/50 rounded-2xl">
             <Database size={28} className="text-gray-700 mb-4"/>
             <h3 className="text-lg font-bold text-gray-400 mb-2">Waiting for market data</h3>
             <p className="text-sm text-gray-600">OI capture runs weekdays 9:15 AM – 3:30 PM IST</p>
           </div>
         )}
 
-        {/* Market breadth */}
+        {/* Today's Spotlight */}
+        {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}
+
+        {/* Market Breadth */}
         {breadth.total > 0 && (
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <div>
                 <h3 className="text-sm font-bold text-white">Market Breadth</h3>
                 <p className="text-xs text-gray-500">{breadth.total} F&O symbols</p>
@@ -691,9 +743,9 @@ export default function MarketPulse() {
               </div>
             </div>
             <div className="h-2 rounded-full overflow-hidden flex">
-              <div className="bg-emerald-500 h-full transition-all" style={{ width: `${Math.round(breadth.bullish/breadth.total*100)}%` }}/>
-              <div className="bg-amber-500/70 h-full transition-all" style={{ width: `${Math.round(breadth.neutral/breadth.total*100)}%` }}/>
-              <div className="bg-red-500 h-full transition-all" style={{ width: `${Math.round(breadth.bearish/breadth.total*100)}%` }}/>
+              <div className="bg-emerald-500 h-full transition-all" style={{width:`${Math.round(breadth.bullish/breadth.total*100)}%`}}/>
+              <div className="bg-amber-500/70 h-full transition-all" style={{width:`${Math.round(breadth.neutral/breadth.total*100)}%`}}/>
+              <div className="bg-red-500 h-full transition-all" style={{width:`${Math.round(breadth.bearish/breadth.total*100)}%`}}/>
             </div>
           </div>
         )}
@@ -703,7 +755,7 @@ export default function MarketPulse() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-black text-white">Market Pulse Feed</h2>
-              <p className="text-xs text-gray-500 mt-0.5">All 66 F&O symbols · Ranked by activity · CPR + OI combined</p>
+              <p className="text-xs text-gray-500 mt-0.5">All 66 F&O symbols · CPR + OI combined · War Zone ranked first</p>
             </div>
             {warZoneCount > 0 && (
               <div className="flex items-center gap-1.5 bg-orange-950/40 border border-orange-800/50 rounded-lg px-3 py-1.5">
@@ -712,27 +764,13 @@ export default function MarketPulse() {
               </div>
             )}
           </div>
-          {pulseStocks.length > 0 ? (
-  <MarketPulseFeed stocks={pulseStocks} cprData={cprData}/>
-) : cprData.length > 0 ? (
-  <MarketPulseFeed stocks={cprData.map(c => ({
-    symbol: c.symbol,
-    cmp: c.last_cmp || c.cmp || 0,
-    oi_chg_pct: 0,
-    price_chg_pct: 0,
-    signal: 'NEUTRAL',
-    label: '—',
-    has_oi_signal: c.has_oi_signal || false,
-    width_pct: c.width_pct,
-    width_emoji: c.width_emoji,
-    cpr_position: c.cpr_position,
-    confluence: c.confluence || false,
-  }))} cprData={cprData}/>
-) : (
-  <div className="text-center py-12 text-gray-600 text-sm">
-    {loading ? 'Loading market data…' : 'No data available'}
-  </div>
-)}
+          {feedStocks.length > 0
+            ? <MarketPulseFeed stocks={feedStocks} cprData={cprData}/>
+            : <div className="text-center py-12 text-gray-600 text-sm">{loading ? 'Loading…' : 'No data available'}</div>
+          }
+
+          {/* Extended View drawer */}
+          {feedStocks.length > 0 && <ExtendedView stocks={feedStocks}/>}
         </div>
 
         {/* SEBI disclaimer */}

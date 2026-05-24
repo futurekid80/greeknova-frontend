@@ -183,20 +183,26 @@ function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: numb
 // ── Today's Spotlight ─────────────────────────────────────────────────────────
 function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
   const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
-  const topOIBuilder  = [...stocksOnly].sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))[0]
-  const topOIUnwinder = [...stocksOnly].sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))[0]
+const isMarketData  = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
+  const topOIBuilder  = isMarketData
+    ? [...stocksOnly].sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))[0]
+    : [...stocksOnly].filter(s => s.cpr_position === 'ABOVE_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
+  const topOIUnwinder = isMarketData
+    ? [...stocksOnly].sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))[0]
+    : [...stocksOnly].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
   const narrowestCPR  = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
 
   const cards = [
     {
-      label: '🔥 Highest OI Buildup',
+      {
+      label: isMarketData ? '🔥 Highest OI Buildup' : '🟢 Narrowest Above CPR',
       symbol: topOIBuilder?.symbol,
       value: topOIBuilder?.oi_chg_pct !== undefined ? `+${topOIBuilder.oi_chg_pct.toFixed(1)}% OI` : '—',
       sub: topOIBuilder?.cmp ? `₹${topOIBuilder.cmp.toLocaleString()}` : '',
       color: 'text-emerald-400', bg: 'bg-emerald-950/20', border: 'border-emerald-800/30',
     },
     {
-      label: '📉 Highest OI Unwind',
+      label: isMarketData ? '📉 Highest OI Unwind' : '🔴 Narrowest Below CPR',
       symbol: topOIUnwinder?.symbol,
       value: topOIUnwinder?.oi_chg_pct !== undefined ? `${topOIUnwinder.oi_chg_pct.toFixed(1)}% OI` : '—',
       sub: topOIUnwinder?.cmp ? `₹${topOIUnwinder.cmp.toLocaleString()}` : '',
@@ -379,7 +385,7 @@ const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
 
 // ── Extended Market View (collapsed drawer) ───────────────────────────────────
 function ExtendedView({ stocks }: { stocks: PulseStock[] }) {
-  const [open, setOpen] = useState(false)
+const [open, setOpen] = useState(true)
   const [activeTab, setActiveTab] = useState<'gainers'|'losers'|'active'>('gainers')
 
   const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))

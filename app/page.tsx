@@ -244,10 +244,16 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
     confluence:   s.confluence   ?? cprMap[s.symbol]?.confluence ?? false,
   }))
 
-  const warZone   = enriched.filter(s => (s.width_pct||1) < 0.3 && s.has_oi_signal)
-  const oiBuild   = [...enriched].filter(s => (s.oi_chg_pct||0) > 0).sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))
-  const oiUnwind  = [...enriched].filter(s => (s.oi_chg_pct||0) < 0).sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))
-  const all       = [...enriched].sort((a,b) => {
+const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
+
+  const warZone  = enriched.filter(s => (s.width_pct||1) < 0.3 && s.has_oi_signal)
+  const oiBuild  = isMarketData
+    ? [...enriched].filter(s => (s.oi_chg_pct||0) > 0).sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))
+    : [...enriched].sort((a,b) => (a.width_pct||1) - (b.width_pct||1)) // post-market: narrowest CPR first
+  const oiUnwind = isMarketData
+    ? [...enriched].filter(s => (s.oi_chg_pct||0) < 0).sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))
+    : [...enriched].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1)) // post-market: below CPR narrowest first
+  const all      = [...enriched].sort((a,b) => {
     const aW = (a.width_pct||1)<0.3 && a.has_oi_signal ? 0 : (a.width_pct||1)<0.3 ? 1 : 2
     const bW = (b.width_pct||1)<0.3 && b.has_oi_signal ? 0 : (b.width_pct||1)<0.3 ? 1 : 2
     if (aW !== bW) return aW - bW

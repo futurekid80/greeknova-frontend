@@ -70,8 +70,8 @@ export default function StockDeepDive({ params }: { params: { symbol: string } }
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-center gap-4 mb-8">
-          <a href="/scanners" className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft size={16}/>Back to Scanners
+          <a href="/" className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft size={16}/>Back to Market Pulse
           </a>
           <div className="w-px h-5 bg-gray-800"/>
           <h1 className="text-3xl font-black tracking-tight">{symbol}</h1>

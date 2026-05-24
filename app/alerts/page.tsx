@@ -99,16 +99,26 @@ export default function Alerts() {
     if ('Notification' in window) setPermission(Notification.permission)
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(reg => {
-        setSwReady(true)
-        const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
-        const threshold  = Number(localStorage.getItem('gn_spike_threshold') || 10)
-        if (wasEnabled && Notification.permission === 'granted') {
-          setEnabled(true)
-          const sw = reg.active || reg.waiting || reg.installing
-          sw?.postMessage({ type: 'ENABLE', data: { spikeThreshold: threshold } })
-        }
-      }).catch(e => console.error('SW registration failed:', e))
+  navigator.serviceWorker.register('/sw.js').then(async reg => {
+    // Wait for SW to be fully active before sending messages
+    if (reg.installing) {
+      await new Promise<void>(resolve => {
+        reg.installing!.addEventListener('statechange', function() {
+          if (this.state === 'activated') resolve()
+        })
+      })
+    }
+    // Use ready to guarantee active SW
+    const activeReg = await navigator.serviceWorker.ready
+    setSwReady(true)
+
+    const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
+    const threshold  = Number(localStorage.getItem('gn_spike_threshold') || 10)
+    if (wasEnabled && Notification.permission === 'granted') {
+      setEnabled(true)
+      activeReg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold: threshold } })
+    }
+  }).catch(e => console.error('SW registration failed:', e))
 
       navigator.serviceWorker.addEventListener('message', (e) => {
         if (e.data.type === 'STATUS') setEnabled(e.data.enabled)

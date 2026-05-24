@@ -34,7 +34,7 @@ const NAV_GROUPS = [
     ]
   },
   {
-    {
+    
     label: 'Signals',
     links: [
       { href: '/vacuum',      label: '⚡ Vacuum Scanner' },

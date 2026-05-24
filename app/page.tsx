@@ -713,12 +713,26 @@ export default function MarketPulse() {
             )}
           </div>
           {pulseStocks.length > 0 ? (
-            <MarketPulseFeed stocks={pulseStocks} cprData={cprData}/>
-          ) : (
-            <div className="text-center py-12 text-gray-600 text-sm">
-              {loading ? 'Loading market data…' : 'No pulse data available — market may be closed'}
-            </div>
-          )}
+  <MarketPulseFeed stocks={pulseStocks} cprData={cprData}/>
+) : cprData.length > 0 ? (
+  <MarketPulseFeed stocks={cprData.map(c => ({
+    symbol: c.symbol,
+    cmp: c.last_cmp || c.cmp || 0,
+    oi_chg_pct: 0,
+    price_chg_pct: 0,
+    signal: 'NEUTRAL',
+    label: '—',
+    has_oi_signal: c.has_oi_signal || false,
+    width_pct: c.width_pct,
+    width_emoji: c.width_emoji,
+    cpr_position: c.cpr_position,
+    confluence: c.confluence || false,
+  }))} cprData={cprData}/>
+) : (
+  <div className="text-center py-12 text-gray-600 text-sm">
+    {loading ? 'Loading market data…' : 'No data available'}
+  </div>
+)}
         </div>
 
         {/* SEBI disclaimer */}

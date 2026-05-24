@@ -694,14 +694,12 @@ export default function MarketPulse() {
                 onKeyDown={e => e.key==='Enter' && searchQuery && setSearchedSymbol(searchQuery)}
                 placeholder="Deep dive any F&O stock… RELIANCE, TCS, NIFTY"
                 className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-xl pl-9 pr-4 py-3 focus:outline-none focus:border-emerald-500 placeholder:text-gray-600"/>
-              {suggestions.length > 0 && !searchedSymbol && (
-  <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
-    {suggestions.map(s => (
-      <button key={s} onClick={() => { setSearchedSymbol(s); setSearchQuery(s) }}
-        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white font-medium">{s}</button>
-    ))}
-  </div>
-)}
+{suggestions.length > 0 && !searchedSymbol && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
+                  {suggestions.map(s => (
+                    <button key={s} onClick={() => { setSearchedSymbol(s); setSearchQuery(s) }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white font-medium">{s}</button>
+                  ))}
                 </div>
               )}
             </div>

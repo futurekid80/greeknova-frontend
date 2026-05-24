@@ -273,10 +273,10 @@ const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
   }
 
   const tabs = [
-    { key: 'warzone',   label: `⚡ War Zone`,     count: warZone.length },
-    { key: 'oi_build',  label: `📈 OI Builders`,  count: oiBuild.length },
-    { key: 'oi_unwind', label: `📉 OI Unwinders`,  count: oiUnwind.length },
-    { key: 'all',       label: `📊 All`,           count: all.length },
+    { key: 'warzone',   label: `⚡ War Zone`,                                    count: warZone.length },
+    { key: 'oi_build',  label: isMarketData ? `📈 OI Builders` : `📈 Narrow CPR`, count: oiBuild.length },
+    { key: 'oi_unwind', label: isMarketData ? `📉 OI Unwinders` : `📉 Below CPR`, count: oiUnwind.length },
+    { key: 'all',       label: `📊 All`,                                          count: all.length },
   ]
 
   return (
@@ -301,8 +301,8 @@ const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
       {/* Tab description */}
       <p className="text-xs text-gray-600 mb-3">
         {tab === 'warzone'   && 'Narrow CPR (<0.30%) + active OI signal — highest conviction setups'}
-        {tab === 'oi_build'  && 'Stocks with increasing Open Interest today — fresh positioning'}
-        {tab === 'oi_unwind' && 'Stocks with decreasing Open Interest today — positions being squared off'}
+        {tab === 'oi_build'  && (isMarketData ? 'Stocks with increasing Open Interest today — fresh positioning' : 'Ranked by narrowest CPR — compression setups for tomorrow')}
+        {tab === 'oi_unwind' && (isMarketData ? 'Stocks with decreasing Open Interest today — positions being squared off' : 'Stocks below CPR with narrow range — watch for continuation')}
         {tab === 'all'       && 'All 66 F&O symbols ranked by War Zone status then OI activity'}
       </p>
 

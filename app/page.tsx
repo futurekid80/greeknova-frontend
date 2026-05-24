@@ -309,7 +309,7 @@ const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
       {/* Tab description */}
       <p className="text-xs text-gray-600 mb-3">
         {tab === 'warzone'   && 'Narrow CPR (<0.30%) + active OI signal — highest conviction setups'}
-        {tab === 'oi_build'  && (isMarketData ? 'Stocks with increasing Open Interest today — fresh positioning' : 'Ranked by narrowest CPR — compression setups for tomorrow')}
+        {tab === 'oi_build'  && (isMarketData ? 'Stocks with increasing Open Interest today — fresh positioning' : 'OI change: previous close vs latest close · High % normal during expiry week')}
         {tab === 'oi_unwind' && (isMarketData ? 'Stocks with decreasing Open Interest today — positions being squared off' : 'Stocks below CPR with narrow range — watch for continuation')}
         {tab === 'all'       && 'All 66 F&O symbols ranked by War Zone status then OI activity'}
       </p>
@@ -769,7 +769,7 @@ export default function MarketPulse() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-black text-white">Market Pulse Feed</h2>
-              <p className="text-xs text-gray-500 mt-0.5">All 66 F&O symbols · CPR + OI combined · War Zone ranked first</p>
+              <p className="text-xs text-gray-500 mt-0.5">All 66 F&O symbols · CPR + OI combined · War Zone ranked first · OI = prev close vs latest close</p>
             </div>
             {warZoneCount > 0 && (
               <div className="flex items-center gap-1.5 bg-orange-950/40 border border-orange-800/50 rounded-lg px-3 py-1.5">

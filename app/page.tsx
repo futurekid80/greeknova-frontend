@@ -552,14 +552,37 @@ export default function MarketPulse() {
     checkAuth()
   }, [])
 
-  async function fetchData() {
+async function fetchData() {
     setLoading(true)
+
+    // Fix 3 — Show cached CPR instantly while fresh data loads
     try {
-      const [cprRes, pulseRes] = await Promise.all([fetch(`${API}/cpr-scanner`), fetch(`${API}/oi-pulse`)])
+      const cached = sessionStorage.getItem('gn_cpr_cache')
+      const cacheTime = sessionStorage.getItem('gn_cpr_time')
+      const cacheAge = cacheTime ? Date.now() - Number(cacheTime) : Infinity
+      if (cached && cacheAge < 5 * 60 * 1000) {
+        setCprData(JSON.parse(cached))
+        setLoading(false) // Show page immediately with cached data
+      }
+    } catch {}
+
+    try {
+      // Fix 2 — Fetch CPR + OI Pulse in parallel
+      const [cprRes, pulseRes] = await Promise.all([
+        fetch(`${API}/cpr-scanner`),
+        fetch(`${API}/oi-pulse`)
+      ])
       const [cprJson, pulseJson] = await Promise.all([cprRes.json(), pulseRes.json()])
 
       const cprRows: CPRRow[] = cprJson?.data || []
       setCprData(cprRows)
+
+      // Fix 3 — Update cache
+      try {
+        sessionStorage.setItem('gn_cpr_cache', JSON.stringify(cprRows))
+        sessionStorage.setItem('gn_cpr_time', String(Date.now()))
+      } catch {}
+
       const cprMap = Object.fromEntries(cprRows.map((c: CPRRow) => [c.symbol, c]))
 
       const pulseItems = pulseJson?.items || []
@@ -581,6 +604,9 @@ export default function MarketPulse() {
       }))
       setPulseStocks(enrichedPulse)
 
+      // Show feed immediately — don't wait for index cards
+      setLoading(false)
+
       let bull=0, bear=0, neut=0
       pulseItems.forEach((s: any) => {
         if (s.price_chg_pct > 0 && s.oi_chg_pct > 0) bull++
@@ -589,7 +615,7 @@ export default function MarketPulse() {
       })
       setBreadth({ bullish:bull, bearish:bear, neutral:neut, total:pulseItems.length })
 
-      // Index cards from Supabase
+      // Fix 1 — Fetch index cards separately, indices only (300 rows vs 50,000+)
       const { data: latest } = await supabase.from('oi_snapshots').select('timestamp').eq('symbol','NIFTY')
         .gte('timestamp', new Date(Date.now()-2*24*60*60*1000).toISOString().slice(0,10)+'T00:00:00+00:00')
         .order('timestamp',{ascending:false}).limit(1)
@@ -597,20 +623,33 @@ export default function MarketPulse() {
       if (latest?.length) {
         const ts = latest[0].timestamp
         setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))
-        const { data: cmpData } = await supabase.from('cmp_prices').select('*').order('timestamp',{ascending:false}).limit(200)
+
+        // Fetch CMP + index OI snapshots in parallel
+        const [cmpResult, ...indexBatches] = await Promise.all([
+          supabase.from('cmp_prices').select('*').order('timestamp',{ascending:false}).limit(200),
+          supabase.from('oi_snapshots').select('*')
+            .eq('timestamp',ts)
+            .in('symbol',['NIFTY','BANKNIFTY','FINNIFTY'])
+            .range(0,999),
+          supabase.from('oi_snapshots').select('*')
+            .eq('timestamp',ts)
+            .in('symbol',['NIFTY','BANKNIFTY','FINNIFTY'])
+            .range(1000,1999),
+        ])
+
         const cmpMap2: Record<string,number> = {}
         const seen = new Set<string>()
-        cmpData?.forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
+        cmpResult.data?.forEach((c:any) => {
+          if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)}
+        })
         setCmps(cmpMap2)
 
-        let data: any[] = []
-        for (let offset=0; offset<200000; offset+=1000) {
-          const { data: batch } = await supabase.from('oi_snapshots').select('*').eq('timestamp',ts).range(offset,offset+999)
-          if (!batch?.length) break
-          data = [...data, ...batch]
-          if (batch.length < 1000) break
-        }
-        const results = ['NIFTY','BANKNIFTY','FINNIFTY'].map(s => analyzeIndex(data as OIRecord[], s, cmpMap2[s]||0)).filter(Boolean) as IndexAnalysis[]
+        // Combine index batches
+        const indexData = indexBatches.flatMap(b => b.data || [])
+
+        const results = ['NIFTY','BANKNIFTY','FINNIFTY']
+          .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
+          .filter(Boolean) as IndexAnalysis[]
         setAnalyses(results)
       }
     } catch(e) { console.error(e) }

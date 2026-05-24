@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.1'
+const SW_VERSION = 'v2.0.2'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes

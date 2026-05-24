@@ -193,7 +193,6 @@ const isMarketData  = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
   const narrowestCPR  = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
 
   const cards = [
-    {
       {
       label: isMarketData ? '🔥 Highest OI Buildup' : '🟢 Narrowest Above CPR',
       symbol: topOIBuilder?.symbol,

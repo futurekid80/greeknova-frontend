@@ -70,6 +70,8 @@ function analyzeIndex(data: OIRecord[], symbol: string, cmp: number = 0): IndexA
 }
 
 function getWarZoneTag(stock: PulseStock) {
+  const isIndex = ['NIFTY','BANKNIFTY','FINNIFTY'].includes(stock.symbol)
+  if (isIndex) return { label: 'Quiet', icon: '😴', color: 'text-gray-600', bg: 'bg-gray-900/10', border: 'border-gray-800/20' }
   const isNarrow = (stock.width_pct || 1) < 0.3
   const hasSignal = stock.has_oi_signal
   if (isNarrow && hasSignal) return { label: 'War Zone', icon: '⚡', color: 'text-orange-300', bg: 'bg-orange-950/50', border: 'border-orange-700/60' }
@@ -190,7 +192,8 @@ const isMarketData  = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
   const topOIUnwinder = isMarketData
     ? [...stocksOnly].sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))[0]
     : [...stocksOnly].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
-  const narrowestCPR  = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
+  const usedSymbols = new Set([topOIBuilder?.symbol, topOIUnwinder?.symbol])
+  const narrowestCPR = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(c.symbol) && !usedSymbols.has(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
 
   const cards = [
       {

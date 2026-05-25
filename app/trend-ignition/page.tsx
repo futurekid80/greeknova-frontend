@@ -27,6 +27,9 @@ interface Signal {
   atm_strike: number;
   scan_note: string;
   scanned_at: string;
+  session_open_oi: number;
+  cumulative_oi_pct: number;
+  cumulative_direction: "bullish" | "bearish" | "neutral";
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -59,10 +62,10 @@ function LiveDot() {
       <span style={{
         width: 8, height: 8, borderRadius: "50%",
         background: "#1D9E75", display: "inline-block",
-        animation: "pulse 2s infinite",
+        animation: "livepulse 2s infinite",
       }} />
       <style>{`
-        @keyframes pulse {
+        @keyframes livepulse {
           0%   { box-shadow: 0 0 0 0 rgba(29,158,117,0.6); }
           70%  { box-shadow: 0 0 0 6px rgba(29,158,117,0); }
           100% { box-shadow: 0 0 0 0 rgba(29,158,117,0); }
@@ -72,56 +75,89 @@ function LiveDot() {
   );
 }
 
-// ── Alert system ───────────────────────────────────────────────────────────
 function useAlerts(signals: Signal[]) {
   const prevStatusRef = useRef<Record<string, string>>({});
   const permissionRef = useRef<NotificationPermission>("default");
 
-  // Request permission once on mount
   useEffect(() => {
     if ("Notification" in window) {
-      Notification.requestPermission().then(p => {
-        permissionRef.current = p;
-      });
+      Notification.requestPermission().then(p => { permissionRef.current = p; });
     }
   }, []);
 
-  // Watch for status changes and fire alerts
   useEffect(() => {
     if (!signals.length) return;
     if (!("Notification" in window)) return;
     if (permissionRef.current !== "granted") return;
 
     signals.forEach(signal => {
-      const prev = prevStatusRef.current[signal.commodity];
-      const curr = signal.status;
+      const prev  = prevStatusRef.current[signal.commodity];
+      const curr  = signal.status;
       const label = COMMODITY_META[signal.commodity]?.label || signal.commodity;
 
-      // Only alert on upgrades: quiet→watch, quiet→fired, watch→fired
       if (prev && prev !== curr) {
         if (curr === "fired") {
           new Notification(`⚡ IGNITION — ${label}`, {
-            body: `${signal.direction?.toUpperCase() || "SIGNAL"} · Price ₹${signal.current_price?.toLocaleString("en-IN")} · Score ${signal.signal_score}%\n${signal.scan_note}`,
+            body: `${signal.direction?.toUpperCase() || "SIGNAL"} · ₹${signal.current_price?.toLocaleString("en-IN")} · Score ${signal.signal_score}%\nSession OI ${signal.cumulative_oi_pct > 0 ? "+" : ""}${signal.cumulative_oi_pct?.toFixed(1)}% (${signal.cumulative_direction})`,
             icon: "/favicon.ico",
-            tag: `mcx-${signal.commodity}`,  // prevents duplicate stacking
+            tag: `mcx-${signal.commodity}`,
           });
         } else if (curr === "watch" && prev === "quiet") {
           new Notification(`👀 Watch — ${label}`, {
-            body: `${signal.pillars_met}/3 pillars met · Price ₹${signal.current_price?.toLocaleString("en-IN")}`,
+            body: `${signal.pillars_met}/3 pillars · ₹${signal.current_price?.toLocaleString("en-IN")} · Session OI ${signal.cumulative_oi_pct > 0 ? "+" : ""}${signal.cumulative_oi_pct?.toFixed(1)}% (${signal.cumulative_direction})`,
             icon: "/favicon.ico",
             tag: `mcx-${signal.commodity}`,
           });
         }
       }
-
       prevStatusRef.current[signal.commodity] = curr;
     });
   }, [signals]);
 }
-// ──────────────────────────────────────────────────────────────────────────
+
+function CumulativeBar({ pct, direction }: { pct: number; direction: string }) {
+  const color = direction === "bullish" ? "#1D9E75"
+    : direction === "bearish" ? "#C0392B"
+    : "var(--color-text-tertiary)";
+
+  const dirEmoji = direction === "bullish" ? "▲" : direction === "bearish" ? "▼" : "—";
+  const absPct = Math.abs(pct);
+  const barWidth = Math.min(absPct * 5, 100); // scale: 20% OI change = full bar
+
+  return (
+    <div style={{
+      background: "var(--color-background-secondary)",
+      borderRadius: 8, padding: "8px 12px",
+      display: "flex", alignItems: "center", gap: 12,
+    }}>
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 2 }}>
+          Session OI (positional)
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 500, color, display: "flex", alignItems: "center", gap: 4 }}>
+          <span>{dirEmoji}</span>
+          <span>{pct > 0 ? "+" : ""}{pct?.toFixed(1)}%</span>
+          <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-tertiary)", marginLeft: 2 }}>
+            since open · {direction}
+          </span>
+        </div>
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ height: 4, background: "var(--color-background-tertiary)", borderRadius: 99, overflow: "hidden" }}>
+          <div style={{
+            height: "100%", borderRadius: 99,
+            width: `${barWidth}%`,
+            background: color,
+            transition: "width 0.5s ease",
+          }} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function SignalCard({ signal }: { signal: Signal }) {
-  const meta = COMMODITY_META[signal.commodity] || { label: signal.commodity };
+  const meta    = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";
   const isWatch = signal.status === "watch";
 
@@ -130,16 +166,13 @@ function SignalCard({ signal }: { signal: Signal }) {
     border: isFired ? "2px solid #1D9E75"
       : isWatch ? "2px solid #BA7517"
       : "0.5px solid var(--color-border-tertiary)",
-    borderRadius: 12,
-    padding: "1rem 1.1rem",
-    marginBottom: 10,
+    borderRadius: 12, padding: "1rem 1.1rem", marginBottom: 10,
     transition: "border 0.3s ease",
   };
 
   const badgeStyle: React.CSSProperties = isFired
     ? { background: "#E1F5EE", color: "#085041" }
-    : isWatch
-    ? { background: "#FAEEDA", color: "#633806" }
+    : isWatch ? { background: "#FAEEDA", color: "#633806" }
     : { background: "var(--color-background-tertiary)", color: "var(--color-text-secondary)" };
 
   const badgeText = isFired
@@ -147,17 +180,16 @@ function SignalCard({ signal }: { signal: Signal }) {
     : isWatch ? `👀 ${signal.pillars_met}/3 — watch` : "quiet";
 
   const pillarBg: React.CSSProperties = {
-    background: "var(--color-background-secondary)",
-    borderRadius: 8, padding: "8px 10px",
+    background: "var(--color-background-secondary)", borderRadius: 8, padding: "8px 10px",
   };
 
   return (
     <div style={cardStyle}>
+
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
-          <span style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)" }}>
-            {meta.label}
-          </span>
+          <span style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)" }}>{meta.label}</span>
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginLeft: 8 }}>
             {signal.expiry_date} · ATM {signal.atm_strike?.toLocaleString("en-IN")}
           </span>
@@ -172,7 +204,8 @@ function SignalCard({ signal }: { signal: Signal }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: signal.status !== "quiet" ? 10 : 0 }}>
+      {/* 3 scalp pillars */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 8 }}>
         <div style={pillarBg}>
           <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 3 }}>OI change (5min)</div>
           <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", display: "flex", alignItems: "center" }}>
@@ -207,8 +240,15 @@ function SignalCard({ signal }: { signal: Signal }) {
         </div>
       </div>
 
+      {/* Cumulative OI — positional view */}
+      <CumulativeBar
+        pct={signal.cumulative_oi_pct || 0}
+        direction={signal.cumulative_direction || "neutral"}
+      />
+
+      {/* Note + score bar */}
       {(isFired || isWatch) && (
-        <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10 }}>
+        <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10, marginTop: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: 0, flex: 1, lineHeight: 1.5 }}>
               {signal.scan_note}
@@ -219,10 +259,8 @@ function SignalCard({ signal }: { signal: Signal }) {
               </div>
               <div style={{ height: 5, background: "var(--color-background-tertiary)", borderRadius: 99, overflow: "hidden" }}>
                 <div style={{
-                  height: "100%", borderRadius: 99,
-                  width: `${signal.signal_score}%`,
-                  background: isFired ? "#1D9E75" : "#BA7517",
-                  transition: "width 0.5s ease",
+                  height: "100%", borderRadius: 99, width: `${signal.signal_score}%`,
+                  background: isFired ? "#1D9E75" : "#BA7517", transition: "width 0.5s ease",
                 }} />
               </div>
             </div>
@@ -251,7 +289,6 @@ export default function TrendIgnitionPage() {
   const [alertsOn, setAlertsOn]         = useState(false);
   const [alertPermission, setAlertPermission] = useState<string>("default");
 
-  // Wire up alert system
   useAlerts(signals);
 
   const fetchSignals = useCallback(async (silent = false) => {
@@ -279,13 +316,10 @@ export default function TrendIgnitionPage() {
   }, [fetchSignals]);
 
   useEffect(() => {
-    const tick = setInterval(() => {
-      setCountdown(c => c > 0 ? c - 1 : REFRESH_INTERVAL);
-    }, 1000);
+    const tick = setInterval(() => setCountdown(c => c > 0 ? c - 1 : REFRESH_INTERVAL), 1000);
     return () => clearInterval(tick);
   }, []);
 
-  // Check notification permission state
   useEffect(() => {
     if ("Notification" in window) {
       setAlertPermission(Notification.permission);
@@ -312,12 +346,10 @@ export default function TrendIgnitionPage() {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem 1rem" }}>
 
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, color: "var(--color-text-primary)", display: "flex", alignItems: "center" }}>
-            <LiveDot />
-            Trend ignition
+            <LiveDot />Trend ignition
           </h1>
           <p style={{ fontSize: 13, color: "var(--color-text-tertiary)", margin: "4px 0 0" }}>
             MCX · 5-min scan · next refresh in {countdown}s
@@ -337,77 +369,46 @@ export default function TrendIgnitionPage() {
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
             {lastUpdate ? timeAgo(lastUpdate.toISOString()) : "—"}
           </span>
-
-          {/* Alert toggle button */}
-          <button
-            onClick={handleAlertToggle}
-            title={alertsOn ? "Alerts on — click to mute" : "Enable browser alerts"}
+          <button onClick={handleAlertToggle}
             style={{
               fontSize: 12, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
-              border: alertsOn
-                ? "0.5px solid #1D9E75"
-                : "0.5px solid var(--color-border-secondary)",
+              border: alertsOn ? "0.5px solid #1D9E75" : "0.5px solid var(--color-border-secondary)",
               background: alertsOn ? "#E1F5EE" : "transparent",
               color: alertsOn ? "#085041" : "var(--color-text-secondary)",
-            }}
-          >
+            }}>
             {alertsOn ? "🔔 alerts on" : "🔕 alerts off"}
           </button>
-
-          <button
-            onClick={() => fetchSignals()}
-            disabled={isRefreshing}
+          <button onClick={() => fetchSignals()} disabled={isRefreshing}
             style={{
               fontSize: 12, padding: "4px 12px", borderRadius: 8, cursor: "pointer",
               border: "0.5px solid var(--color-border-secondary)",
               background: "transparent", color: "var(--color-text-primary)",
               opacity: isRefreshing ? 0.5 : 1,
-            }}
-          >
+            }}>
             {isRefreshing ? "..." : "refresh"}
           </button>
         </div>
       </div>
 
-      {/* Countdown progress bar */}
+      {/* Progress bar */}
       <div style={{ height: 2, background: "var(--color-background-secondary)", borderRadius: 99, marginBottom: 16, overflow: "hidden" }}>
-        <div style={{
-          height: "100%", borderRadius: 99,
-          width: `${progressPct}%`,
-          background: "var(--color-border-info, #185FA5)",
-          transition: "width 1s linear",
-        }} />
+        <div style={{ height: "100%", borderRadius: 99, width: `${progressPct}%`, background: "var(--color-border-info, #185FA5)", transition: "width 1s linear" }} />
       </div>
 
-      {/* Alert permission banner */}
       {alertPermission === "denied" && (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "8px 14px", marginBottom: 12, fontSize: 12, color: "var(--color-text-secondary)" }}>
           🔕 Browser notifications blocked — enable in browser settings to get alerts
         </div>
       )}
 
-      {/* WIP banner */}
-      <div style={{
-        background: "#FAEEDA", borderRadius: 8,
-        padding: "8px 14px", marginBottom: 16,
-        fontSize: 12, color: "#633806",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
+      <div style={{ background: "#FAEEDA", borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: "#633806", display: "flex", alignItems: "center", gap: 8 }}>
         <span>⚠</span>
         <span>Work in progress — signals are live but thresholds are being calibrated. Do not trade solely on these signals.</span>
       </div>
 
-      {loading && (
-        <div style={{ textAlign: "center", padding: "3rem", color: "var(--color-text-secondary)", fontSize: 14 }}>
-          Loading signals...
-        </div>
-      )}
+      {loading && <div style={{ textAlign: "center", padding: "3rem", color: "var(--color-text-secondary)", fontSize: 14 }}>Loading signals...</div>}
 
-      {error && (
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "12px 16px", color: "#A32D2D", fontSize: 13, marginBottom: 12 }}>
-          Error: {error}
-        </div>
-      )}
+      {error && <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "12px 16px", color: "#A32D2D", fontSize: 13, marginBottom: 12 }}>Error: {error}</div>}
 
       {!loading && signals.map(signal => <SignalCard key={signal.commodity} signal={signal} />)}
 

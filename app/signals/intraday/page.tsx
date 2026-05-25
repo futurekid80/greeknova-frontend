@@ -82,7 +82,7 @@ export default function IntradaySignalLog() {
   const [loading, setLoading] = useState(true)
   const [biasFilter, setBiasFilter]     = useState<'all'|'BULLISH'|'BEARISH'>('all')
   const [sigFilter, setSigFilter]       = useState<'all'|'LONG_BUILDUP'|'SHORT_BUILDUP'|'SHORT_COVERING'|'LONG_UNWINDING'>('all')
-  const [minPersist, setMinPersist]     = useState(2)
+  const [minPersist, setMinPersist]     = useState(1)
   const [countdown, setCountdown]       = useState(300)
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)

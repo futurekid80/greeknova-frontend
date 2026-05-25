@@ -167,6 +167,15 @@ export default function PositionalRadar() {
           </div>
         )}
 
+        {/* Expiry week warning */}
+        {data && Math.ceil((new Date(data.expiry).getTime() - Date.now()) / 86400000) <= 2 && (
+          <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl px-4 py-3 mb-5">
+            <p className="text-xs text-amber-400">
+              <span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {data.expiry} expiry. Conviction signals will rebuild from Wednesday when June series begins.
+            </p>
+          </div>
+        )}
+
         {/* Conviction legend */}
         <div className="bg-gray-900/20 border border-gray-800/40 rounded-xl px-4 py-3 mb-5">
           <p className="text-xs text-gray-400 font-semibold mb-2">Signal conviction levels:</p>

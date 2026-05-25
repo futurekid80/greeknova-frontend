@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 const MCX_ENABLED = process.env.NEXT_PUBLIC_MCX_ENABLED === "true";
-const REFRESH_INTERVAL = 30; // seconds
+const REFRESH_INTERVAL = 30;
 
 interface Signal {
   commodity: string;
@@ -48,12 +48,11 @@ function PillarDot({ passed }: { passed: boolean }) {
     <span style={{
       display: "inline-block", width: 8, height: 8,
       borderRadius: "50%", marginRight: 4, flexShrink: 0,
-      background: passed ? "var(--color-success, #1D9E75)" : "var(--color-border-secondary, #888)",
+      background: passed ? "#1D9E75" : "var(--color-border-secondary, #888)",
     }} />
   );
 }
 
-// Animated live pulse dot
 function LiveDot() {
   return (
     <span style={{ position: "relative", display: "inline-flex", alignItems: "center", marginRight: 6 }}>
@@ -72,6 +71,54 @@ function LiveDot() {
     </span>
   );
 }
+
+// ── Alert system ───────────────────────────────────────────────────────────
+function useAlerts(signals: Signal[]) {
+  const prevStatusRef = useRef<Record<string, string>>({});
+  const permissionRef = useRef<NotificationPermission>("default");
+
+  // Request permission once on mount
+  useEffect(() => {
+    if ("Notification" in window) {
+      Notification.requestPermission().then(p => {
+        permissionRef.current = p;
+      });
+    }
+  }, []);
+
+  // Watch for status changes and fire alerts
+  useEffect(() => {
+    if (!signals.length) return;
+    if (!("Notification" in window)) return;
+    if (permissionRef.current !== "granted") return;
+
+    signals.forEach(signal => {
+      const prev = prevStatusRef.current[signal.commodity];
+      const curr = signal.status;
+      const label = COMMODITY_META[signal.commodity]?.label || signal.commodity;
+
+      // Only alert on upgrades: quiet→watch, quiet→fired, watch→fired
+      if (prev && prev !== curr) {
+        if (curr === "fired") {
+          new Notification(`⚡ IGNITION — ${label}`, {
+            body: `${signal.direction?.toUpperCase() || "SIGNAL"} · Price ₹${signal.current_price?.toLocaleString("en-IN")} · Score ${signal.signal_score}%\n${signal.scan_note}`,
+            icon: "/favicon.ico",
+            tag: `mcx-${signal.commodity}`,  // prevents duplicate stacking
+          });
+        } else if (curr === "watch" && prev === "quiet") {
+          new Notification(`👀 Watch — ${label}`, {
+            body: `${signal.pillars_met}/3 pillars met · Price ₹${signal.current_price?.toLocaleString("en-IN")}`,
+            icon: "/favicon.ico",
+            tag: `mcx-${signal.commodity}`,
+          });
+        }
+      }
+
+      prevStatusRef.current[signal.commodity] = curr;
+    });
+  }, [signals]);
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 function SignalCard({ signal }: { signal: Signal }) {
   const meta = COMMODITY_META[signal.commodity] || { label: signal.commodity };
@@ -106,7 +153,6 @@ function SignalCard({ signal }: { signal: Signal }) {
 
   return (
     <div style={cardStyle}>
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
           <span style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)" }}>
@@ -126,7 +172,6 @@ function SignalCard({ signal }: { signal: Signal }) {
         </div>
       </div>
 
-      {/* 3 pillars */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: signal.status !== "quiet" ? 10 : 0 }}>
         <div style={pillarBg}>
           <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 3 }}>OI change (5min)</div>
@@ -162,7 +207,6 @@ function SignalCard({ signal }: { signal: Signal }) {
         </div>
       </div>
 
-      {/* Note + score bar */}
       {(isFired || isWatch) && (
         <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -198,12 +242,17 @@ export default function TrendIgnitionPage() {
     );
   }
 
-  const [signals, setSignals]       = useState<Signal[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState<string | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [countdown, setCountdown]   = useState(REFRESH_INTERVAL);
+  const [signals, setSignals]           = useState<Signal[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate]     = useState<Date | null>(null);
+  const [countdown, setCountdown]       = useState(REFRESH_INTERVAL);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [alertsOn, setAlertsOn]         = useState(false);
+  const [alertPermission, setAlertPermission] = useState<string>("default");
+
+  // Wire up alert system
+  useAlerts(signals);
 
   const fetchSignals = useCallback(async (silent = false) => {
     if (!silent) setIsRefreshing(true);
@@ -223,14 +272,12 @@ export default function TrendIgnitionPage() {
     }
   }, []);
 
-  // Auto refresh every 30 seconds
   useEffect(() => {
     fetchSignals();
     const interval = setInterval(() => fetchSignals(true), REFRESH_INTERVAL * 1000);
     return () => clearInterval(interval);
   }, [fetchSignals]);
 
-  // Countdown timer
   useEffect(() => {
     const tick = setInterval(() => {
       setCountdown(c => c > 0 ? c - 1 : REFRESH_INTERVAL);
@@ -238,10 +285,28 @@ export default function TrendIgnitionPage() {
     return () => clearInterval(tick);
   }, []);
 
+  // Check notification permission state
+  useEffect(() => {
+    if ("Notification" in window) {
+      setAlertPermission(Notification.permission);
+      setAlertsOn(Notification.permission === "granted");
+    }
+  }, []);
+
+  function handleAlertToggle() {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") {
+      setAlertsOn(v => !v);
+    } else {
+      Notification.requestPermission().then(p => {
+        setAlertPermission(p);
+        setAlertsOn(p === "granted");
+      });
+    }
+  }
+
   const firedCount = signals.filter(s => s.status === "fired").length;
   const watchCount = signals.filter(s => s.status === "watch").length;
-
-  // Progress bar width for countdown
   const progressPct = ((REFRESH_INTERVAL - countdown) / REFRESH_INTERVAL) * 100;
 
   return (
@@ -272,6 +337,23 @@ export default function TrendIgnitionPage() {
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
             {lastUpdate ? timeAgo(lastUpdate.toISOString()) : "—"}
           </span>
+
+          {/* Alert toggle button */}
+          <button
+            onClick={handleAlertToggle}
+            title={alertsOn ? "Alerts on — click to mute" : "Enable browser alerts"}
+            style={{
+              fontSize: 12, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
+              border: alertsOn
+                ? "0.5px solid #1D9E75"
+                : "0.5px solid var(--color-border-secondary)",
+              background: alertsOn ? "#E1F5EE" : "transparent",
+              color: alertsOn ? "#085041" : "var(--color-text-secondary)",
+            }}
+          >
+            {alertsOn ? "🔔 alerts on" : "🔕 alerts off"}
+          </button>
+
           <button
             onClick={() => fetchSignals()}
             disabled={isRefreshing}
@@ -296,6 +378,13 @@ export default function TrendIgnitionPage() {
           transition: "width 1s linear",
         }} />
       </div>
+
+      {/* Alert permission banner */}
+      {alertPermission === "denied" && (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "8px 14px", marginBottom: 12, fontSize: 12, color: "var(--color-text-secondary)" }}>
+          🔕 Browser notifications blocked — enable in browser settings to get alerts
+        </div>
+      )}
 
       {/* WIP banner */}
       <div style={{

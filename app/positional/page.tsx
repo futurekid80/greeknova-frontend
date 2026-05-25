@@ -16,6 +16,8 @@ interface RadarResult {
   oi_chg_pct: number; vol_chg_pct: number; vol_series_chg: number; vol_avg_7d: number; cmp_chg_pct: number
   oi_series: number[]; vol_series: number[]; cmp_series: number[]
   date_labels: string[]; cmp: number; series_days: number
+  conviction_level: string; conviction_label: string; conviction_emoji: string; conviction_color: string; conviction_rank: number
+  ignition: boolean; fut_signal_today: string | null
 }
 
 interface RadarData {
@@ -26,6 +28,7 @@ interface RadarData {
     long_buildup: number; short_buildup: number
     short_covering: number; long_unwinding: number
     high_consistency: number; triple_confirm: number; accelerating: number
+    conviction: number; ignition: number; building: number; radar: number
   }
   results: RadarResult[]
 }
@@ -35,6 +38,13 @@ const SIGNAL_META: Record<string, { color: string; bg: string; border: string; i
   SHORT_BUILDUP:  { color: 'text-red-400',     bg: 'bg-red-950/30',     border: 'border-red-800/40',     icon: '🐻', label: 'Short Buildup' },
   SHORT_COVERING: { color: 'text-cyan-400',    bg: 'bg-cyan-950/30',    border: 'border-cyan-800/40',    icon: '🔄', label: 'Short Covering' },
   LONG_UNWINDING: { color: 'text-orange-400',  bg: 'bg-orange-950/30',  border: 'border-orange-800/40',  icon: '⚠️', label: 'Long Unwinding' },
+}
+
+const CONVICTION_META: Record<string, { bg: string; text: string; border: string }> = {
+  RADAR:      { bg: 'bg-blue-950',    text: 'text-blue-400',    border: 'border-blue-800/50' },
+  BUILDING:   { bg: 'bg-yellow-950',  text: 'text-yellow-400',  border: 'border-yellow-800/50' },
+  CONVICTION: { bg: 'bg-orange-950',  text: 'text-orange-400',  border: 'border-orange-800/50' },
+  IGNITION:   { bg: 'bg-emerald-950', text: 'text-emerald-400', border: 'border-emerald-800/50' },
 }
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
@@ -48,10 +58,7 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
   return (
     <svg width={w} height={h} className="overflow-visible">
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
-      <circle
-        cx={(data.length-1)/(data.length-1)*w}
-        cy={h-((data[data.length-1]-min)/range)*h}
-        r="2.5" fill={color}/>
+      <circle cx={(data.length-1)/(data.length-1)*w} cy={h-((data[data.length-1]-min)/range)*h} r="2.5" fill={color}/>
     </svg>
   )
 }
@@ -72,16 +79,25 @@ function ConsistencyBar({ pct, label }: { pct: number; label: string }) {
   )
 }
 
+function ConvictionBadge({ level, label, emoji }: { level: string; label: string; emoji: string }) {
+  const meta = CONVICTION_META[level] || CONVICTION_META['RADAR']
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 ${meta.bg} ${meta.text} border ${meta.border} rounded font-bold`}>
+      {emoji} {label}
+    </span>
+  )
+}
+
 export default function PositionalRadar() {
-  const [data, setData]         = useState<RadarData | null>(null)
-  const [loading, setLoading]   = useState(true)
+  const [data, setData]           = useState<RadarData | null>(null)
+  const [loading, setLoading]     = useState(true)
   const [minConsec, setMinConsec] = useState(0)
-  const [signalFilter, setSignalFilter] = useState('all')
-  const [biasFilter, setBiasFilter]     = useState<'all'|'BULLISH'|'BEARISH'>('all')
-  const [consisFilter, setConsisFilter] = useState('all')
-  const [tripleOnly, setTripleOnly]     = useState(false)
-  const [accelOnly, setAccelOnly]       = useState(false)
-  const [typeFilter, setTypeFilter]     = useState<'all'|'index'|'stocks'>('all')
+  const [signalFilter, setSignalFilter]   = useState('all')
+  const [biasFilter, setBiasFilter]       = useState<'all'|'BULLISH'|'BEARISH'>('all')
+  const [consisFilter, setConsisFilter]   = useState('all')
+  const [convictionFilter, setConvictionFilter] = useState('all')
+  const [accelOnly, setAccelOnly]         = useState(false)
+  const [typeFilter, setTypeFilter]       = useState<'all'|'index'|'stocks'>('all')
 
   const fetchData = useCallback(async (consec?: number) => {
     setLoading(true)
@@ -106,8 +122,8 @@ export default function PositionalRadar() {
     .filter(r => signalFilter === 'all' || r.signal === signalFilter)
     .filter(r => biasFilter === 'all' || r.bias === biasFilter)
     .filter(r => consisFilter === 'all' || r.consistency_label === consisFilter)
-    .filter(r => !tripleOnly || r.triple_confirm)
-    .filter(r => !accelOnly  || r.accelerating)
+    .filter(r => convictionFilter === 'all' || r.conviction_level === convictionFilter)
+    .filter(r => !accelOnly || r.accelerating)
 
   const s = data?.summary
 
@@ -121,7 +137,7 @@ export default function PositionalRadar() {
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">📈 Positional Radar</h1>
             <p className="text-gray-500 text-sm">
-              Monthly expiry series analysis · Consistency scoring · OI acceleration detection
+              Monthly expiry series · Options OI buildup · FUT confirmation · Informational only
             </p>
           </div>
           <button onClick={() => fetchData()} disabled={loading}
@@ -151,15 +167,27 @@ export default function PositionalRadar() {
           </div>
         )}
 
-        {/* How it works */}
+        {/* Conviction legend */}
         <div className="bg-gray-900/20 border border-gray-800/40 rounded-xl px-4 py-3 mb-5">
-          <p className="text-xs text-gray-500 leading-relaxed">
-            <span className="text-gray-300 font-semibold">Two ways to use this: </span>
-            <span className="text-amber-400">Active streak</span> = use "Active 3d/5d/7d" buttons → stocks where signal is LIVE right now going into tomorrow ·
-            <span className="text-emerald-400"> Series consistency</span> = use "HIGH" filter → stocks where signal held 70%+ of all days this series (best overall trend) ·
-            <span className="text-purple-400"> ⚡ Triple</span> = OI + Price + Volume all rising ·
-            <span className="text-blue-400"> 🚀 Accelerating</span> = OI building faster recently than earlier in series
-          </p>
+          <p className="text-xs text-gray-400 font-semibold mb-2">Signal conviction levels:</p>
+          <div className="flex items-center gap-6 flex-wrap">
+            {[
+              { level: 'RADAR',      emoji: '🔵', label: 'Radar',      desc: 'Early signal, 1-2 days. Watch only.' },
+              { level: 'BUILDING',   emoji: '🟡', label: 'Building',   desc: '2-3 days consecutive. Add to watchlist.' },
+              { level: 'CONVICTION', emoji: '🟠', label: 'Conviction', desc: '3+ days + volume surge + accelerating. High confidence.' },
+              { level: 'IGNITION',   emoji: '🟢', label: 'Ignition',   desc: 'Conviction + FUT confirming same direction today. Execute.' },
+            ].map(({ level, emoji, label, desc }) => {
+              const meta = CONVICTION_META[level]
+              return (
+                <div key={level} className="flex items-center gap-2">
+                  <span className={`text-[10px] px-1.5 py-0.5 ${meta.bg} ${meta.text} border ${meta.border} rounded font-bold`}>
+                    {emoji} {label}
+                  </span>
+                  <span className="text-[10px] text-gray-600">{desc}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         {/* PRIMARY FILTER — Consecutive days */}
@@ -180,22 +208,23 @@ export default function PositionalRadar() {
                   ? 'bg-white text-gray-900 border-white'
                   : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
                 <div>{label}</div>
-                <div className={`text-xs font-normal mt-0.5 ${minConsec===val ? 'text-gray-600' : 'text-gray-600'}`}>{sub}</div>
+                <div className="text-xs font-normal mt-0.5 text-gray-600">{sub}</div>
               </button>
             ))}
           </div>
         </div>
 
         {/* Summary boxes */}
-        <div className="grid grid-cols-7 gap-2 mb-5">
+        <div className="grid grid-cols-8 gap-2 mb-5">
           {[
-            { label: 'Total',          val: data?.total || 0,          color: 'text-white',        sub: 'signals' },
-            { label: '🐂 Long Buildup', val: s?.long_buildup   || 0,   color: 'text-emerald-400',  sub: 'OI+price ↑' },
-            { label: '🐻 Short Buildup',val: s?.short_buildup  || 0,   color: 'text-red-400',      sub: 'OI↑ price↓' },
-            { label: '🔄 Short Cover',  val: s?.short_covering || 0,   color: 'text-cyan-400',     sub: 'OI↓ price↑' },
-            { label: '✅ High Consist', val: s?.high_consistency|| 0,  color: 'text-emerald-400',  sub: '70%+ days' },
-            { label: '⚡ Triple',       val: s?.triple_confirm || 0,   color: 'text-purple-400',   sub: 'OI+Price+Vol' },
-            { label: '🚀 Accelerating', val: s?.accelerating   || 0,   color: 'text-blue-400',     sub: 'OI speeding up' },
+            { label: 'Total',        val: data?.total || 0,         color: 'text-white',        sub: 'signals' },
+            { label: '🟢 Ignition',  val: s?.ignition || 0,         color: 'text-emerald-400',  sub: 'FUT confirmed' },
+            { label: '🟠 Conviction',val: s?.conviction || 0,        color: 'text-orange-400',   sub: '3d+ triple' },
+            { label: '🟡 Building',  val: s?.building || 0,          color: 'text-yellow-400',   sub: '2-3d consec' },
+            { label: '🔵 Radar',     val: s?.radar || 0,             color: 'text-blue-400',     sub: 'early signal' },
+            { label: '✅ High',      val: s?.high_consistency || 0,  color: 'text-emerald-400',  sub: '70%+ days' },
+            { label: '🐂 Long',      val: s?.long_buildup || 0,      color: 'text-emerald-400',  sub: 'buildup' },
+            { label: '🐻 Short',     val: s?.short_buildup || 0,     color: 'text-red-400',      sub: 'buildup' },
           ].map(({ label, val, color, sub }) => (
             <div key={label} className="bg-gray-900/30 border border-gray-800 rounded-xl p-3">
               <p className="text-[10px] text-gray-500 mb-1">{label}</p>
@@ -244,22 +273,37 @@ export default function PositionalRadar() {
             </button>
           ))}
           <div className="w-px h-5 bg-gray-800 mx-1"/>
-          <button onClick={() => setTripleOnly(t => !t)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${tripleOnly ? 'bg-purple-950 text-purple-400 border-purple-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-            ⚡ Triple Only
-          </button>
+          {[
+            { val: 'all',        label: 'All Levels' },
+            { val: 'IGNITION',   label: '🟢 Ignition' },
+            { val: 'CONVICTION', label: '🟠 Conviction' },
+            { val: 'BUILDING',   label: '🟡 Building' },
+            { val: 'RADAR',      label: '🔵 Radar' },
+          ].map(({ val, label }) => (
+            <button key={val} onClick={() => setConvictionFilter(val)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${convictionFilter===val
+                ? val==='IGNITION'   ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                : val==='CONVICTION' ? 'bg-orange-950 text-orange-400 border-orange-800'
+                : val==='BUILDING'   ? 'bg-yellow-950 text-yellow-400 border-yellow-800'
+                : val==='RADAR'      ? 'bg-blue-950 text-blue-400 border-blue-800'
+                : 'bg-white text-gray-900 border-white'
+                : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              {label}
+            </button>
+          ))}
+          <div className="w-px h-5 bg-gray-800 mx-1"/>
           <button onClick={() => setAccelOnly(a => !a)}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${accelOnly ? 'bg-blue-950 text-blue-400 border-blue-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
             🚀 Accelerating Only
           </button>
-          <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setTripleOnly(false); setAccelOnly(false); setTypeFilter('all') }}
+          <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setTypeFilter('all') }}
             className="text-xs text-gray-600 hover:text-gray-400 transition-colors ml-1">
             Clear filters
           </button>
         </div>
 
         <p className="text-xs text-gray-600 mb-4">
-          {results.length} signals · {minConsec > 0 ? `Active ${minConsec}d+ streak filter` : 'showing all signals — use HIGH consistency or Active streak filters to narrow down'} · May series · Informational only
+          {results.length} signals · {minConsec > 0 ? `Active ${minConsec}d+ streak filter` : 'showing all signals'} · May series · Informational only
         </p>
 
         {/* Table */}
@@ -272,11 +316,7 @@ export default function PositionalRadar() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-900/60 border-b border-gray-800">
-                  {[
-                    'Symbol', 'Signal', 'Consistency', 'Consec', 
-                    'OI (Series)', 'Volume (vs 7d avg)', 'Price (Series)',
-                    'OI Trend', 'Price Trend', 'Deep Dive'
-                  ].map((h, i) => (
+                  {['Symbol', 'Signal', 'Consistency', 'Consec', 'OI (Series)', 'Volume (vs 7d avg)', 'Price (Series)', 'OI Trend', 'Price Trend', 'Deep Dive'].map((h, i) => (
                     <th key={h} className={`text-xs font-semibold text-gray-500 px-3 py-3.5 ${i <= 3 ? 'text-left' : 'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5 text-left':''}`}>
                       {h}
                     </th>
@@ -288,10 +328,14 @@ export default function PositionalRadar() {
                   const m        = SIGNAL_META[r.signal]
                   const oiColor  = r.oi_chg_pct  > 0 ? '#10b981' : '#ef4444'
                   const cmpColor = r.cmp_chg_pct > 0 ? '#10b981' : '#ef4444'
-                  const rowBg    = r.triple_confirm && r.accelerating
-                    ? 'bg-purple-950/15 border-l-2 border-l-purple-700'
-                    : r.triple_confirm ? 'bg-purple-950/8'
-                    : r.accelerating   ? 'bg-blue-950/8 border-l-2 border-l-blue-800'
+                  const rowBg    = r.ignition
+                    ? 'bg-emerald-950/15 border-l-2 border-l-emerald-700'
+                    : r.conviction_level === 'CONVICTION' && r.accelerating
+                    ? 'bg-orange-950/15 border-l-2 border-l-orange-700'
+                    : r.conviction_level === 'CONVICTION'
+                    ? 'bg-orange-950/10'
+                    : r.accelerating
+                    ? 'bg-blue-950/8 border-l-2 border-l-blue-800'
                     : i % 2 === 0 ? '' : 'bg-gray-900/20'
 
                   return (
@@ -301,9 +345,7 @@ export default function PositionalRadar() {
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-black text-white">{r.symbol}</span>
-                          {r.triple_confirm && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-purple-950 text-purple-400 border border-purple-800/50 rounded">⚡ Triple</span>
-                          )}
+                          <ConvictionBadge level={r.conviction_level} label={r.conviction_label} emoji={r.conviction_emoji}/>
                           {r.accelerating && (
                             <span className="text-[10px] px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-800/50 rounded">🚀 Accel</span>
                           )}
@@ -312,6 +354,9 @@ export default function PositionalRadar() {
                           )}
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5">₹{r.cmp.toLocaleString('en-IN')}</p>
+                        {r.ignition && r.fut_signal_today && (
+                          <p className="text-[10px] text-emerald-500 mt-0.5">⚡ FUT: {r.fut_signal_today.replace('_', ' ')}</p>
+                        )}
                       </td>
 
                       {/* Signal */}
@@ -332,9 +377,7 @@ export default function PositionalRadar() {
                         <p className={`text-lg font-black ${r.consec_days >= 5 ? 'text-emerald-400' : r.consec_days >= 3 ? 'text-amber-400' : r.consec_days >= 1 ? 'text-white' : 'text-orange-400'}`}>
                           {r.consec_days > 0 ? `${r.consec_days}d` : '—'}
                         </p>
-                        <p className="text-[10px] text-gray-600">
-                          {r.consec_days > 0 ? 'in a row' : 'broke last day'}
-                        </p>
+                        <p className="text-[10px] text-gray-600">{r.consec_days > 0 ? 'in a row' : 'broke last day'}</p>
                       </td>
 
                       {/* OI */}
@@ -353,7 +396,9 @@ export default function PositionalRadar() {
                           {r.vol_chg_pct > 0 ? '+' : ''}{r.vol_chg_pct}%
                         </p>
                         <p className="text-[10px] text-gray-600">vs 7d avg ({r.vol_avg_7d}L)</p>
-                        {r.triple_confirm && <p className="text-[10px] text-purple-400">⚡ {r.vol_consec}d consec</p>}
+                        {r.conviction_level === 'CONVICTION' && (
+                          <p className="text-[10px] text-orange-400">⚡ {r.vol_consec}d consec</p>
+                        )}
                       </td>
 
                       {/* Price */}
@@ -393,19 +438,13 @@ export default function PositionalRadar() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
-            <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-4 text-3xl">
-              📈
-            </div>
+            <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-4 text-3xl">📈</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">No signals match</h3>
             <p className="text-sm text-gray-600 mb-3">
-              {minConsec > 0
-                ? `No stocks had ${minConsec}+ consecutive days of this signal. Try reducing the consecutive days filter.`
-                : 'Try changing the filters above.'}
+              {minConsec > 0 ? `No stocks had ${minConsec}+ consecutive days of this signal.` : 'Try changing the filters above.'}
             </p>
-            <button onClick={() => { handleConsec(0); setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setTripleOnly(false); setAccelOnly(false) }}
-              className="text-xs text-emerald-400 hover:text-emerald-300">
-              Reset all filters
-            </button>
+            <button onClick={() => { handleConsec(0); setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false) }}
+              className="text-xs text-emerald-400 hover:text-emerald-300">Reset all filters</button>
           </div>
         )}
 

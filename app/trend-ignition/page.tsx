@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 const MCX_ENABLED = process.env.NEXT_PUBLIC_MCX_ENABLED === "true";
+const REFRESH_INTERVAL = 30; // seconds
 
 interface Signal {
   commodity: string;
@@ -52,6 +53,26 @@ function PillarDot({ passed }: { passed: boolean }) {
   );
 }
 
+// Animated live pulse dot
+function LiveDot() {
+  return (
+    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", marginRight: 6 }}>
+      <span style={{
+        width: 8, height: 8, borderRadius: "50%",
+        background: "#1D9E75", display: "inline-block",
+        animation: "pulse 2s infinite",
+      }} />
+      <style>{`
+        @keyframes pulse {
+          0%   { box-shadow: 0 0 0 0 rgba(29,158,117,0.6); }
+          70%  { box-shadow: 0 0 0 6px rgba(29,158,117,0); }
+          100% { box-shadow: 0 0 0 0 rgba(29,158,117,0); }
+        }
+      `}</style>
+    </span>
+  );
+}
+
 function SignalCard({ signal }: { signal: Signal }) {
   const meta = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";
@@ -59,14 +80,13 @@ function SignalCard({ signal }: { signal: Signal }) {
 
   const cardStyle: React.CSSProperties = {
     background: "var(--color-background-primary)",
-    border: isFired
-      ? "2px solid #1D9E75"
-      : isWatch
-      ? "2px solid #BA7517"
+    border: isFired ? "2px solid #1D9E75"
+      : isWatch ? "2px solid #BA7517"
       : "0.5px solid var(--color-border-tertiary)",
     borderRadius: 12,
     padding: "1rem 1.1rem",
     marginBottom: 10,
+    transition: "border 0.3s ease",
   };
 
   const badgeStyle: React.CSSProperties = isFired
@@ -76,13 +96,12 @@ function SignalCard({ signal }: { signal: Signal }) {
     : { background: "var(--color-background-tertiary)", color: "var(--color-text-secondary)" };
 
   const badgeText = isFired
-    ? `ignition fired${signal.direction ? ` — ${signal.direction}` : ""}`
-    : isWatch ? `${signal.pillars_met}/3 — watch` : "quiet";
+    ? `⚡ ignition fired${signal.direction ? ` — ${signal.direction}` : ""}`
+    : isWatch ? `👀 ${signal.pillars_met}/3 — watch` : "quiet";
 
   const pillarBg: React.CSSProperties = {
     background: "var(--color-background-secondary)",
-    borderRadius: 8,
-    padding: "8px 10px",
+    borderRadius: 8, padding: "8px 10px",
   };
 
   return (
@@ -101,17 +120,14 @@ function SignalCard({ signal }: { signal: Signal }) {
           <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>
             ₹{signal.current_price?.toLocaleString("en-IN")}
           </span>
-          <span style={{
-            fontSize: 11, padding: "2px 10px", borderRadius: 99, fontWeight: 500,
-            ...badgeStyle,
-          }}>
+          <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, fontWeight: 500, ...badgeStyle }}>
             {badgeText}
           </span>
         </div>
       </div>
 
       {/* 3 pillars */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: signal.status !== "quiet" ? 10 : 0 }}>
         <div style={pillarBg}>
           <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 3 }}>OI change (5min)</div>
           <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", display: "flex", alignItems: "center" }}>
@@ -127,7 +143,7 @@ function SignalCard({ signal }: { signal: Signal }) {
           <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 3 }}>Price breakout</div>
           <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", display: "flex", alignItems: "center" }}>
             <PillarDot passed={signal.price_passed} />
-            {signal.price_chg_pct > 0 ? "+" : ""}{signal.price_chg_pct?.toFixed(1)}%
+            {signal.price_chg_pct > 0 ? "+" : ""}{signal.price_chg_pct?.toFixed(2)}%
           </div>
           <div style={{ fontSize: 11, color: signal.price_passed ? "#1D9E75" : "var(--color-text-tertiary)" }}>
             threshold {signal.price_threshold}%
@@ -162,6 +178,7 @@ function SignalCard({ signal }: { signal: Signal }) {
                   height: "100%", borderRadius: 99,
                   width: `${signal.signal_score}%`,
                   background: isFired ? "#1D9E75" : "#BA7517",
+                  transition: "width 0.5s ease",
                 }} />
               </div>
             </div>
@@ -185,9 +202,11 @@ export default function TrendIgnitionPage() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [countdown, setCountdown]   = useState(60);
+  const [countdown, setCountdown]   = useState(REFRESH_INTERVAL);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  async function fetchSignals() {
+  const fetchSignals = useCallback(async (silent = false) => {
+    if (!silent) setIsRefreshing(true);
     try {
       const res = await fetch("/api/mcx/ignition");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -195,66 +214,87 @@ export default function TrendIgnitionPage() {
       setSignals(data.signals || []);
       setLastUpdate(new Date());
       setError(null);
-      setCountdown(60);
+      setCountdown(REFRESH_INTERVAL);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
-  }
-
-  useEffect(() => {
-    fetchSignals();
-    const interval = setInterval(fetchSignals, 60000);
-    return () => clearInterval(interval);
   }, []);
 
+  // Auto refresh every 30 seconds
   useEffect(() => {
-    const tick = setInterval(() => setCountdown(c => c > 0 ? c - 1 : 60), 1000);
+    fetchSignals();
+    const interval = setInterval(() => fetchSignals(true), REFRESH_INTERVAL * 1000);
+    return () => clearInterval(interval);
+  }, [fetchSignals]);
+
+  // Countdown timer
+  useEffect(() => {
+    const tick = setInterval(() => {
+      setCountdown(c => c > 0 ? c - 1 : REFRESH_INTERVAL);
+    }, 1000);
     return () => clearInterval(tick);
   }, []);
 
   const firedCount = signals.filter(s => s.status === "fired").length;
   const watchCount = signals.filter(s => s.status === "watch").length;
 
+  // Progress bar width for countdown
+  const progressPct = ((REFRESH_INTERVAL - countdown) / REFRESH_INTERVAL) * 100;
+
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem 1rem" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, color: "var(--color-text-primary)" }}>
+          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, color: "var(--color-text-primary)", display: "flex", alignItems: "center" }}>
+            <LiveDot />
             Trend ignition
           </h1>
           <p style={{ fontSize: 13, color: "var(--color-text-tertiary)", margin: "4px 0 0" }}>
-            MCX · 5-min scan · refreshes in {countdown}s
+            MCX · 5-min scan · next refresh in {countdown}s
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {firedCount > 0 && (
             <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 99, background: "#E1F5EE", color: "#085041", fontWeight: 500 }}>
-              {firedCount} fired
+              ⚡ {firedCount} fired
             </span>
           )}
           {watchCount > 0 && (
             <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 99, background: "#FAEEDA", color: "#633806", fontWeight: 500 }}>
-              {watchCount} watch
+              👀 {watchCount} watch
             </span>
           )}
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
             {lastUpdate ? timeAgo(lastUpdate.toISOString()) : "—"}
           </span>
           <button
-            onClick={fetchSignals}
+            onClick={() => fetchSignals()}
+            disabled={isRefreshing}
             style={{
               fontSize: 12, padding: "4px 12px", borderRadius: 8, cursor: "pointer",
               border: "0.5px solid var(--color-border-secondary)",
               background: "transparent", color: "var(--color-text-primary)",
+              opacity: isRefreshing ? 0.5 : 1,
             }}
           >
-            refresh
+            {isRefreshing ? "..." : "refresh"}
           </button>
         </div>
+      </div>
+
+      {/* Countdown progress bar */}
+      <div style={{ height: 2, background: "var(--color-background-secondary)", borderRadius: 99, marginBottom: 16, overflow: "hidden" }}>
+        <div style={{
+          height: "100%", borderRadius: 99,
+          width: `${progressPct}%`,
+          background: "var(--color-border-info, #185FA5)",
+          transition: "width 1s linear",
+        }} />
       </div>
 
       {/* WIP banner */}
@@ -275,7 +315,7 @@ export default function TrendIgnitionPage() {
       )}
 
       {error && (
-        <div style={{ background: "var(--color-background-danger)", borderRadius: 8, padding: "12px 16px", color: "var(--color-text-danger)", fontSize: 13, marginBottom: 12 }}>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "12px 16px", color: "#A32D2D", fontSize: 13, marginBottom: 12 }}>
           Error: {error}
         </div>
       )}

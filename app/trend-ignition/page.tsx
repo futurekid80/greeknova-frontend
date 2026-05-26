@@ -116,13 +116,16 @@ function useAlerts(signals: Signal[]) {
 }
 
 function CumulativeBar({ pct, direction }: { pct: number; direction: string }) {
+  // Arrow follows actual number sign, not CE/PE bias
+  const dirEmoji = pct > 0.05 ? "▲" : pct < -0.05 ? "▼" : "—";
+
+  // Color follows CE/PE directional bias
   const color = direction === "bullish" ? "#1D9E75"
     : direction === "bearish" ? "#C0392B"
     : "var(--color-text-tertiary)";
 
-  const dirEmoji = direction === "bullish" ? "▲" : direction === "bearish" ? "▼" : "—";
-  const absPct = Math.abs(pct);
-  const barWidth = Math.min(absPct * 5, 100); // scale: 20% OI change = full bar
+  const absPct  = Math.abs(pct);
+  const barWidth = Math.min(absPct * 5, 100); // 20% OI change = full bar
 
   return (
     <div style={{
@@ -185,7 +188,6 @@ function SignalCard({ signal }: { signal: Signal }) {
 
   return (
     <div style={cardStyle}>
-
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
@@ -339,8 +341,8 @@ export default function TrendIgnitionPage() {
     }
   }
 
-  const firedCount = signals.filter(s => s.status === "fired").length;
-  const watchCount = signals.filter(s => s.status === "watch").length;
+  const firedCount  = signals.filter(s => s.status === "fired").length;
+  const watchCount  = signals.filter(s => s.status === "watch").length;
   const progressPct = ((REFRESH_INTERVAL - countdown) / REFRESH_INTERVAL) * 100;
 
   return (
@@ -369,28 +371,25 @@ export default function TrendIgnitionPage() {
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
             {lastUpdate ? timeAgo(lastUpdate.toISOString()) : "—"}
           </span>
-          <button onClick={handleAlertToggle}
-            style={{
-              fontSize: 12, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
-              border: alertsOn ? "0.5px solid #1D9E75" : "0.5px solid var(--color-border-secondary)",
-              background: alertsOn ? "#E1F5EE" : "transparent",
-              color: alertsOn ? "#085041" : "var(--color-text-secondary)",
-            }}>
+          <button onClick={handleAlertToggle} style={{
+            fontSize: 12, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
+            border: alertsOn ? "0.5px solid #1D9E75" : "0.5px solid var(--color-border-secondary)",
+            background: alertsOn ? "#E1F5EE" : "transparent",
+            color: alertsOn ? "#085041" : "var(--color-text-secondary)",
+          }}>
             {alertsOn ? "🔔 alerts on" : "🔕 alerts off"}
           </button>
-          <button onClick={() => fetchSignals()} disabled={isRefreshing}
-            style={{
-              fontSize: 12, padding: "4px 12px", borderRadius: 8, cursor: "pointer",
-              border: "0.5px solid var(--color-border-secondary)",
-              background: "transparent", color: "var(--color-text-primary)",
-              opacity: isRefreshing ? 0.5 : 1,
-            }}>
+          <button onClick={() => fetchSignals()} disabled={isRefreshing} style={{
+            fontSize: 12, padding: "4px 12px", borderRadius: 8, cursor: "pointer",
+            border: "0.5px solid var(--color-border-secondary)",
+            background: "transparent", color: "var(--color-text-primary)",
+            opacity: isRefreshing ? 0.5 : 1,
+          }}>
             {isRefreshing ? "..." : "refresh"}
           </button>
         </div>
       </div>
 
-      {/* Progress bar */}
       <div style={{ height: 2, background: "var(--color-background-secondary)", borderRadius: 99, marginBottom: 16, overflow: "hidden" }}>
         <div style={{ height: "100%", borderRadius: 99, width: `${progressPct}%`, background: "var(--color-border-info, #185FA5)", transition: "width 1s linear" }} />
       </div>
@@ -407,11 +406,8 @@ export default function TrendIgnitionPage() {
       </div>
 
       {loading && <div style={{ textAlign: "center", padding: "3rem", color: "var(--color-text-secondary)", fontSize: 14 }}>Loading signals...</div>}
-
       {error && <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "12px 16px", color: "#A32D2D", fontSize: 13, marginBottom: 12 }}>Error: {error}</div>}
-
       {!loading && signals.map(signal => <SignalCard key={signal.commodity} signal={signal} />)}
-
       {!loading && signals.length === 0 && !error && (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--color-text-secondary)", fontSize: 14 }}>
           No signals yet — seed runs at 9:00 AM IST

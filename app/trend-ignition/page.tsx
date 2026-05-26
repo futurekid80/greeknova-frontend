@@ -309,13 +309,15 @@ export default function TrendIgnitionPage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, []); // empty deps — never recreated on render
 
   useEffect(() => {
-    fetchSignals();
-    const interval = setInterval(() => fetchSignals(true), REFRESH_INTERVAL * 1000);
+    fetchSignals(); // initial load
+    const interval = setInterval(() => {
+      fetchSignals(true); // silent refresh every 30s
+    }, REFRESH_INTERVAL * 1000);
     return () => clearInterval(interval);
-  }, [fetchSignals]);
+  }, []); // empty deps — interval set once, never reset
 
   useEffect(() => {
     const tick = setInterval(() => setCountdown(c => c > 0 ? c - 1 : REFRESH_INTERVAL), 1000);

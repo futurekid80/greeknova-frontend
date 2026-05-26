@@ -240,7 +240,7 @@ export default function TrendIgnitionPage() {
   const [alertPermission, setAlertPermission] = useState<string>("default");
 
   // Use ref so interval always calls the latest version of fetch
-  const fetchRef = useRef<(silent?: boolean) => Promise<void>>();
+  const fetchRef = useRef<(silent?: boolean) => Promise<void>>(() => Promise.resolve());
 
   fetchRef.current = async (silent = false) => {
     if (!silent) setIsRefreshing(true);

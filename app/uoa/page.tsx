@@ -14,6 +14,7 @@ interface UOASignal {
   signal_type: string; signal_desc: string; bias: string
   score: number; time_tag: string; is_index: boolean
   day_high: number | null; day_high_pct: number | null; at_day_high: boolean
+  snapshot_count: number; persistence_pct: number; first_seen: string
 }
 
 interface UOAData {
@@ -80,6 +81,21 @@ function ScoreMeter({ score }: { score: number }) {
   )
 }
 
+function PersistenceBar({ pct, snapshots, firstSeen }: { pct: number; snapshots: number; firstSeen: string }) {
+  const color = pct >= 70 ? 'bg-emerald-400' : pct >= 40 ? 'bg-amber-400' : 'bg-gray-500'
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5">
+        <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }}/>
+        </div>
+        <span className={`text-xs font-bold ${pct >= 70 ? 'text-emerald-400' : pct >= 40 ? 'text-amber-400' : 'text-gray-500'}`}>{pct}%</span>
+      </div>
+      <p className="text-[10px] text-gray-600">{snapshots} snaps · since {firstSeen}</p>
+    </div>
+  )
+}
+
 function StockAtHighBadge({ atDayHigh, pct }: { atDayHigh: boolean; pct: number | null }) {
   if (atDayHigh) return (
     <span className="text-xs px-1.5 py-0.5 rounded-md bg-orange-950/60 text-orange-400 border border-orange-800/50 font-bold"
@@ -139,7 +155,6 @@ export default function UOA() {
       setData(json)
       if (json.timestamp) setCaptureTime(toIST(json.timestamp))
       if (json.open_timestamp) setOpenTime(toIST(json.open_timestamp))
-      // Auto-disable refresh if post-market
       if (json.is_post_market) stopAuto()
     } catch(e) { console.error(e) }
     setLoading(false)
@@ -172,7 +187,6 @@ export default function UOA() {
   const minsToClose = data?.mins_to_close || 0
   const isPostMarket = data?.is_post_market || false
 
-  // Two-way detection
   const symbolSides: Record<string, Set<string>> = {}
   allSignals.forEach(s => {
     if (!symbolSides[s.symbol]) symbolSides[s.symbol] = new Set()
@@ -241,7 +255,6 @@ export default function UOA() {
                 <Clock size={11}/>Open: {openTime} → {isPostMarket ? 'Close' : 'Now'}: {captureTime} IST
               </div>
             )}
-            {/* Hide auto-refresh toggle post-market */}
             {!isPostMarket && (
               <button onClick={() => autoEnabled ? stopAuto() : startAuto()}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${autoEnabled ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
@@ -261,9 +274,7 @@ export default function UOA() {
           <div className="bg-gray-900/60 border border-gray-700 rounded-xl px-4 py-3 mb-6 flex items-center gap-3">
             <MoonStar size={16} className="text-gray-400 flex-shrink-0"/>
             <div>
-              <p className="text-sm font-bold text-gray-300">
-                📊 EOD Snapshot · Market Closed
-              </p>
+              <p className="text-sm font-bold text-gray-300">📊 EOD Snapshot · Market Closed</p>
               <p className="text-xs text-gray-500 mt-0.5">
                 Showing final state as of {captureTime} IST · Signals reflect patterns observed at market close · Auto-refresh disabled · Not for intraday use
               </p>
@@ -285,7 +296,8 @@ export default function UOA() {
             <span className="text-gray-300 font-semibold">How signals are derived: </span>
             <span className="text-cyan-400">OI momentum</span> = change in open interest over last 30 mins ·
             <span className="text-amber-400"> Price direction</span> = option LTP vs today's open ({openTime || '—'} IST) ·
-            <span className="text-orange-400"> 🏔️ Stock at High</span> = underlying stock price near today's high (not the option price)
+            <span className="text-orange-400"> 🏔️ Stock at High</span> = underlying stock price near today's high ·
+            <span className="text-emerald-400"> Persistence</span> = % of today's snapshots showing same signal (higher = more consistent)
             {isPostMarket && <span className="text-gray-600"> · 📊 EOD = signals from market close snapshot</span>}
           </p>
         </div>
@@ -300,7 +312,7 @@ export default function UOA() {
                 {isPostMarket && <span className="text-xs font-normal text-amber-600 ml-2">· as of market close</span>}
               </p>
               <p className="text-xs text-gray-400 mb-3">
-                Both CE and PE showing significant activity for the same underlying — elevated activity on both sides. Informational only.
+                Both CE and PE showing significant activity for the same underlying. Informational only.
               </p>
               <div className="flex flex-wrap gap-2">
                 {twoWayList.map(sym => {
@@ -312,16 +324,8 @@ export default function UOA() {
                     <button key={sym} onClick={() => setStockSearch(sym)}
                       className="flex items-center gap-2 px-3 py-2 bg-amber-950/40 border border-amber-800/60 rounded-xl hover:bg-amber-950/60 transition-all group">
                       <span className="text-sm font-black text-white group-hover:text-amber-400 transition-colors">{sym}</span>
-                      {ceSig && (
-                        <span className="text-xs px-1.5 py-0.5 bg-red-950/60 text-red-400 border border-red-800/50 rounded-md">
-                          {SIGNAL_META[ceSig.signal_type]?.icon} CE
-                        </span>
-                      )}
-                      {peSig && (
-                        <span className="text-xs px-1.5 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 rounded-md">
-                          {SIGNAL_META[peSig.signal_type]?.icon} PE
-                        </span>
-                      )}
+                      {ceSig && <span className="text-xs px-1.5 py-0.5 bg-red-950/60 text-red-400 border border-red-800/50 rounded-md">{SIGNAL_META[ceSig.signal_type]?.icon} CE</span>}
+                      {peSig && <span className="text-xs px-1.5 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 rounded-md">{SIGNAL_META[peSig.signal_type]?.icon} PE</span>}
                       <span className="text-xs text-amber-600 group-hover:text-amber-400">View →</span>
                     </button>
                   )
@@ -397,7 +401,6 @@ export default function UOA() {
                               <span className="text-sm font-black text-white">{s.strike.toLocaleString()} CE</span>
                               <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.color} ${m.bg} border ${m.border}`}>{m.icon} {m.label}</span>
                               {s.at_day_high && <StockAtHighBadge atDayHigh={s.at_day_high} pct={s.day_high_pct}/>}
-                              {isPostMarket && <span className="text-xs px-1 py-0.5 bg-gray-800 text-gray-500 rounded">📊 EOD</span>}
                             </div>
                             <span className={`text-sm font-black ${s.ltp_chg_from_open > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                               {s.ltp_chg_from_open > 0 ? '+' : ''}{s.ltp_chg_from_open}% from open
@@ -407,6 +410,7 @@ export default function UOA() {
                             <span>OI 30m: <span className={s.oi_chg_30min > 0 ? 'text-emerald-400' : 'text-red-400'}>{s.oi_chg_30min > 0 ? '+' : ''}{s.oi_chg_30min}%</span></span>
                             <span>Vol/OI: <span className="text-amber-400">{s.vol_oi_ratio}x</span></span>
                             <span>LTP: <span className="text-white">₹{s.ltp}</span> (Open: ₹{s.open_ltp})</span>
+                            <span>Persist: <span className="text-emerald-400">{s.persistence_pct}%</span></span>
                           </div>
                         </div>
                       )
@@ -427,7 +431,6 @@ export default function UOA() {
                               <span className="text-sm font-black text-white">{s.strike.toLocaleString()} PE</span>
                               <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.color} ${m.bg} border ${m.border}`}>{m.icon} {m.label}</span>
                               {s.at_day_high && <StockAtHighBadge atDayHigh={s.at_day_high} pct={s.day_high_pct}/>}
-                              {isPostMarket && <span className="text-xs px-1 py-0.5 bg-gray-800 text-gray-500 rounded">📊 EOD</span>}
                             </div>
                             <span className={`text-sm font-black ${s.ltp_chg_from_open > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                               {s.ltp_chg_from_open > 0 ? '+' : ''}{s.ltp_chg_from_open}% from open
@@ -437,6 +440,7 @@ export default function UOA() {
                             <span>OI 30m: <span className={s.oi_chg_30min > 0 ? 'text-emerald-400' : 'text-red-400'}>{s.oi_chg_30min > 0 ? '+' : ''}{s.oi_chg_30min}%</span></span>
                             <span>Vol/OI: <span className="text-amber-400">{s.vol_oi_ratio}x</span></span>
                             <span>LTP: <span className="text-white">₹{s.ltp}</span> (Open: ₹{s.open_ltp})</span>
+                            <span>Persist: <span className="text-emerald-400">{s.persistence_pct}%</span></span>
                           </div>
                         </div>
                       )
@@ -500,8 +504,8 @@ export default function UOA() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-900/60 border-b border-gray-800">
-                  {['Symbol','Strike','Type','Signal Observed','Activity Pattern','Conviction','Vol/OI','Volume','OI Δ 30m','LTP Δ Open','OTM%','LTP'].map((h,i)=>(
-                    <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=4?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===11?'pr-5':''}`}>{h}</th>
+                  {['Symbol','Strike','Type','Signal Observed','Activity Pattern','Conviction','Persistence','Vol/OI','Volume','OI Δ 30m','LTP Δ Open','OTM%','LTP'].map((h,i)=>(
+                    <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=5?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===12?'pr-5':''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -531,16 +535,9 @@ export default function UOA() {
                         {sig.day_high && !sig.at_day_high && sig.day_high_pct !== null && sig.day_high_pct < 2 && (
                           <p className="text-xs text-gray-600">{sig.day_high_pct.toFixed(1)}% to stock high</p>
                         )}
-                        {/* Time tags */}
-                        {isEOD && (
-                          <span className="text-xs text-gray-500 flex items-center gap-1">📊 EOD snapshot</span>
-                        )}
-                        {sig.time_tag === 'market_closing' && (
-                          <span className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle size={9}/> Market closing</span>
-                        )}
-                        {sig.time_tag === 'positional_only' && (
-                          <span className="text-xs text-orange-400">Positional · {minsToClose}m left</span>
-                        )}
+                        {isEOD && <span className="text-xs text-gray-500 flex items-center gap-1">📊 EOD snapshot</span>}
+                        {sig.time_tag === 'market_closing' && <span className="text-xs text-red-400 flex items-center gap-1"><AlertTriangle size={9}/> Market closing</span>}
+                        {sig.time_tag === 'positional_only' && <span className="text-xs text-orange-400">Positional · {minsToClose}m left</span>}
                       </td>
 
                       <td className="px-4 py-3.5 text-sm font-bold text-gray-300">{sig.strike.toLocaleString()}</td>
@@ -560,7 +557,17 @@ export default function UOA() {
                         <p className="text-xs text-gray-600 mt-0.5 max-w-[200px]">{sig.signal_desc}</p>
                       </td>
 
-                      <td className="px-4 py-3.5 text-right"><ScoreMeter score={sig.score}/></td>
+                      <td className="px-4 py-3.5"><ScoreMeter score={sig.score}/></td>
+
+                      {/* ── Persistence column ── */}
+                      <td className="px-4 py-3.5">
+                        <PersistenceBar
+                          pct={sig.persistence_pct || 0}
+                          snapshots={sig.snapshot_count || 0}
+                          firstSeen={toIST(sig.first_seen || '')}
+                        />
+                      </td>
+
                       <td className={`px-4 py-3.5 text-right text-sm font-black ${sig.vol_oi_ratio > 5 ? 'text-orange-400' : sig.vol_oi_ratio > 2 ? 'text-amber-400' : 'text-gray-400'}`}>{sig.vol_oi_ratio}x</td>
                       <td className="px-4 py-3.5 text-right text-sm text-gray-300">{(sig.volume/100000).toFixed(1)}L</td>
                       <td className={`px-4 py-3.5 text-right text-sm font-semibold ${sig.oi_chg_30min > 0 ? 'text-emerald-400' : sig.oi_chg_30min < 0 ? 'text-red-400' : 'text-gray-500'}`}>

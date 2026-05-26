@@ -5,6 +5,15 @@ import { RefreshCw, Clock } from 'lucide-react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
+interface OptionsSignal {
+  signal_type: string
+  label: string
+  strike: number
+  option_type: string
+  score: number
+  bias: string
+}
+
 interface Signal {
   symbol: string
   cmp: number
@@ -27,6 +36,12 @@ interface Signal {
   cpr_position: string | null
   cpr_width_emoji: string | null
   cpr_is_virgin: boolean | null
+  // Options confirmation
+  options_confirmation: boolean
+  options_confirms: boolean | null
+  options_alignment: string | null
+  options_alignment_color: string | null
+  options_signal: OptionsSignal | null
 }
 
 interface LogData {
@@ -50,6 +65,19 @@ const SIGNAL_META: Record<string, { color: string; bg: string; border: string; i
   LONG_UNWINDING: { color: 'text-orange-400',  bg: 'bg-orange-950/40',  border: 'border-orange-800/50',  icon: '⚠️' },
 }
 
+const OPTIONS_SIGNAL_ICONS: Record<string, string> = {
+  PUT_WRITING:      '✍️',
+  CALL_WRITING:     '✍️',
+  LONG_BUILDUP:     '🐂',
+  SHORT_BUILDUP:    '🐻',
+  SHORT_COVERING:   '🔄',
+  LONG_UNWINDING:   '⚠️',
+  BUYER_DOMINATED:  '🐋',
+  SELLER_DOMINATED: '🔻',
+  FAR_OTM_ACTIVITY: '🚀',
+  VOLUME_SURGE:     '⚡',
+}
+
 const CPR_COLOR: Record<string, string> = {
   'Above CPR':  'text-emerald-400',
   'Below CPR':  'text-red-400',
@@ -70,6 +98,34 @@ function PersistenceBar({ pct, isActive }: { pct: number; isActive: boolean }) {
   )
 }
 
+function OptionsConfirmation({ sig }: { sig: Signal }) {
+  if (!sig.options_confirmation || !sig.options_signal) {
+    return <span className="text-[10px] text-gray-600">—</span>
+  }
+
+  const opt = sig.options_signal
+  const isConfirms = sig.options_confirms === true
+  const icon = OPTIONS_SIGNAL_ICONS[opt.signal_type] || '👁️'
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
+        isConfirms
+          ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/50'
+          : 'text-amber-400 bg-amber-950/40 border-amber-800/50'
+      }`}>
+        {isConfirms ? '✅' : '⚠️'} {sig.options_alignment}
+      </div>
+      <p className="text-[10px] text-gray-400">
+        {icon} {opt.label}
+      </p>
+      <p className="text-[10px] text-gray-600">
+        {opt.strike.toLocaleString()} {opt.option_type} · Score {opt.score}/5
+      </p>
+    </div>
+  )
+}
+
 function fmt(n: number) {
   if (n >= 10000000) return `${(n/10000000).toFixed(1)}Cr`
   if (n >= 100000)   return `${(n/100000).toFixed(1)}L`
@@ -80,10 +136,11 @@ function fmt(n: number) {
 export default function IntradaySignalLog() {
   const [data, setData]       = useState<LogData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [biasFilter, setBiasFilter]     = useState<'all'|'BULLISH'|'BEARISH'>('all')
-  const [sigFilter, setSigFilter]       = useState<'all'|'LONG_BUILDUP'|'SHORT_BUILDUP'|'SHORT_COVERING'|'LONG_UNWINDING'>('all')
-  const [minPersist, setMinPersist]     = useState(1)
-  const [countdown, setCountdown]       = useState(300)
+  const [biasFilter, setBiasFilter] = useState<'all'|'BULLISH'|'BEARISH'>('all')
+  const [sigFilter, setSigFilter]   = useState<'all'|'LONG_BUILDUP'|'SHORT_BUILDUP'|'SHORT_COVERING'|'LONG_UNWINDING'>('all')
+  const [minPersist, setMinPersist] = useState(1)
+  const [confirmedOnly, setConfirmedOnly] = useState(false)
+  const [countdown, setCountdown]   = useState(300)
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
 
@@ -115,8 +172,10 @@ export default function IntradaySignalLog() {
     .filter(s => biasFilter === 'all' || s.bias === biasFilter)
     .filter(s => sigFilter  === 'all' || s.signal_type === sigFilter)
     .filter(s => s.persistence >= minPersist)
+    .filter(s => !confirmedOnly || (s.options_confirmation && s.options_confirms === true))
 
-  const surgeCount = signals.filter(s => s.vol_surge).length
+  const surgeCount     = signals.filter(s => s.vol_surge).length
+  const confirmedCount = signals.filter(s => s.options_confirmation && s.options_confirms === true).length
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -129,7 +188,7 @@ export default function IntradaySignalLog() {
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">📋 Intraday Futures Scanner</h1>
             <p className="text-gray-500 text-sm">
-              Stocks with significant futures OI activity · Based on FUT OI + Volume + Price · Updates every 5 mins
+              FUT OI + Options Confirmation · Higher conviction when both align · Updates every 5 mins
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -150,7 +209,7 @@ export default function IntradaySignalLog() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-5 gap-3 mb-6">
           <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">🐂 Long Buildup</p>
             <p className="text-2xl font-black text-emerald-400">{data?.long_buildup || 0}</p>
@@ -170,6 +229,11 @@ export default function IntradaySignalLog() {
             <p className="text-xs text-gray-500 mb-1">⚡ Volume Surge</p>
             <p className="text-2xl font-black text-amber-400">{surgeCount}</p>
             <p className="text-xs text-gray-600">Vol {'>'} 50% above open</p>
+          </div>
+          <div className="bg-emerald-950/30 border border-emerald-700/60 rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">✅ Confirmed</p>
+            <p className="text-2xl font-black text-emerald-300">{confirmedCount}</p>
+            <p className="text-xs text-gray-600">FUT + Options aligned</p>
           </div>
         </div>
 
@@ -199,6 +263,14 @@ export default function IntradaySignalLog() {
             </button>
           ))}
           <div className="w-px h-5 bg-gray-800 mx-1"/>
+          {/* Confirmed only toggle */}
+          <button onClick={() => setConfirmedOnly(!confirmedOnly)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${confirmedOnly
+              ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+              : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+            ✅ Confirmed Only
+          </button>
+          <div className="w-px h-5 bg-gray-800 mx-1"/>
           <div className="flex items-center gap-2 bg-gray-900/30 border border-gray-800 rounded-lg px-3 py-1.5">
             <span className="text-xs text-gray-500">Min snapshots:</span>
             <input type="range" min="1" max="10" value={minPersist} onChange={e => setMinPersist(Number(e.target.value))} className="w-16 accent-amber-400"/>
@@ -223,7 +295,7 @@ export default function IntradaySignalLog() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-900/60 border-b border-gray-800">
-                  {['Symbol','FUT OI Chg','Price Chg','Volume','Signal','CPR','Persistence','Since'].map((h,i) => (
+                  {['Symbol','FUT OI Chg','Price Chg','Volume','Signal','CPR','Options Confirmation','Persistence','Since'].map((h,i) => (
                     <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3 ${i===0?'text-left pl-5':'text-center'}`}>{h}</th>
                   ))}
                 </tr>
@@ -231,13 +303,24 @@ export default function IntradaySignalLog() {
               <tbody>
                 {filtered.map((sig, i) => {
                   const m = SIGNAL_META[sig.signal_type] || SIGNAL_META.LONG_BUILDUP
+                  const isHighConviction = sig.options_confirmation && sig.options_confirms === true
                   return (
                     <tr key={`${sig.symbol}-${i}`}
-                      className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${i%2===0?'':'bg-gray-900/10'}`}>
+                      className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${
+                        isHighConviction ? 'bg-emerald-950/10 border-l-2 border-l-emerald-700'
+                        : i%2===0 ? '' : 'bg-gray-900/10'
+                      }`}>
 
                       {/* Symbol */}
                       <td className="px-5 py-3">
-                        <p className="text-sm font-black text-white">{sig.symbol}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-black text-white">{sig.symbol}</p>
+                          {isHighConviction && (
+                            <span className="text-[9px] px-1 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800/50 rounded font-bold">
+                              HIGH CONV
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-500">₹{sig.cmp.toLocaleString()}</p>
                       </td>
 
@@ -286,6 +369,11 @@ export default function IntradaySignalLog() {
                         ) : <span className="text-[10px] text-gray-600">—</span>}
                       </td>
 
+                      {/* Options Confirmation */}
+                      <td className="px-4 py-3 text-center">
+                        <OptionsConfirmation sig={sig} />
+                      </td>
+
                       {/* Persistence */}
                       <td className="px-4 py-3 text-center">
                         <PersistenceBar pct={sig.persistence_pct} isActive={sig.is_active}/>
@@ -320,8 +408,10 @@ export default function IntradaySignalLog() {
             FUT OI Chg = futures open interest change from day open ·
             Volume = today's volume vs opening volume ·
             <span className="text-amber-400"> ⚡ Surge</span> = volume {'>'} 50% above open ·
-            <span className="text-gray-300"> Persistence</span> = how many of today's snapshots showed same signal ·
-            High persistence = institutional conviction · Observational only · Not investment advice
+            <span className="text-emerald-400"> ✅ Confirms</span> = options market activity aligns with FUT signal (e.g. Put Writing + Long Buildup) ·
+            <span className="text-amber-400"> ⚠️ Contradicts</span> = options signal opposes FUT direction — treat with caution ·
+            <span className="text-gray-300"> HIGH CONV</span> = FUT + Options both confirm — higher conviction setup ·
+            Observational only · Not investment advice
           </p>
         </div>
       </div>

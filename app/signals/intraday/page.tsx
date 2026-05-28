@@ -405,8 +405,7 @@ export default function IntradaySignalLog() {
         <div className="mt-6 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
           <p className="text-xs text-gray-600 leading-relaxed">
             <span className="text-gray-400 font-semibold">How to read: </span>
-            FUT OI Chg = futures open interest change from day open ·
-            Volume = today's volume vs opening volume ·
+            FUT OI Chg = futures open interest change from day open · Price Chg = change from today's 9:15 AM open (not yesterday's close) · A positive Price Chg after a gap-down open = institutional buying the dip · Volume = today's volume vs opening volume ·
             <span className="text-amber-400"> ⚡ Surge</span> = volume {'>'} 50% above open ·
             <span className="text-emerald-400"> ✅ Confirms</span> = options market activity aligns with FUT signal (e.g. Put Writing + Long Buildup) ·
             <span className="text-amber-400"> ⚠️ Contradicts</span> = options signal opposes FUT direction — treat with caution ·

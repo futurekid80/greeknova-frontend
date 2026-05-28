@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation'
 const API = 'https://greeknova-backend-production.up.railway.app'
 
 interface OISignal {
-  signal_type: string; bias: string; option_type: string; strike: number; score: number
+  signal_type: string; bias: string; option_type: string; strike: number; score: number;
+  otm_distance_pct?: number
 }
 
 interface CPRRow {
@@ -308,6 +309,19 @@ export default function CPRScanner() {
                             </span>
                           </div>
                           <p className="text-[10px] text-gray-600">{row.best_signal.strike.toLocaleString()} {row.best_signal.option_type} · {row.best_signal.score}/5</p>
+                          {(row.best_signal as any).otm_distance_pct !== undefined && (
+                            <p className={`text-[10px] font-semibold mt-0.5 ${
+                              (row.best_signal as any).otm_distance_pct <= 2
+                                ? 'text-emerald-400'
+                                : (row.best_signal as any).otm_distance_pct <= 5
+                                ? 'text-amber-400'
+                                : 'text-red-400'
+                            }`}>
+                              {(row.best_signal as any).otm_distance_pct <= 2 ? '✅' :
+                               (row.best_signal as any).otm_distance_pct <= 5 ? '⚠️' : '🔴'}{' '}
+                              {(row.best_signal as any).otm_distance_pct}% from CMP
+                            </p>
+                          )}
                           {row.oi_signals.length > 1 && <p className="text-[10px] text-gray-700">+{row.oi_signals.length-1} more</p>}
                         </div>
                       ) : (

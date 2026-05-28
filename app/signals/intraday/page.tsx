@@ -194,8 +194,9 @@ export default function IntradaySignalLog() {
           <div className="flex items-center gap-3">
             {data && (
               <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
-                <Clock size={11}/>{data.open_time} → {data.latest_time} · {data.snapshots} snapshots
-              </div>
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+              Next refresh in {mins}:{secs.toString().padStart(2,'0')}
+            </div>
             )}
             <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
@@ -207,6 +208,24 @@ export default function IntradaySignalLog() {
             </button>
           </div>
         </div>
+        {/* HIGH CONV Alert Banner */}
+        {confirmedCount > 0 && (
+          <div className="mb-4 flex items-center gap-3 bg-emerald-950/30 border border-emerald-700/50 rounded-xl px-4 py-3">
+            <span className="text-lg">🎯</span>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-emerald-400">
+                {confirmedCount} HIGH CONV signal{confirmedCount > 1 ? 's' : ''} active
+              </p>
+              <p className="text-xs text-gray-400">
+                {signals
+                  .filter(s => s.options_confirmation && s.options_confirms === true)
+                  .map(s => s.symbol)
+                  .join(' · ')}
+              </p>
+            </div>
+            <span className="text-[10px] text-gray-600">Updates every 5 mins</span>
+          </div>
+        )}
 
         {/* Summary cards */}
         <div className="grid grid-cols-5 gap-3 mb-6">

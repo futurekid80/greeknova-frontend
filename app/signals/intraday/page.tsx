@@ -331,9 +331,13 @@ export default function IntradaySignalLog() {
                       }`}>
 
                       {/* Symbol */}
+                      {/* Symbol */}
                       <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-black text-white">{sig.symbol}</p>
+                        <div 
+                          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => router.push(`/uoa?symbol=${sig.symbol}`)}
+                        >
+                          <p className="text-sm font-black text-white underline-offset-2 hover:underline">{sig.symbol}</p>
                           {isHighConviction && (
                             <span className="text-[9px] px-1 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800/50 rounded font-bold">
                               HIGH CONV

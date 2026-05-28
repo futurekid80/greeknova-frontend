@@ -206,11 +206,7 @@ export default function IntradaySignalLog() {
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
             </button>
           </div>
-            <button onClick={fetchData} disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
-            </button>
-          </div>
+            
         </div>
         {/* HIGH CONV Alert Banner */}
         {confirmedCount > 0 && (

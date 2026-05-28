@@ -193,10 +193,6 @@ export default function IntradaySignalLog() {
           </div>
           <div className="flex items-center gap-3">
             {data && (
-              <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
-              Next refresh in {mins}:{secs.toString().padStart(2,'0')}
-            </div>
             )}
             <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>

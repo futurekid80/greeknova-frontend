@@ -193,11 +193,19 @@ export default function IntradaySignalLog() {
           </div>
           <div className="flex items-center gap-3">
             {data && (
+              <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
+                <Clock size={11}/>{data.open_time} → {data.latest_time} · {data.snapshots} snapshots
+              </div>
             )}
             <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
-              {mins}:{secs.toString().padStart(2,'0')}
+              Next refresh in {mins}:{secs.toString().padStart(2,'0')}
             </div>
+            <button onClick={fetchData} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
+            </button>
+          </div>
             <button onClick={fetchData} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh

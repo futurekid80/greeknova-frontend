@@ -2,6 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
@@ -141,6 +142,7 @@ export default function IntradaySignalLog() {
   const [minPersist, setMinPersist] = useState(1)
   const [confirmedOnly, setConfirmedOnly] = useState(false)
   const [countdown, setCountdown]   = useState(300)
+  const router = useRouter()
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
 
@@ -330,7 +332,6 @@ export default function IntradaySignalLog() {
                         : i%2===0 ? '' : 'bg-gray-900/10'
                       }`}>
 
-                      {/* Symbol */}
                       {/* Symbol */}
                       <td className="px-5 py-3">
                         <div 

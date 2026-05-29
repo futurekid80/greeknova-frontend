@@ -1,6 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -70,6 +70,9 @@ export default function CPRScanner() {
   const [virginOnly, setVirginOnly]         = useState(false)
   const [typeFilter, setTypeFilter]       = useState<'all'|'index'|'stocks'>('all')
   const router = useRouter()
+  const [countdown, setCountdown] = useState(300)
+  const intervalRef  = useRef<NodeJS.Timeout|null>(null)
+  const countdownRef = useRef<NodeJS.Timeout|null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -81,7 +84,15 @@ export default function CPRScanner() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
+    countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
+    return () => {
+      if (intervalRef.current)  clearInterval(intervalRef.current)
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
+  }, [fetchData])
 
   const rows = data?.data || []
   const filtered = rows
@@ -113,6 +124,10 @@ export default function CPRScanner() {
                 {data.source === 'live' && <span className="text-amber-400 ml-1">(live fallback)</span>}
               </div>
             )}
+            <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+              Next refresh in {Math.floor(countdown/60)}:{(countdown%60).toString().padStart(2,'0')}
+            </div>
             <button onClick={fetchData} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh

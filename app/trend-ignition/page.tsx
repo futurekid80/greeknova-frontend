@@ -32,6 +32,8 @@ interface Signal {
   cumulative_direction: "bullish" | "bearish" | "neutral";
   session_peak_oi_pct: number;
   oi_unwind_status: "building" | "rolling_over" | "unwinding";
+  divergence_label: "neutral" | "continuation" | "exhaustion" | "coiling" | "trap";
+  divergence_note: string;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -162,6 +164,27 @@ function UnwindBadge({ status, peak, current }: { status: string; peak: number; 
   );
 }
 
+function DivergenceBadge({ label, note }: { label: string; note: string }) {
+  if (!label || label === "neutral" || !note) return null;
+
+  const styles: Record<string, { bg: string; color: string; icon: string }> = {
+    continuation: { bg: "#E1F5EE", color: "#085041", icon: "✓" },
+    exhaustion:   { bg: "#FCEBEB", color: "#791F1F", icon: "⚡" },
+    coiling:      { bg: "#FAEEDA", color: "#633806", icon: "◎" },
+    trap:         { bg: "#FCEBEB", color: "#791F1F", icon: "⚠" },
+  };
+
+  const s = styles[label];
+  if (!s) return null;
+
+  return (
+    <div style={{ background: s.bg, borderRadius: 6, padding: "5px 10px", marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: s.color }}>
+      <span style={{ fontWeight: 500 }}>{s.icon} {label.charAt(0).toUpperCase() + label.slice(1)}</span>
+      <span style={{ opacity: 0.8 }}>— {note}</span>
+    </div>
+  );
+}
+
 function SignalCard({ signal }: { signal: Signal }) {
   const meta    = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";
@@ -230,6 +253,10 @@ function SignalCard({ signal }: { signal: Signal }) {
         status={signal.oi_unwind_status || "building"}
         peak={signal.session_peak_oi_pct || 0}
         current={signal.cumulative_oi_pct || 0}
+      />
+      <DivergenceBadge
+        label={signal.divergence_label || "neutral"}
+        note={signal.divergence_note || ""}
       />
 
       {(isFired || isWatch) && (

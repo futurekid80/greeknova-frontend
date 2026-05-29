@@ -21,7 +21,7 @@ interface CPRRow {
   is_virgin: boolean
   cpr_status: string | null; status_label: string | null; status_color: string | null
   cpr_position: string; position_label: string; position_bias: string; position_color: string
-  has_oi_signal: boolean; confluence: boolean
+  has_oi_signal: boolean; confluence: boolean; confluence_type: string | null
   oi_signals: OISignal[]; best_signal: OISignal | null
 }
 
@@ -69,6 +69,7 @@ export default function CPRScanner() {
   const [confluenceOnly, setConfluenceOnly] = useState(false)
   const [virginOnly, setVirginOnly]         = useState(false)
   const [typeFilter, setTypeFilter]       = useState<'all'|'index'|'stocks'>('all')
+  const [confluenceType, setConfluenceType] = useState<'all'|'CONFIRMS'|'CONTRADICTS'>('all')
   const router = useRouter()
   const [countdown, setCountdown] = useState(300)
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
@@ -102,6 +103,7 @@ export default function CPRScanner() {
     .filter(r => !confluenceOnly || r.confluence)
     .filter(r => !virginOnly || r.is_virgin)
     .filter(r => typeFilter === 'all' || (typeFilter === 'index' ? r.is_index : !r.is_index))
+    .filter(r => confluenceType === 'all' || r.confluence_type === confluenceType)
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -179,6 +181,17 @@ export default function CPRScanner() {
 
         {/* Filters */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
+          {(['all','CONFIRMS','CONTRADICTS'] as const).map(f => (
+            <button key={f} onClick={() => setConfluenceType(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${confluenceType===f
+                ? f==='CONFIRMS' ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                : f==='CONTRADICTS' ? 'bg-amber-950 text-amber-400 border-amber-800'
+                : 'bg-white text-gray-900 border-white'
+                : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              {f==='all' ? 'All Confluence' : f==='CONFIRMS' ? '✅ Confirmed' : '⚠️ Contradicts'}
+            </button>
+          ))}
+          <div className="w-px h-5 bg-gray-800 mx-1"/>
           <button onClick={() => setConfluenceOnly(v => !v)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${confluenceOnly ? 'bg-orange-950/60 text-orange-400 border-orange-800/60' : 'bg-gray-900/40 text-gray-400 border-gray-800'}`}>
             ⚡ Confluence Only
@@ -283,15 +296,6 @@ export default function CPRScanner() {
                       <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold ${WIDTH_STYLES[row.width_color] || WIDTH_STYLES.GRAY}`}>
                         {row.width_emoji} {row.width_label}
                       </div>
-                      {row.best_signal && (row.best_signal as any).alignment && (
-                            <div className={`text-[9px] font-bold mb-0.5 ${
-                              (row.best_signal as any).alignment_color === 'EMERALD' 
-                                ? 'text-emerald-400' 
-                                : 'text-amber-400'
-                            }`}>
-                              {(row.best_signal as any).alignment}
-                            </div>
-                          )}
                       <p className="text-[10px] text-gray-600 mt-1">{row.width_pct}% · {row.width_pts}pts</p>
                     </td>
 
@@ -326,6 +330,15 @@ export default function CPRScanner() {
                     <td className="px-4 py-3">
                       {row.best_signal ? (
                         <div>
+                          {row.best_signal && (row.best_signal as any).alignment && (
+                            <div className={`text-[9px] font-bold mb-0.5 ${
+                              (row.best_signal as any).alignment_color === 'EMERALD'
+                                ? 'text-emerald-400'
+                                : 'text-amber-400'
+                            }`}>
+                              {(row.best_signal as any).alignment}
+                            </div>
+                          )}
                           <div className="flex items-center gap-1">
                             <span>{SIGNAL_ICONS[row.best_signal.signal_type] || '👁️'}</span>
                             <span className={`text-xs font-bold ${row.best_signal.bias === 'BULLISH' ? 'text-emerald-400' : row.best_signal.bias === 'BEARISH' ? 'text-red-400' : 'text-gray-400'}`}>

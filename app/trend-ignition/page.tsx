@@ -34,6 +34,10 @@ interface Signal {
   oi_unwind_status: "building" | "rolling_over" | "unwinding";
   divergence_label: "neutral" | "continuation" | "exhaustion" | "coiling" | "trap";
   divergence_note: string;
+  support_strike: number;
+  support_oi: number;
+  resistance_strike: number;
+  resistance_oi: number;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -185,6 +189,41 @@ function DivergenceBadge({ label, note }: { label: string; note: string }) {
   );
 }
 
+function SRLevels({ support, resistance, price }: { support: number; resistance: number; price: number }) {
+  if (!support && !resistance) return null;
+
+  return (
+    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+      {support > 0 && (
+        <div style={{ flex: 1, background: "var(--color-background-secondary)", borderRadius: 6, padding: "6px 10px", borderLeft: "2px solid #1D9E75" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 2 }}>PE wall · support</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: "#1D9E75" }}>
+            ₹{support.toLocaleString("en-IN")}
+          </div>
+          {price > 0 && (
+            <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+              {price > support ? `+${((price - support) / support * 100).toFixed(1)}% above` : `${((support - price) / support * 100).toFixed(1)}% below`}
+            </div>
+          )}
+        </div>
+      )}
+      {resistance > 0 && (
+        <div style={{ flex: 1, background: "var(--color-background-secondary)", borderRadius: 6, padding: "6px 10px", borderLeft: "2px solid #C0392B" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 2 }}>CE wall · resistance</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: "#C0392B" }}>
+            ₹{resistance.toLocaleString("en-IN")}
+          </div>
+          {price > 0 && (
+            <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+              {price < resistance ? `${((resistance - price) / resistance * 100).toFixed(1)}% above` : `+${((price - resistance) / resistance * 100).toFixed(1)}% below`}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SignalCard({ signal }: { signal: Signal }) {
   const meta    = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";
@@ -257,6 +296,11 @@ function SignalCard({ signal }: { signal: Signal }) {
       <DivergenceBadge
         label={signal.divergence_label || "neutral"}
         note={signal.divergence_note || ""}
+      />
+      <SRLevels
+        support={signal.support_strike || 0}
+        resistance={signal.resistance_strike || 0}
+        price={signal.current_price || 0}
       />
 
       {(isFired || isWatch) && (

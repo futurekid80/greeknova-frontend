@@ -202,7 +202,9 @@ function SRLevels({ support, resistance, price }: { support: number; resistance:
           </div>
           {price > 0 && (
             <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
-              {price > support ? `+${((price - support) / support * 100).toFixed(1)}% above` : `${((support - price) / support * 100).toFixed(1)}% below`}
+              {price > support
+                ? `↓ ${((price - support) / price * 100).toFixed(1)}% below price`
+                : `↑ ${((support - price) / price * 100).toFixed(1)}% above price`}
             </div>
           )}
         </div>
@@ -215,7 +217,9 @@ function SRLevels({ support, resistance, price }: { support: number; resistance:
           </div>
           {price > 0 && (
             <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
-              {price < resistance ? `${((resistance - price) / resistance * 100).toFixed(1)}% above` : `+${((price - resistance) / resistance * 100).toFixed(1)}% below`}
+              {price < resistance
+                ? `↑ ${((resistance - price) / price * 100).toFixed(1)}% above price`
+                : `↓ ${((price - resistance) / price * 100).toFixed(1)}% below price`}
             </div>
           )}
         </div>

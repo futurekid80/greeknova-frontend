@@ -269,6 +269,34 @@ function CEPEDelta({ ceDelta, peDelta }: { ceDelta: number; peDelta: number }) {
   );
 }
 
+function ExpiryBadge({ expiryDate }: { expiryDate: string }) {
+  if (!expiryDate) return null;
+
+  const today    = new Date();
+  const expiry   = new Date(expiryDate);
+  const diffMs   = expiry.getTime() - today.getTime();
+  const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (daysLeft > 7) return null; // only show within 7 days
+
+  const isExpiry  = daysLeft <= 0;
+  const isUrgent  = daysLeft <= 2;
+  const bg        = isExpiry ? "#FCEBEB" : isUrgent ? "#FAEEDA" : "#F1EFE8";
+  const color     = isExpiry ? "#791F1F" : isUrgent ? "#633806" : "#5F5E5A";
+  const label     = isExpiry
+    ? "Expiry today — signals unreliable"
+    : daysLeft === 1
+    ? "Expiry tomorrow — high pinning risk"
+    : `${daysLeft} days to expiry — signals may be noisy`;
+
+  return (
+    <div style={{ background: bg, borderRadius: 6, padding: "4px 10px", marginBottom: 8, fontSize: 11, color, display: "flex", alignItems: "center", gap: 5 }}>
+      <span>⏳</span>
+      <span>{label}</span>
+    </div>
+  );
+}
+
 function SignalCard({ signal }: { signal: Signal }) {
   const meta    = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";

@@ -38,6 +38,8 @@ interface Signal {
   support_oi: number;
   resistance_strike: number;
   resistance_oi: number;
+  ce_oi_delta: number;
+  pe_oi_delta: number;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -228,6 +230,45 @@ function SRLevels({ support, resistance, price }: { support: number; resistance:
   );
 }
 
+function CEPEDelta({ ceDelta, peDelta }: { ceDelta: number; peDelta: number }) {
+  if (ceDelta === 0 && peDelta === 0) return null;
+
+  const total = Math.abs(ceDelta) + Math.abs(peDelta);
+  if (total === 0) return null;
+
+  const cePct = Math.round((Math.abs(ceDelta) / total) * 100);
+  const pePct = 100 - cePct;
+
+  // Interpret: more PE adding = bearish conviction, more CE adding = bullish conviction
+  // PE writers are selling puts = bullish; CE writers are selling calls = bearish
+  // But net buyers: PE buyers = bearish, CE buyers = bullish
+  // We track net OI change — positive = net new positions opening
+  const peAdding = peDelta > 0;
+  const ceAdding = ceDelta > 0;
+  const dominant = Math.abs(peDelta) > Math.abs(ceDelta) ? "PE" : "CE";
+  const bias = dominant === "PE"
+    ? (peAdding ? "bearish" : "bearish covering")
+    : (ceAdding ? "bullish" : "bullish covering");
+  const biasColor = bias.includes("bearish") ? "#C0392B" : "#1D9E75";
+
+  return (
+    <div style={{ marginTop: 6, background: "var(--color-background-secondary)", borderRadius: 6, padding: "7px 10px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+        <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>CE vs PE this scan</span>
+        <span style={{ fontSize: 11, fontWeight: 500, color: biasColor }}>{bias}</span>
+      </div>
+      <div style={{ display: "flex", height: 6, borderRadius: 99, overflow: "hidden", gap: 1 }}>
+        <div style={{ width: `${cePct}%`, background: "#1D9E75", borderRadius: "99px 0 0 99px", transition: "width 0.5s ease" }} title={`CE: ${ceDelta > 0 ? "+" : ""}${ceDelta}`} />
+        <div style={{ width: `${pePct}%`, background: "#C0392B", borderRadius: "0 99px 99px 0", transition: "width 0.5s ease" }} title={`PE: ${peDelta > 0 ? "+" : ""}${peDelta}`} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
+        <span style={{ fontSize: 11, color: "#1D9E75" }}>CE {ceDelta > 0 ? "+" : ""}{ceDelta} ({cePct}%)</span>
+        <span style={{ fontSize: 11, color: "#C0392B" }}>PE {peDelta > 0 ? "+" : ""}{peDelta} ({pePct}%)</span>
+      </div>
+    </div>
+  );
+}
+
 function SignalCard({ signal }: { signal: Signal }) {
   const meta    = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";
@@ -305,6 +346,10 @@ function SignalCard({ signal }: { signal: Signal }) {
         support={signal.support_strike || 0}
         resistance={signal.resistance_strike || 0}
         price={signal.current_price || 0}
+      />
+      <CEPEDelta
+        ceDelta={signal.ce_oi_delta || 0}
+        peDelta={signal.pe_oi_delta || 0}
       />
 
       {(isFired || isWatch) && (

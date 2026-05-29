@@ -30,6 +30,8 @@ interface Signal {
   session_open_oi: number;
   cumulative_oi_pct: number;
   cumulative_direction: "bullish" | "bearish" | "neutral";
+  session_peak_oi_pct: number;
+  oi_unwind_status: "building" | "rolling_over" | "unwinding";
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -141,6 +143,25 @@ function CumulativeBar({ pct, direction }: { pct: number; direction: string }) {
   );
 }
 
+function UnwindBadge({ status, peak, current }: { status: string; peak: number; current: number }) {
+  if (status === "building") return null;
+
+  const isUnwinding = status === "unwinding";
+  const bg    = isUnwinding ? "#FCEBEB" : "#FAEEDA";
+  const color = isUnwinding ? "#791F1F" : "#633806";
+  const icon  = isUnwinding ? "🔴" : "⚠";
+  const label = isUnwinding
+    ? `OI unwinding — peak ${peak > 0 ? "+" : ""}${peak.toFixed(1)}%, now ${current > 0 ? "+" : ""}${current.toFixed(1)}% — possible exhaustion`
+    : `OI rolling over — peak ${peak > 0 ? "+" : ""}${peak.toFixed(1)}%, now ${current > 0 ? "+" : ""}${current.toFixed(1)}% — watch for reversal`;
+
+  return (
+    <div style={{ background: bg, borderRadius: 6, padding: "5px 10px", marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: 12, color }}>
+      <span>{icon}</span>
+      <span>{label}</span>
+    </div>
+  );
+}
+
 function SignalCard({ signal }: { signal: Signal }) {
   const meta    = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";
@@ -205,6 +226,11 @@ function SignalCard({ signal }: { signal: Signal }) {
       </div>
 
       <CumulativeBar pct={signal.cumulative_oi_pct || 0} direction={signal.cumulative_direction || "neutral"} />
+      <UnwindBadge
+        status={signal.oi_unwind_status || "building"}
+        peak={signal.session_peak_oi_pct || 0}
+        current={signal.cumulative_oi_pct || 0}
+      />
 
       {(isFired || isWatch) && (
         <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10, marginTop: 8 }}>

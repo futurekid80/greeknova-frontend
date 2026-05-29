@@ -283,7 +283,7 @@ export default function CPRScanner() {
                       <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold ${WIDTH_STYLES[row.width_color] || WIDTH_STYLES.GRAY}`}>
                         {row.width_emoji} {row.width_label}
                       </div>
-                      {(row.best_signal as any).alignment && (
+                      {row.best_signal && (row.best_signal as any).alignment && (
                             <div className={`text-[9px] font-bold mb-0.5 ${
                               (row.best_signal as any).alignment_color === 'EMERALD' 
                                 ? 'text-emerald-400' 

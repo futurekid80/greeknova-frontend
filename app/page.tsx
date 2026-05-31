@@ -567,7 +567,7 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
 
   const callWriters = uoaSignals
     .filter(s => s.signal_type === 'CALL_WRITING' && s.score >= 3)
-    ..map(s => ({
+    .map(s => ({
       ...s,
       otm_distance_pct: (() => { const c = cmpMap[s.symbol] || 0; return c > 0 ? Math.round(Math.abs(s.strike - c) / c * 1000) / 10 : null })()
     }))

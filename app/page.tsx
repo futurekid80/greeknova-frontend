@@ -574,24 +574,11 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
   // Volume Surge Leaders
   const volSurge = isMarketData
     ? [...stocksOnly]
-        .filter(s => s.vol_surge)
+        .filter(s => s.vol_surge || Math.abs(s.oi_chg_pct||0) > 5)
         .sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))
         .slice(0,3)
     : []
 
-  const distanceColor = (d?: number) => {
-    if (!d && d !== 0) return 'text-gray-500'
-    if (d <= 1) return 'text-emerald-400'
-    if (d <= 2) return 'text-amber-400'
-    return 'text-red-400'
-  }
-
-  const distanceIcon = (d?: number) => {
-    if (!d && d !== 0) return ''
-    if (d <= 1) return '✅'
-    if (d <= 2) return '⚠️'
-    return '🔴'
-  }
 
   if (!isMarketData && putWriters.length === 0 && callWriters.length === 0) return null
 
@@ -630,8 +617,16 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
                   <p className="text-xs font-bold text-white">{s.symbol}</p>
                   <p className="text-[10px] text-gray-500">{s.strike} PE · {s.score}/5</p>
                 </div>
-                <span className={`text-[10px] font-bold ${distanceColor(s.strikes_from_atm)}`}>
-                  {distanceIcon(s.strikes_from_atm)} {s.strikes_from_atm?.toFixed(1) ?? '—'}str
+               <span className={`text-[10px] font-bold ${
+                  s.otm_distance_pct != null
+                    ? s.otm_distance_pct <= 2 ? 'text-emerald-400'
+                    : s.otm_distance_pct <= 5 ? 'text-amber-400'
+                    : 'text-red-400'
+                    : 'text-gray-500'
+                }`}>
+                  {s.otm_distance_pct != null
+                    ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}%`
+                    : '—'}
                 </span>
               </button>
             ))}
@@ -653,8 +648,16 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
                   <p className="text-xs font-bold text-white">{s.symbol}</p>
                   <p className="text-[10px] text-gray-500">{s.strike} CE · {s.score}/5</p>
                 </div>
-                <span className={`text-[10px] font-bold ${distanceColor(s.strikes_from_atm)}`}>
-                  {distanceIcon(s.strikes_from_atm)} {s.strikes_from_atm?.toFixed(1) ?? '—'}str
+                <span className={`text-[10px] font-bold ${
+                  s.otm_distance_pct != null
+                    ? s.otm_distance_pct <= 2 ? 'text-emerald-400'
+                    : s.otm_distance_pct <= 5 ? 'text-amber-400'
+                    : 'text-red-400'
+                    : 'text-gray-500'
+                }`}>
+                  {s.otm_distance_pct != null
+                    ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}%`
+                    : '—'}
                 </span>
               </button>
             ))}

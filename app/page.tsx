@@ -578,17 +578,6 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
     })
     .slice(0,3)
 
-  // Top Call Writers — near-ATM, score >= 3, sorted by strikes_from_atm
-  const callWriters = uoaSignals
-    .filter(s => s.signal_type === 'CALL_WRITING' && s.score >= 3)
-    .sort((a,b) => {
-      const distA = a.strikes_from_atm ?? 99
-      const distB = b.strikes_from_atm ?? 99
-      if (distA !== distB) return distA - distB
-      return b.score - a.score
-    })
-    .slice(0,3)
-
   // Volume Surge Leaders
   const volSurge = isMarketData
     ? [...stocksOnly]

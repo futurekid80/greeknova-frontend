@@ -66,37 +66,64 @@ function getWriterTake(r: RadarResult): {
   refStrike: number; refSide: 'CE' | 'PE'
   safetyLabel: string; safetyColor: string
   structureNote: string; cautionNote: string | null
+  opportunityLabel: string; opportunityColor: string; opportunityBg: string
+  conflictNote: string | null
 } {
   const isCEWriter = r.signal === 'SHORT_BUILDUP' || r.signal === 'LONG_UNWINDING'
   const isPEWriter = r.signal === 'LONG_BUILDUP' || r.signal === 'SHORT_COVERING'
   const refSide: 'CE' | 'PE' = isCEWriter ? 'CE' : 'PE'
   const refStrike = getRefStrike(r.cmp, refSide)
-
   const oiType    = isCEWriter ? '✍️ CE OI Structure' : '✍️ PE OI Structure'
   const oiColor   = isCEWriter ? 'text-red-400' : 'text-emerald-400'
   const oiBg      = isCEWriter ? 'bg-red-950/20' : 'bg-emerald-950/20'
   const oiBorder  = isCEWriter ? 'border-red-800/30' : 'border-emerald-800/30'
-
   const safetyLabel = r.consistency_pct >= 70 ? 'HIGH' : r.consistency_pct >= 50 ? 'MEDIUM' : 'LOW'
   const safetyColor = safetyLabel === 'HIGH' ? 'text-emerald-400' : safetyLabel === 'MEDIUM' ? 'text-amber-400' : 'text-red-400'
 
-  // Structure note from composition
+  // Writer Opportunity — explicit context
+  let opportunityLabel = ''
+  let opportunityColor = ''
+  let opportunityBg = ''
+  if (isCEWriter && r.composition === 'CALL_DOMINATED') {
+    opportunityLabel = '✅ CE writing context — call writers observably active'
+    opportunityColor = 'text-emerald-400'
+    opportunityBg = 'bg-emerald-950/20'
+  } else if (isCEWriter && r.composition === 'PUT_DOMINATED') {
+    opportunityLabel = '⚠️ Mixed — PE writers dominant despite bearish price'
+    opportunityColor = 'text-amber-400'
+    opportunityBg = 'bg-amber-950/20'
+  } else if (isPEWriter && r.composition === 'PUT_DOMINATED') {
+    opportunityLabel = '✅ PE writing context — put writers observably active'
+    opportunityColor = 'text-emerald-400'
+    opportunityBg = 'bg-emerald-950/20'
+  } else if (isPEWriter && r.composition === 'CALL_DOMINATED') {
+    opportunityLabel = '⚠️ Mixed — CE writers dominant despite bullish price'
+    opportunityColor = 'text-amber-400'
+    opportunityBg = 'bg-amber-950/20'
+  } else {
+    opportunityLabel = '⚪ Balanced OI — both sides active, monitor closely'
+    opportunityColor = 'text-gray-400'
+    opportunityBg = 'bg-gray-900/30'
+  }
+
+  const conflictNote = (isCEWriter && r.composition === 'PUT_DOMINATED') ||
+                       (isPEWriter && r.composition === 'CALL_DOMINATED')
+    ? '⚠️ Composition contradicts price direction — avoid'
+    : null
+
   const compNote = r.composition === 'PUT_DOMINATED'
     ? 'PE writers active · bullish institutional positioning'
     : r.composition === 'CALL_DOMINATED'
     ? 'CE writers active · bearish institutional positioning'
     : 'Mixed OI · both sides positioning'
 
-  const structureNote = compNote
-
-  // Caution — when OI is unwinding (writer's risk)
   const cautionNote = r.signal === 'LONG_UNWINDING'
     ? '⚠️ Long positions exiting — monitor OI direction'
     : r.signal === 'SHORT_COVERING'
     ? '⚠️ Short covering — OI reducing'
     : null
 
-  return { oiType, oiColor, oiBg, oiBorder, refStrike, refSide, safetyLabel, safetyColor, structureNote, cautionNote }
+  return { oiType, oiColor, oiBg, oiBorder, refStrike, refSide, safetyLabel, safetyColor, structureNote: compNote, cautionNote, opportunityLabel, opportunityColor, opportunityBg, conflictNote }
 }
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
@@ -533,6 +560,9 @@ export default function PositionalRadar() {
                             <p className={`text-[10px] font-bold ${wt.safetyColor} mb-1`}>
                               Direction Safety: {wt.safetyLabel}
                             </p>
+                            <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded mb-1.5 ${wt.opportunityColor} ${wt.opportunityBg}`}>
+                              {wt.opportunityLabel}
+                            </div>
                             <p className="text-[10px] text-gray-400 mb-1">{wt.structureNote}</p>
                             <p className="text-[10px] text-gray-500">
                               Ref strike: <span className="text-white font-bold">{wt.refStrike.toLocaleString()} {wt.refSide}</span>

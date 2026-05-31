@@ -533,6 +533,163 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Activity Leaders ──────────────────────────────────────────────────────────
+function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
+  stocks: PulseStock[]
+  uoaSignals: any[]
+  onSymbolClick: (sym: string) => void
+}) {
+  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
+  const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
+
+  // Day High Breakouts — stocks where price_chg_pct is positive and high
+  const dayHighBreakouts = isMarketData
+    ? [...stocksOnly]
+        .filter(s => (s.price_chg_pct||0) > 0.5)
+        .sort((a,b) => (b.price_chg_pct||0) - (a.price_chg_pct||0))
+        .slice(0,3)
+    : []
+
+  // Top Put Writers — near-ATM, score >= 3, sorted by strikes_from_atm
+  const putWriters = uoaSignals
+    .filter(s => s.signal_type === 'PUT_WRITING' && s.score >= 3)
+    .sort((a,b) => {
+      const distA = a.strikes_from_atm ?? 99
+      const distB = b.strikes_from_atm ?? 99
+      if (distA !== distB) return distA - distB
+      return b.score - a.score
+    })
+    .slice(0,3)
+
+  // Top Call Writers — near-ATM, score >= 3, sorted by strikes_from_atm
+  const callWriters = uoaSignals
+    .filter(s => s.signal_type === 'CALL_WRITING' && s.score >= 3)
+    .sort((a,b) => {
+      const distA = a.strikes_from_atm ?? 99
+      const distB = b.strikes_from_atm ?? 99
+      if (distA !== distB) return distA - distB
+      return b.score - a.score
+    })
+    .slice(0,3)
+
+  // Volume Surge Leaders
+  const volSurge = isMarketData
+    ? [...stocksOnly]
+        .filter(s => s.vol_surge)
+        .sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))
+        .slice(0,3)
+    : []
+
+  const distanceColor = (d?: number) => {
+    if (!d && d !== 0) return 'text-gray-500'
+    if (d <= 1) return 'text-emerald-400'
+    if (d <= 2) return 'text-amber-400'
+    return 'text-red-400'
+  }
+
+  const distanceIcon = (d?: number) => {
+    if (!d && d !== 0) return ''
+    if (d <= 1) return '✅'
+    if (d <= 2) return '⚠️'
+    return '🔴'
+  }
+
+  if (!isMarketData && putWriters.length === 0 && callWriters.length === 0) return null
+
+  return (
+    <div className="grid grid-cols-4 gap-3 mb-6">
+
+      {/* Day High Breakouts */}
+      <div className="bg-emerald-950/20 border border-emerald-800/30 rounded-xl p-4">
+        <p className="text-xs text-gray-500 mb-3">🔝 Day High Breakouts</p>
+        {dayHighBreakouts.length > 0 ? (
+          <div className="space-y-2">
+            {dayHighBreakouts.map(s => (
+              <button key={s.symbol} onClick={() => onSymbolClick(s.symbol)}
+                className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
+                <span className="text-xs font-bold text-white">{s.symbol}</span>
+                <span className="text-xs font-bold text-emerald-400">+{s.price_chg_pct?.toFixed(2)}%</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-600">
+            {isMarketData ? 'No breakouts yet' : 'Available during market hours'}
+          </p>
+        )}
+      </div>
+
+      {/* Top Put Writers */}
+      <div className="bg-emerald-950/10 border border-emerald-800/20 rounded-xl p-4">
+        <p className="text-xs text-gray-500 mb-3">✍️ Top Put Writers</p>
+        {putWriters.length > 0 ? (
+          <div className="space-y-2">
+            {putWriters.map((s,i) => (
+              <button key={i} onClick={() => onSymbolClick(s.symbol)}
+                className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
+                <div className="text-left">
+                  <p className="text-xs font-bold text-white">{s.symbol}</p>
+                  <p className="text-[10px] text-gray-500">{s.strike} PE · {s.score}/5</p>
+                </div>
+                <span className={`text-[10px] font-bold ${distanceColor(s.strikes_from_atm)}`}>
+                  {distanceIcon(s.strikes_from_atm)} {s.strikes_from_atm?.toFixed(1) ?? '—'}str
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-600">No put writing signals</p>
+        )}
+      </div>
+
+      {/* Top Call Writers */}
+      <div className="bg-red-950/10 border border-red-800/20 rounded-xl p-4">
+        <p className="text-xs text-gray-500 mb-3">✍️ Top Call Writers</p>
+        {callWriters.length > 0 ? (
+          <div className="space-y-2">
+            {callWriters.map((s,i) => (
+              <button key={i} onClick={() => onSymbolClick(s.symbol)}
+                className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
+                <div className="text-left">
+                  <p className="text-xs font-bold text-white">{s.symbol}</p>
+                  <p className="text-[10px] text-gray-500">{s.strike} CE · {s.score}/5</p>
+                </div>
+                <span className={`text-[10px] font-bold ${distanceColor(s.strikes_from_atm)}`}>
+                  {distanceIcon(s.strikes_from_atm)} {s.strikes_from_atm?.toFixed(1) ?? '—'}str
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-600">No call writing signals</p>
+        )}
+      </div>
+
+      {/* Volume Surge Leaders */}
+      <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl p-4">
+        <p className="text-xs text-gray-500 mb-3">⚡ Vol Surge Leaders</p>
+        {volSurge.length > 0 ? (
+          <div className="space-y-2">
+            {volSurge.map(s => (
+              <button key={s.symbol} onClick={() => onSymbolClick(s.symbol)}
+                className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
+                <span className="text-xs font-bold text-white">{s.symbol}</span>
+                <span className="text-xs font-bold text-amber-400">
+                  {(s.oi_chg_pct||0) > 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}% OI
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-600">
+            {isMarketData ? 'No volume surges yet' : 'Available during market hours'}
+          </p>
+        )}
+      </div>
+
+    </div>
+  )
+}
 export default function MarketPulse() {
   const [analyses, setAnalyses]       = useState<IndexAnalysis[]>([])
   const [cmps, setCmps]               = useState<Record<string,number>>({})
@@ -543,6 +700,7 @@ export default function MarketPulse() {
   const [lastUpdate, setLastUpdate]   = useState('')
   const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [uoaSignals, setUoaSignals] = useState<any[]>([])
 
   useEffect(() => {
     async function checkAuth() {
@@ -568,11 +726,13 @@ async function fetchData() {
 
     try {
       // Fix 2 — Fetch CPR + OI Pulse in parallel
-      const [cprRes, pulseRes] = await Promise.all([
+      const [cprRes, pulseRes, uoaRes] = await Promise.all([
         fetch(`${API}/cpr-scanner`),
-        fetch(`${API}/oi-pulse`)
+        fetch(`${API}/oi-pulse`),
+        fetch(`${API}/uoa`)
       ])
-      const [cprJson, pulseJson] = await Promise.all([cprRes.json(), pulseRes.json()])
+      const [cprJson, pulseJson, uoaJson] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json()])
+      setUoaSignals(uoaJson?.signals || [])
 
       const cprRows: CPRRow[] = cprJson?.data || []
       setCprData(cprRows)
@@ -783,6 +943,14 @@ async function fetchData() {
         {/* Today's Spotlight */}
         {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}
 
+        {/* Activity Leaders */}
+        {feedStocks.length > 0 && (
+          <ActivityLeaders
+            stocks={feedStocks}
+            uoaSignals={uoaSignals}
+            onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym) }}
+          />
+        )}
         {/* Market Breadth */}
         {breadth.total > 0 && (
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-6">

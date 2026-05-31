@@ -23,8 +23,7 @@ const ALL_SYMBOLS = [
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
 interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }
 interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
-interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number }
-
+interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean }
 function fmtOI(n: number) {
   const abs = Math.abs(n)
   if (abs >= 10000000) return `${(n/10000000).toFixed(2)}Cr`
@@ -756,6 +755,7 @@ async function fetchData() {
         label:         p.label || '—',
         oi_now:        p.oi_now,
         oi_prev:       p.oi_prev,
+        vol_surge:     p.vol_surge || false,
         has_oi_signal: (cprMap[p.symbol] as CPRRow)?.has_oi_signal || false,
         width_pct:     (cprMap[p.symbol] as CPRRow)?.width_pct,
         width_pts:     (cprMap[p.symbol] as CPRRow)?.width_pts,

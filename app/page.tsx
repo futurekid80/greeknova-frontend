@@ -552,9 +552,27 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
   // Top Put Writers — near-ATM, score >= 3, sorted by strikes_from_atm
   const putWriters = uoaSignals
     .filter(s => s.signal_type === 'PUT_WRITING' && s.score >= 3)
+    .map(s => ({
+      ...s,
+      otm_distance_pct: s.cmp > 0 ? Math.round(Math.abs(s.strike - s.cmp) / s.cmp * 1000) / 10 : null
+    }))
     .sort((a,b) => {
-      const distA = a.strikes_from_atm ?? 99
-      const distB = b.strikes_from_atm ?? 99
+      const distA = a.otm_distance_pct ?? 99
+      const distB = b.otm_distance_pct ?? 99
+      if (distA !== distB) return distA - distB
+      return b.score - a.score
+    })
+    .slice(0,3)
+
+  const callWriters = uoaSignals
+    .filter(s => s.signal_type === 'CALL_WRITING' && s.score >= 3)
+    .map(s => ({
+      ...s,
+      otm_distance_pct: s.cmp > 0 ? Math.round(Math.abs(s.strike - s.cmp) / s.cmp * 1000) / 10 : null
+    }))
+    .sort((a,b) => {
+      const distA = a.otm_distance_pct ?? 99
+      const distB = b.otm_distance_pct ?? 99
       if (distA !== distB) return distA - distB
       return b.score - a.score
     })

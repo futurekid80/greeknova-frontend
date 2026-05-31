@@ -540,6 +540,7 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
 }) {
   const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
   const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
+  const cmpMap = Object.fromEntries(stocks.map(s => [s.symbol, s.cmp]))
 
   // Day High Breakouts — stocks where price_chg_pct is positive and high
   const dayHighBreakouts = isMarketData
@@ -566,9 +567,9 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
 
   const callWriters = uoaSignals
     .filter(s => s.signal_type === 'CALL_WRITING' && s.score >= 3)
-    .map(s => ({
+    ..map(s => ({
       ...s,
-      otm_distance_pct: (() => { const c = cmpMap[s.symbol] || 0; return c > 0 ? Math.round(Math.abs(s.strike - c) / c * 1000) / 10 : null })(): s.cmp > 0 ? Math.round(Math.abs(s.strike - s.cmp) / s.cmp * 1000) / 10 : null
+      otm_distance_pct: (() => { const c = cmpMap[s.symbol] || 0; return c > 0 ? Math.round(Math.abs(s.strike - c) / c * 1000) / 10 : null })()
     }))
     .sort((a,b) => {
       const distA = a.otm_distance_pct ?? 99

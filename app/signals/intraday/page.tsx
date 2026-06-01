@@ -154,23 +154,19 @@ export default function IntradaySignalLog() {
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
 
-  const fetchData = useCallback(async (isAutoRefresh = false) => {
-    // Auto-refresh: don't show loading spinner or blank screen — keep existing data visible
-    if (!isAutoRefresh) setLoading(true)
+  const fetchData = useCallback(async () => {
+    setLoading(true)
     try {
       const res  = await fetch(`${API}/signal-log`)
       const json = await res.json()
-      // Only update data if new response has signals OR we have no data yet
-      if (json.total > 0 || !data) {
-        setData(json)
-      }
+      setData(json)
     } catch(e) { console.error(e) }
-    if (!isAutoRefresh) setLoading(false)
-  }, [data])
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
     fetchData()
-    intervalRef.current  = setInterval(() => { fetchData(true); setCountdown(300) }, 5*60*1000)
+    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
     return () => {
       if (intervalRef.current)  clearInterval(intervalRef.current)
@@ -314,7 +310,7 @@ export default function IntradaySignalLog() {
         <p className="text-xs text-gray-600 mb-4">{filtered.length} stocks · Futures OI only · Informational</p>
 
         {/* Table */}
-        {loading ? (
+        {loading && signals.length === 0 ? (
           <div className="space-y-2">{[1,2,3,4,5].map(i=>(
             <div key={i} className="h-14 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>
           ))}</div>

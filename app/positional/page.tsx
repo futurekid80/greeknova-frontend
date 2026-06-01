@@ -22,6 +22,10 @@ interface RadarResult {
   ce_pct_of_total?: number; pe_pct_of_total?: number
   pcr_series?: number; composition?: string; composition_interp?: string; composition_short?: string
   bias_confirmed?: boolean; dominant?: string
+  // OI Walls
+  ce_wall?: number; pe_wall?: number
+  ce_wall_oi_L?: number; pe_wall_oi_L?: number
+  trade_range?: number; trade_range_pct?: number; range_label?: string
 }
 
 interface RadarData {
@@ -570,6 +574,22 @@ export default function PositionalRadar() {
                             </p>
                             {wt.cautionNote && (
                               <p className="text-[10px] text-amber-400 mt-1">{wt.cautionNote}</p>
+                            )}
+                            {r.ce_wall && r.pe_wall && (
+                              <div className="mt-1.5 pt-1.5 border-t border-gray-700/50">
+                                <p className="text-[10px] text-gray-500 mb-0.5">OI walls observed:</p>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] font-bold text-red-400">
+                                    📈 CE ₹{r.ce_wall.toLocaleString()} · {r.ce_wall_oi_L}L
+                                  </span>
+                                  <span className="text-[10px] font-bold text-emerald-400">
+                                    📉 PE ₹{r.pe_wall.toLocaleString()} · {r.pe_wall_oi_L}L
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-gray-600 mt-0.5">
+                                  Range: ₹{r.trade_range} · {r.trade_range_pct}% · {r.range_label}
+                                </p>
+                              </div>
                             )}
                             <p className="text-[10px] text-gray-700 mt-1">Verify OI wall before use</p>
                           </div>

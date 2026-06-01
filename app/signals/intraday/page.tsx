@@ -154,19 +154,23 @@ export default function IntradaySignalLog() {
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchData = useCallback(async (isAutoRefresh = false) => {
+    // Auto-refresh: don't show loading spinner or blank screen — keep existing data visible
+    if (!isAutoRefresh) setLoading(true)
     try {
       const res  = await fetch(`${API}/signal-log`)
       const json = await res.json()
-      setData(json)
+      // Only update data if new response has signals OR we have no data yet
+      if (json.total > 0 || !data) {
+        setData(json)
+      }
     } catch(e) { console.error(e) }
-    setLoading(false)
-  }, [])
+    if (!isAutoRefresh) setLoading(false)
+  }, [data])
 
   useEffect(() => {
     fetchData()
-    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
+    intervalRef.current  = setInterval(() => { fetchData(true); setCountdown(300) }, 5*60*1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
     return () => {
       if (intervalRef.current)  clearInterval(intervalRef.current)

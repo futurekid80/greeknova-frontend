@@ -30,6 +30,7 @@ interface Signal {
   session_open_oi: number;
   cumulative_oi_pct: number;
   cumulative_direction: "bullish" | "bearish" | "neutral";
+  futures_oi_direction: "long buildup" | "short buildup" | "short covering" | "long unwinding" | "neutral";
   session_peak_oi_pct: number;
   oi_unwind_status: "building" | "rolling_over" | "unwinding";
   divergence_label: "neutral" | "continuation" | "exhaustion" | "coiling" | "trap";
@@ -392,7 +393,11 @@ function SignalCard({ signal }: { signal: Signal }) {
         </div>
       </div>
 
-      <CumulativeBar pct={signal.cumulative_oi_pct || 0} direction={signal.cumulative_direction || "neutral"} />
+      <CumulativeBar
+        pct={signal.cumulative_oi_pct || 0}
+        direction={signal.cumulative_direction || "neutral"}
+        futuresDirection={signal.futures_oi_direction || "neutral"}
+      />
       <UnwindBadge
         status={signal.oi_unwind_status || "building"}
         peak={signal.session_peak_oi_pct || 0}

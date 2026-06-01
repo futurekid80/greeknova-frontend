@@ -31,6 +31,8 @@ interface Signal {
   cumulative_oi_pct: number;
   cumulative_direction: "bullish" | "bearish" | "neutral";
   futures_oi_direction: "long buildup" | "short buildup" | "short covering" | "long unwinding" | "neutral";
+  overnight_oi_direction: string;
+  session_open_price: number;
   session_peak_oi_pct: number;
   oi_unwind_status: "building" | "rolling_over" | "unwinding";
   divergence_label: "neutral" | "continuation" | "exhaustion" | "coiling" | "trap";
@@ -164,6 +166,28 @@ function CumulativeBar({ pct, direction, futuresDirection }: { pct: number; dire
           <div style={{ height: "100%", borderRadius: 99, width: `${barWidth}%`, background: cfg.color, transition: "width 0.5s ease" }} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function OvernightBadge({ direction }: { direction: string }) {
+  if (!direction || direction === "neutral") return null;
+
+  const config: Record<string, { color: string; bg: string; icon: string }> = {
+    "long buildup":   { bg: "#E1F5EE", color: "#085041", icon: "📈" },
+    "short buildup":  { bg: "#FCEBEB", color: "#791F1F", icon: "📉" },
+    "short covering": { bg: "#E1F5EE", color: "#085041", icon: "↗" },
+    "long unwinding": { bg: "#FCEBEB", color: "#791F1F", icon: "↘" },
+  };
+
+  const cfg = config[direction];
+  if (!cfg) return null;
+
+  return (
+    <div style={{ background: cfg.bg, borderRadius: 6, padding: "4px 10px", marginTop: 6, fontSize: 11, color: cfg.color, display: "flex", alignItems: "center", gap: 5 }}>
+      <span>{cfg.icon}</span>
+      <span style={{ fontWeight: 500 }}>Overnight: {direction}</span>
+      <span style={{ opacity: 0.8 }}>— futures OI context</span>
     </div>
   );
 }
@@ -408,6 +432,7 @@ function SignalCard({ signal }: { signal: Signal }) {
         direction={signal.cumulative_direction || "neutral"}
         futuresDirection={signal.futures_oi_direction || "neutral"}
       />
+      <OvernightBadge direction={signal.overnight_oi_direction || "neutral"} />
       <UnwindBadge
         status={signal.oi_unwind_status || "building"}
         peak={signal.session_peak_oi_pct || 0}

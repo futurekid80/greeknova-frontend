@@ -346,7 +346,7 @@ export default function CPRScanner() {
                               {row.best_signal.signal_type.replace(/_/g,' ')}
                             </span>
                           </div>
-                          <p className="text-[10px] text-gray-600">{row.best_signal.strike.toLocaleString()} {row.best_signal.option_type} · {row.best_signal.score}/5</p>
+                          <p className="text-[10px] font-bold text-white">{row.best_signal.strike.toLocaleString()} <span className={row.best_signal.option_type === 'CE' ? 'text-red-400' : 'text-emerald-400'}>{row.best_signal.option_type}</span> · <span className="text-gray-400">{row.best_signal.score}/5</span></p>
                           {(row.best_signal as any).strikes_from_atm !== undefined && (
                             <p className={`text-[10px] font-semibold mt-0.5 ${
                               (row.best_signal as any).strikes_from_atm <= 1

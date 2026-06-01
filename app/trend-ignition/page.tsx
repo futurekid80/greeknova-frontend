@@ -40,6 +40,12 @@ interface Signal {
   resistance_oi: number;
   ce_oi_delta: number;
   pe_oi_delta: number;
+  rally_quality: "neutral" | "genuine" | "suspect";
+  rally_note: string;
+  ce_writing_count: number;
+  pe_writing_count: number;
+  ce_buying_count: number;
+  pe_buying_count: number;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -269,6 +275,32 @@ function CEPEDelta({ ceDelta, peDelta }: { ceDelta: number; peDelta: number }) {
   );
 }
 
+function RallyQualityBadge({ quality, note, ceBuying, peBuying, ceWriting, peWriting }:
+  { quality: string; note: string; ceBuying: number; peBuying: number; ceWriting: number; peWriting: number }) {
+  if (!quality || quality === "neutral" || !note) return null;
+
+  const isGenuine = quality === "genuine";
+  const bg    = isGenuine ? "#E1F5EE" : "#FAEEDA";
+  const color = isGenuine ? "#085041" : "#633806";
+  const icon  = isGenuine ? "✅" : "⚠";
+
+  return (
+    <div style={{ background: bg, borderRadius: 6, padding: "6px 10px", marginTop: 6 }}>
+      <div style={{ fontSize: 12, color, marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}>
+        <span>{icon}</span>
+        <span style={{ fontWeight: 500 }}>{isGenuine ? "Genuine rally" : "Suspect rally"}</span>
+        <span style={{ fontWeight: 400, opacity: 0.85 }}>— {note}</span>
+      </div>
+      <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--color-text-tertiary)" }}>
+        {ceWriting > 0 && <span>CE writing: {ceWriting} strikes</span>}
+        {peWriting > 0 && <span>PE writing: {peWriting} strikes</span>}
+        {ceBuying > 0  && <span style={{ color: "#1D9E75" }}>CE buying: {ceBuying} strikes</span>}
+        {peBuying > 0  && <span style={{ color: "#C0392B" }}>PE buying: {peBuying} strikes</span>}
+      </div>
+    </div>
+  );
+}
+
 function ExpiryBadge({ expiryDate }: { expiryDate: string }) {
   if (!expiryDate) return null;
 
@@ -378,6 +410,14 @@ function SignalCard({ signal }: { signal: Signal }) {
       <CEPEDelta
         ceDelta={signal.ce_oi_delta || 0}
         peDelta={signal.pe_oi_delta || 0}
+      />
+      <RallyQualityBadge
+        quality={signal.rally_quality || "neutral"}
+        note={signal.rally_note || ""}
+        ceBuying={signal.ce_buying_count || 0}
+        peBuying={signal.pe_buying_count || 0}
+        ceWriting={signal.ce_writing_count || 0}
+        peWriting={signal.pe_writing_count || 0}
       />
 
       {(isFired || isWatch) && (

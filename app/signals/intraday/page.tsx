@@ -42,7 +42,15 @@ interface Signal {
   options_confirms: boolean | null
   options_alignment: string | null
   options_alignment_color: string | null
-  options_signal: OptionsSignal | null
+options_signal: OptionsSignal | null
+  // OI Walls
+  ce_wall: number | null
+  pe_wall: number | null
+  ce_wall_oi_L: number | null
+  pe_wall_oi_L: number | null
+  trade_range: number | null
+  trade_range_pct: number | null
+  range_label: string | null
 }
 
 interface LogData {
@@ -377,6 +385,21 @@ export default function IntradaySignalLog() {
                         <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
                           {m.icon} {sig.label}
                         </div>
+                        {sig.ce_wall && sig.pe_wall && (
+                          <div className="flex items-center justify-center gap-1.5 mt-1.5 flex-wrap">
+                            <span className="text-[10px] font-bold text-red-400 bg-red-950/30 border border-red-800/30 px-1.5 py-0.5 rounded">
+                              📈 CE ₹{sig.ce_wall.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-1.5 py-0.5 rounded">
+                              📉 PE ₹{sig.pe_wall.toLocaleString()}
+                            </span>
+                            {sig.range_label && (
+                              <span className="text-[10px] text-gray-600">
+                                {sig.trade_range_pct}% {sig.range_label}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       {/* CPR */}

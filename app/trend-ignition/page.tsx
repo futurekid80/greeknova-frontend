@@ -132,26 +132,36 @@ function useAlerts(signals: Signal[]) {
   }, [signals]);
 }
 
-function CumulativeBar({ pct, direction }: { pct: number; direction: string }) {
+function CumulativeBar({ pct, direction, futuresDirection }: { pct: number; direction: string; futuresDirection?: string }) {
   const dirEmoji = pct > 0.05 ? "▲" : pct < -0.05 ? "▼" : "—";
-  const color = direction === "bullish" ? "#1D9E75"
-    : direction === "bearish" ? "#C0392B"
-    : "var(--color-text-tertiary)";
+
+  const futDirConfig: Record<string, { color: string; label: string }> = {
+    "long buildup":   { color: "#1D9E75", label: "long buildup" },
+    "short buildup":  { color: "#C0392B", label: "short buildup" },
+    "short covering": { color: "#1D9E75", label: "short covering" },
+    "long unwinding": { color: "#C0392B", label: "long unwinding" },
+    "neutral":        { color: "var(--color-text-tertiary)", label: "neutral" },
+  };
+
+  const fd  = futuresDirection || "neutral";
+  const cfg = futDirConfig[fd] || futDirConfig["neutral"];
   const barWidth = Math.min(Math.abs(pct) * 5, 100);
 
   return (
     <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 12 }}>
       <div style={{ flexShrink: 0 }}>
         <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 2 }}>Session OI (positional)</div>
-        <div style={{ fontSize: 13, fontWeight: 500, color, display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: cfg.color, display: "flex", alignItems: "center", gap: 4 }}>
           <span>{dirEmoji}</span>
           <span>{pct > 0 ? "+" : ""}{pct?.toFixed(1)}%</span>
-          <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-tertiary)", marginLeft: 2 }}>since open · {direction}</span>
+          <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-tertiary)", marginLeft: 2 }}>
+            since open · <span style={{ color: cfg.color, fontWeight: 500 }}>{cfg.label}</span>
+          </span>
         </div>
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ height: 4, background: "var(--color-background-tertiary)", borderRadius: 99, overflow: "hidden" }}>
-          <div style={{ height: "100%", borderRadius: 99, width: `${barWidth}%`, background: color, transition: "width 0.5s ease" }} />
+          <div style={{ height: "100%", borderRadius: 99, width: `${barWidth}%`, background: cfg.color, transition: "width 0.5s ease" }} />
         </div>
       </div>
     </div>

@@ -338,23 +338,42 @@ function TradeSignalBadge({ signal, icon, note, action }: {
   const s = styles[signal] || styles["mixed"];
   const label = signal.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
 
-  // Split note: "CE writers capping rally at ₹310 · ₹330 — expect resistance"
-  // → mainNote: "CE writers capping rally"
-  // → strikes: ["₹310", "₹330"]
-  // → suffix: "expect resistance"
-  const atIdx = note.indexOf(" at ");
+  // Parse note to extract strike pills
+  // Handles formats:
+  // 1. "CE writers capping rally at ₹8,900 · ₹9,100 — expect resistance"
+  // 2. "OI building, price flat — CE resistance at ₹9,000 · ₹9,100 · PE support at ₹8,700"
   let mainNote = note;
   let strikeList: string[] = [];
   let suffix = "";
 
+  // Format 1: single "at" with optional em-dash suffix
+  const atIdx = note.indexOf(" at ");
   if (atIdx > -1) {
-    mainNote = note.slice(0, atIdx);
+    // Check if this looks like a simple "X at ₹... — suffix" pattern
     const afterAt = note.slice(atIdx + 4);
-    // Find the em-dash separator if present
     const dashIdx = afterAt.indexOf(" — ");
-    const rawStrikes = dashIdx > -1 ? afterAt.slice(0, dashIdx) : afterAt;
-    suffix = dashIdx > -1 ? afterAt.slice(dashIdx + 3) : "";
-    strikeList = rawStrikes.split(" · ").filter(s => s.trim().length > 0);
+
+    if (dashIdx > -1) {
+      // Has em-dash — classic format
+      const rawStrikes = afterAt.slice(0, dashIdx);
+      suffix = afterAt.slice(dashIdx + 3);
+      // Only treat as strikes if they look like rupee amounts
+      const candidates = rawStrikes.split(" · ").filter(s => s.trim().startsWith("₹"));
+      if (candidates.length > 0) {
+        mainNote = note.slice(0, atIdx);
+        strikeList = candidates;
+      }
+    } else {
+      // No em-dash — could be coiling format "CE resistance at ₹9,000 · ₹9,100 · PE support at ₹8,700"
+      // Extract all ₹ amounts from the whole note
+      const allStrikes = note.match(/₹[\d,]+/g) || [];
+      if (allStrikes.length > 0) {
+        // Main note = everything before first ₹
+        const firstRupee = note.indexOf("₹");
+        mainNote = note.slice(0, firstRupee).replace(/[\s·,—]+$/, "").trim();
+        strikeList = allStrikes;
+      }
+    }
   }
 
   return (

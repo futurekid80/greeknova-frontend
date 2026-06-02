@@ -319,31 +319,58 @@ function TradeSignalBadge({ signal, icon, note, action }: {
 }) {
   if (!signal || signal === "neutral" || !note) return null;
 
-  const styles: Record<string, { bg: string; color: string; border: string }> = {
-    confirmed_move:  { bg: "#E1F5EE", color: "#085041", border: "#1D9E75" },
-    watch_reversal:  { bg: "#E1F5EE", color: "#085041", border: "#1D9E75" },
-    coiling:         { bg: "#FAEEDA", color: "#633806", border: "#BA7517" },
-    likely_fade:     { bg: "#FAEEDA", color: "#633806", border: "#BA7517" },
-    suspect_move:    { bg: "#FAEEDA", color: "#633806", border: "#BA7517" },
-    mixed:           { bg: "var(--color-background-secondary)", color: "var(--color-text-secondary)", border: "var(--color-border-tertiary)" },
-    exhaustion:      { bg: "#FCEBEB", color: "#791F1F", border: "#C0392B" },
+  type SignalStyle = { bg: string; labelColor: string; noteColor: string; actionColor: string; border: string; accentBg: string };
+  const styles: Record<string, SignalStyle> = {
+    confirmed_move: { bg: "#E1F5EE", labelColor: "#085041", noteColor: "#0F6E56", actionColor: "#1D9E75", border: "#1D9E75", accentBg: "#9FE1CB" },
+    watch_reversal: { bg: "#E1F5EE", labelColor: "#085041", noteColor: "#0F6E56", actionColor: "#1D9E75", border: "#1D9E75", accentBg: "#9FE1CB" },
+    coiling:        { bg: "#FAEEDA", labelColor: "#412402", noteColor: "#633806", actionColor: "#BA7517", border: "#EF9F27", accentBg: "#FAC775" },
+    likely_fade:    { bg: "#FAEEDA", labelColor: "#412402", noteColor: "#633806", actionColor: "#BA7517", border: "#EF9F27", accentBg: "#FAC775" },
+    suspect_move:   { bg: "#FAEEDA", labelColor: "#412402", noteColor: "#633806", actionColor: "#BA7517", border: "#EF9F27", accentBg: "#FAC775" },
+    mixed:          { bg: "var(--color-background-secondary)", labelColor: "var(--color-text-primary)", noteColor: "var(--color-text-secondary)", actionColor: "var(--color-text-tertiary)", border: "var(--color-border-secondary)", accentBg: "var(--color-background-tertiary)" },
+    exhaustion:     { bg: "#FCEBEB", labelColor: "#501313", noteColor: "#791F1F", actionColor: "#A32D2D", border: "#E24B4A", accentBg: "#F7C1C1" },
   };
 
   const s = styles[signal] || styles["mixed"];
+  const label = signal.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
+
+  // Split note into main text and strike levels (after "at")
+  const atIdx = note.indexOf(" at ");
+  const mainNote = atIdx > -1 ? note.slice(0, atIdx) : note;
+  const strikePart = atIdx > -1 ? note.slice(atIdx + 4) : "";
+
+  // Parse strike levels from dot-separated string
+  const strikeList = strikePart ? strikePart.split(" · ").filter(Boolean) : [];
 
   return (
-    <div style={{
-      background: s.bg, borderRadius: 8, padding: "10px 12px",
-      marginTop: 8, borderLeft: `3px solid ${s.border}`,
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 500, color: s.color, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-        {icon && <span>{icon}</span>}
-        <span>{signal.replace(/_/g, " ").replace(/\w/g, l => l.toUpperCase())}</span>
+    <div style={{ background: s.bg, borderRadius: 8, padding: "10px 12px", marginTop: 8, borderLeft: `3px solid ${s.border}` }}>
+      {/* Header row — icon + label + action pill */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {icon && <span style={{ fontSize: 14 }}>{icon}</span>}
+          <span style={{ fontSize: 13, fontWeight: 500, color: s.labelColor }}>{label}</span>
+        </div>
+        {action && (
+          <span style={{ fontSize: 11, color: s.actionColor, background: s.accentBg, padding: "2px 8px", borderRadius: 99, fontWeight: 500 }}>
+            {action}
+          </span>
+        )}
       </div>
-      <div style={{ fontSize: 12, color: s.color, opacity: 0.9, marginBottom: action ? 4 : 0 }}>{note}</div>
-      {action && (
-        <div style={{ fontSize: 11, color: s.color, opacity: 0.7, fontStyle: "italic" }}>
-          → {action}
+      {/* Note text */}
+      <div style={{ fontSize: 12, color: s.noteColor, marginBottom: strikeList.length ? 8 : 0, lineHeight: 1.5 }}>
+        {mainNote}
+      </div>
+      {/* Strike level pills */}
+      {strikeList.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          {strikeList.map((strike, i) => (
+            <span key={i} style={{
+              fontSize: 12, fontWeight: 500, color: s.labelColor,
+              background: s.accentBg, padding: "3px 10px",
+              borderRadius: 6, letterSpacing: "0.01em",
+            }}>
+              {strike}
+            </span>
+          ))}
         </div>
       )}
     </div>

@@ -368,10 +368,10 @@ function TradeSignalBadge({ signal, icon, note, action }: {
       // Extract all ₹ amounts from the whole note
       const allStrikes = note.match(/₹[\d,]+/g) || [];
       if (allStrikes.length > 0) {
-        // Main note = everything before first ₹
+        // Main note = everything before first ₹, strip trailing "at" or whitespace
         const firstRupee = note.indexOf("₹");
-        mainNote = note.slice(0, firstRupee).replace(/[\s·,—]+$/, "").trim();
-        strikeList = allStrikes;
+        mainNote = note.slice(0, firstRupee).replace(/[\s·,—]+$/, "").replace(/\s+at\s*$/, "").trim();
+        strikeList = allStrikes.slice(0, 4); // cap at 4 pills
       }
     }
   }

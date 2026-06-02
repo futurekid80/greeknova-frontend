@@ -167,6 +167,38 @@ export default function CPRScanner() {
           </div>
         </div>
 
+        {/* Market context banner */}
+        {(() => {
+          const now = new Date()
+          const istOffset = 5.5 * 60 * 60 * 1000
+          const ist = new Date(now.getTime() + istOffset)
+          const hour = ist.getUTCHours()
+          const min = ist.getUTCMinutes()
+          const totalMins = hour * 60 + min
+          const isAfterMarket = totalMins >= 16 * 60 + 30
+          const isPreMarket = totalMins < 9 * 60 + 15
+          const isWeekend = [0, 6].includes(ist.getUTCDay())
+
+          if (isWeekend || isAfterMarket || isPreMarket) {
+            return (
+              <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl px-4 py-3 mb-5 flex items-center gap-3">
+                <span className="text-lg">🌙</span>
+                <div>
+                  <p className="text-xs font-bold text-blue-400">
+                    {isWeekend ? 'Weekend — ' : isAfterMarket ? 'Market closed — ' : 'Pre-market — '}
+                    Showing tomorrow's CPR levels ({data?.trade_date})
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    CPR computed from today's official NSE close · Same data you'll see tomorrow at 9 AM · 
+                    OI signals reflect today's final session · Live data resumes at 9:15 AM
+                  </p>
+                </div>
+              </div>
+            )
+          }
+          return null
+        })()}
+
         {/* CPR explanation */}
         <div className="bg-gray-900/20 border border-gray-700 rounded-xl px-4 py-3 mb-5">
           <p className="text-xs text-gray-500 leading-relaxed">

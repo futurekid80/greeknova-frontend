@@ -49,6 +49,10 @@ interface Signal {
   pe_writing_count: number;
   ce_buying_count: number;
   pe_buying_count: number;
+  trade_signal: string;
+  trade_signal_icon: string;
+  trade_signal_note: string;
+  trade_signal_action: string;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -310,6 +314,42 @@ function CEPEDelta({ ceDelta, peDelta }: { ceDelta: number; peDelta: number }) {
   );
 }
 
+function TradeSignalBadge({ signal, icon, note, action }: {
+  signal: string; icon: string; note: string; action: string;
+}) {
+  if (!signal || signal === "neutral" || !note) return null;
+
+  const styles: Record<string, { bg: string; color: string; border: string }> = {
+    confirmed_move:  { bg: "#E1F5EE", color: "#085041", border: "#1D9E75" },
+    watch_reversal:  { bg: "#E1F5EE", color: "#085041", border: "#1D9E75" },
+    coiling:         { bg: "#FAEEDA", color: "#633806", border: "#BA7517" },
+    likely_fade:     { bg: "#FAEEDA", color: "#633806", border: "#BA7517" },
+    suspect_move:    { bg: "#FAEEDA", color: "#633806", border: "#BA7517" },
+    mixed:           { bg: "var(--color-background-secondary)", color: "var(--color-text-secondary)", border: "var(--color-border-tertiary)" },
+    exhaustion:      { bg: "#FCEBEB", color: "#791F1F", border: "#C0392B" },
+  };
+
+  const s = styles[signal] || styles["mixed"];
+
+  return (
+    <div style={{
+      background: s.bg, borderRadius: 8, padding: "10px 12px",
+      marginTop: 8, borderLeft: `3px solid ${s.border}`,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 500, color: s.color, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+        {icon && <span>{icon}</span>}
+        <span>{signal.replace(/_/g, " ").replace(/\w/g, l => l.toUpperCase())}</span>
+      </div>
+      <div style={{ fontSize: 12, color: s.color, opacity: 0.9, marginBottom: action ? 4 : 0 }}>{note}</div>
+      {action && (
+        <div style={{ fontSize: 11, color: s.color, opacity: 0.7, fontStyle: "italic" }}>
+          → {action}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RallyQualityBadge({ quality, note, ceBuying, peBuying, ceWriting, peWriting }:
   { quality: string; note: string; ceBuying: number; peBuying: number; ceWriting: number; peWriting: number }) {
   if (!quality || quality === "neutral" || !note) return null;
@@ -438,10 +478,6 @@ function SignalCard({ signal }: { signal: Signal }) {
         peak={signal.session_peak_oi_pct || 0}
         current={signal.cumulative_oi_pct || 0}
       />
-      <DivergenceBadge
-        label={signal.divergence_label || "neutral"}
-        note={signal.divergence_note || ""}
-      />
       <SRLevels
         support={signal.support_strike || 0}
         resistance={signal.resistance_strike || 0}
@@ -451,13 +487,11 @@ function SignalCard({ signal }: { signal: Signal }) {
         ceDelta={signal.ce_oi_delta || 0}
         peDelta={signal.pe_oi_delta || 0}
       />
-      <RallyQualityBadge
-        quality={signal.rally_quality || "neutral"}
-        note={signal.rally_note || ""}
-        ceBuying={signal.ce_buying_count || 0}
-        peBuying={signal.pe_buying_count || 0}
-        ceWriting={signal.ce_writing_count || 0}
-        peWriting={signal.pe_writing_count || 0}
+      <TradeSignalBadge
+        signal={signal.trade_signal || "neutral"}
+        icon={signal.trade_signal_icon || ""}
+        note={signal.trade_signal_note || ""}
+        action={signal.trade_signal_action || ""}
       />
 
       {(isFired || isWatch) && (

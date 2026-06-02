@@ -1,8 +1,7 @@
 'use client'
+import React from 'react'
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { RefreshCw, Clock } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
@@ -356,7 +355,8 @@ export default function IntradaySignalLog() {
                   const m = SIGNAL_META[sig.signal_type] || SIGNAL_META.LONG_BUILDUP
                   const isHighConviction = sig.options_confirmation && sig.options_confirms === true
                   return (
-                    <tr key={`${sig.symbol}-${i}`}
+                    <React.Fragment key={`${sig.symbol}-${i}`}>
+                    <tr
                       className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${
                         isHighConviction ? 'bg-emerald-950/10 border-l-2 border-l-emerald-700'
                         : i%2===0 ? '' : 'bg-gray-900/10'
@@ -550,6 +550,7 @@ export default function IntradaySignalLog() {
                         </td>
                       </tr>
                     )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>

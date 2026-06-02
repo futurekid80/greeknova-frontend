@@ -150,7 +150,29 @@ export default function IntradaySignalLog() {
   const [minPersist, setMinPersist] = useState(1)
   const [confirmedOnly, setConfirmedOnly] = useState(false)
   const [countdown, setCountdown]   = useState(300)
+  const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
+  const [wallsData, setWallsData] = useState<Record<string, any>>({})
+  const [wallsLoading, setWallsLoading] = useState<string | null>(null)
   const router = useRouter()
+
+  const fetchWalls = async (symbol: string) => {
+    if (expandedSymbol === symbol) {
+      setExpandedSymbol(null)
+      return
+    }
+    if (wallsData[symbol]) {
+      setExpandedSymbol(symbol)
+      return
+    }
+    setWallsLoading(symbol)
+    try {
+      const res = await fetch(`${API}/oi-walls/${symbol}`)
+      const json = await res.json()
+      setWallsData(prev => ({ ...prev, [symbol]: json }))
+      setExpandedSymbol(symbol)
+    } catch(e) { console.error(e) }
+    setWallsLoading(null)
+  }
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
 
@@ -400,6 +422,15 @@ export default function IntradaySignalLog() {
                             )}
                           </div>
                         )}
+                        <button
+                          onClick={() => fetchWalls(sig.symbol)}
+                          className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                            expandedSymbol === sig.symbol
+                              ? 'bg-cyan-950 text-cyan-300 border-cyan-700'
+                              : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
+                          }`}>
+                          {wallsLoading === sig.symbol ? '⏳' : expandedSymbol === sig.symbol ? '▲ Close' : '📊 OI Map'}
+                        </button>
                       </td>
 
                       {/* CPR */}
@@ -437,6 +468,88 @@ export default function IntradaySignalLog() {
                         </p>
                       </td>
                     </tr>
+
+                    {/* OI Map expandable panel */}
+                    {expandedSymbol === sig.symbol && wallsData[sig.symbol] && (
+                      <tr key={`${sig.symbol}-walls`}>
+                        <td colSpan={9} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
+                          <div>
+                            {/* Header */}
+                            <div className="flex items-center gap-3 mb-3">
+                              <p className="text-sm font-bold text-white">
+                                📊 {sig.symbol} OI Structure
+                              </p>
+                              <span className="text-xs text-gray-500">
+                                CMP ₹{wallsData[sig.symbol].cmp?.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] bg-red-950/40 text-red-400 border border-red-800/30 px-2 py-0.5 rounded">
+                                📈 CE Wall ₹{wallsData[sig.symbol].ce_wall?.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30 px-2 py-0.5 rounded">
+                                📉 PE Wall ₹{wallsData[sig.symbol].pe_wall?.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] text-gray-500">
+                                Range: {wallsData[sig.symbol].trade_range_pct}%
+                              </span>
+                            </div>
+
+                            {/* Strike table */}
+                            <div className="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-semibold mb-1 px-1">
+                              <span>Strike</span>
+                              <span className="text-red-400">CE OI</span>
+                              <span className="text-emerald-400">PE OI</span>
+                              <span>Dominant</span>
+                              <span>Note</span>
+                            </div>
+                            <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                              {wallsData[sig.symbol].strikes?.map((row: any) => {
+                                const cmp = wallsData[sig.symbol].cmp || 0
+                                const strikes = wallsData[sig.symbol].strikes || []
+                                const intervals = strikes.length > 1
+                                  ? Math.abs(strikes[0].strike - strikes[1].strike)
+                                  : 50
+                                const isAtm = Math.abs(row.strike - cmp) <= intervals / 2
+                                const isCeWall = row.strike === wallsData[sig.symbol].ce_wall
+                                const isPeWall = row.strike === wallsData[sig.symbol].pe_wall
+                                const dominant = row.ce_oi > row.pe_oi ? 'CE' : row.pe_oi > row.ce_oi ? 'PE' : '='
+                                return (
+                                  <div key={row.strike}
+                                    className={`grid grid-cols-5 gap-2 text-[10px] py-1 px-1 rounded ${
+                                      isCeWall ? 'bg-red-950/30 border border-red-800/20' 
+                                      : isPeWall ? 'bg-emerald-950/30 border border-emerald-800/20'
+                                      : isAtm ? 'bg-amber-950/20 border border-amber-800/20'
+                                      : ''
+                                    }`}>
+                                    <span className={`font-bold ${isAtm ? 'text-amber-400' : 'text-white'}`}>
+                                      {row.strike.toLocaleString()} {isAtm ? '★' : ''}
+                                    </span>
+                                    <span className="text-red-400">
+                                      {row.ce_oi > 0 ? `${(row.ce_oi/100000).toFixed(2)}L` : '—'}
+                                    </span>
+                                    <span className="text-emerald-400">
+                                      {row.pe_oi > 0 ? `${(row.pe_oi/100000).toFixed(2)}L` : '—'}
+                                    </span>
+                                    <span className={
+                                      dominant === 'CE' ? 'text-red-400' 
+                                      : dominant === 'PE' ? 'text-emerald-400' 
+                                      : 'text-gray-500'
+                                    }>
+                                      {dominant}
+                                    </span>
+                                    <span className="text-gray-500 font-bold">
+                                      {isCeWall ? '🔴 CE Wall' : isPeWall ? '🟢 PE Wall' : isAtm ? '⭐ ATM' : ''}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            <p className="text-[10px] text-gray-700 mt-2">
+                              Strikes within 15% of CMP · CE Wall = resistance · PE Wall = support · Informational only
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   )
                 })}
               </tbody>

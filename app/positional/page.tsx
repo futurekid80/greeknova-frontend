@@ -26,6 +26,7 @@ interface RadarResult {
   ce_wall?: number; pe_wall?: number
   ce_wall_oi_L?: number; pe_wall_oi_L?: number
   trade_range?: number; trade_range_pct?: number; range_label?: string
+  has_uoa?: boolean
 }
 
 interface RadarData {
@@ -497,7 +498,10 @@ export default function PositionalRadar() {
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5">₹{r.cmp.toLocaleString('en-IN')}</p>
                         {r.ignition && r.fut_signal_today && (
-                          <p className="text-[10px] text-emerald-500 mt-0.5">⚡ FUT: {r.fut_signal_today.replace('_', ' ')}</p>
+                          <div className="mt-0.5">
+                            <p className="text-[10px] text-emerald-500">⚡ FUT: {r.fut_signal_today.replace(/_/g, ' ')}</p>
+                            <p className="text-[10px] text-gray-700">positional threshold only</p>
+                          </div>
                         )}
                       </td>
 
@@ -679,8 +683,18 @@ export default function PositionalRadar() {
                         {/* Deep Dive */}
                         <td className="px-5 py-3.5">
                           <div className="flex flex-col gap-1">
-                            <a href="/uoa"    className="text-xs text-blue-400 hover:text-blue-300">🐋 UOA →</a>
-                            <a href="/jungle" className="text-xs text-amber-400 hover:text-amber-300">🌿 Jungle →</a>
+                            {r.has_uoa ? (
+                              <a href={`/uoa?symbol=${r.symbol}`}
+                                className="text-xs text-blue-400 hover:text-blue-300 font-bold">
+                                🐋 UOA ✅ →
+                              </a>
+                            ) : (
+                              <span className="text-xs text-gray-700">🐋 UOA —</span>
+                            )}
+                            <a href={`/jungle?symbol=${r.symbol}`}
+                              className="text-xs text-amber-400 hover:text-amber-300">
+                              🌿 Jungle →
+                            </a>
                           </div>
                         </td>
                       </>}

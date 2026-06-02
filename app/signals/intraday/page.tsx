@@ -490,14 +490,14 @@ export default function IntradaySignalLog() {
                               <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
                                 <span className="text-[10px] text-gray-500 font-semibold">Intraday:</span>
                                 <span className="text-[10px] font-bold text-red-400">
-                                  📈 CE ₹{wallsData[sig.symbol].ce_wall?.toLocaleString()}
+                                  📈 CE ₹{wallsData[sig.symbol].intraday_ce_wall?.toLocaleString()}
                                 </span>
                                 <span className="text-[10px] text-gray-600">·</span>
                                 <span className="text-[10px] font-bold text-emerald-400">
-                                  📉 PE ₹{wallsData[sig.symbol].pe_wall?.toLocaleString()}
+                                  📉 PE ₹{wallsData[sig.symbol].intraday_pe_wall?.toLocaleString()}
                                 </span>
                                 <span className="text-[10px] text-gray-600">
-                                  · {wallsData[sig.symbol].trade_range_pct}%
+                                  · {wallsData[sig.symbol].intraday_range_pct}%
                                 </span>
                               </div>
                               {/* Max Pain levels — highest OI regardless of proximity */}

@@ -473,11 +473,6 @@ function SignalCard({ signal }: { signal: Signal }) {
         futuresDirection={signal.futures_oi_direction || "neutral"}
       />
       <OvernightBadge direction={signal.overnight_oi_direction || "neutral"} />
-      <UnwindBadge
-        status={signal.oi_unwind_status || "building"}
-        peak={signal.session_peak_oi_pct || 0}
-        current={signal.cumulative_oi_pct || 0}
-      />
       <SRLevels
         support={signal.support_strike || 0}
         resistance={signal.resistance_strike || 0}

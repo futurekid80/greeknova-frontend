@@ -602,6 +602,21 @@ export default function PositionalRadar() {
                           <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
                             {m.icon} {m.label}
                           </span>
+                          {r.ce_wall && r.pe_wall && (
+                            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                              <span className="text-[10px] font-bold text-red-400 bg-red-950/30 border border-red-800/30 px-1.5 py-0.5 rounded">
+                                📈 ₹{r.ce_wall.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-1.5 py-0.5 rounded">
+                                📉 ₹{r.pe_wall.toLocaleString()}
+                              </span>
+                              {r.range_label && (
+                                <span className="text-[10px] text-gray-600">
+                                  {r.trade_range_pct}%
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
 
                         {/* Consistency */}

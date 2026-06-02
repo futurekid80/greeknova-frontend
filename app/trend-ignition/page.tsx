@@ -319,15 +319,20 @@ function TradeSignalBadge({ signal, icon, note, action }: {
 }) {
   if (!signal || signal === "neutral" || !note) return null;
 
-  type SignalStyle = { bg: string; labelColor: string; noteColor: string; actionColor: string; border: string; accentBg: string };
+  type SignalStyle = { bg: string; labelColor: string; noteColor: string; actionColor: string; border: string; pillBg: string; pillColor: string };
   const styles: Record<string, SignalStyle> = {
-    confirmed_move: { bg: "#E1F5EE", labelColor: "#085041", noteColor: "#0F6E56", actionColor: "#1D9E75", border: "#1D9E75", accentBg: "#9FE1CB" },
-    watch_reversal: { bg: "#E1F5EE", labelColor: "#085041", noteColor: "#0F6E56", actionColor: "#1D9E75", border: "#1D9E75", accentBg: "#9FE1CB" },
-    coiling:        { bg: "#FAEEDA", labelColor: "#412402", noteColor: "#633806", actionColor: "#BA7517", border: "#EF9F27", accentBg: "#FAC775" },
-    likely_fade:    { bg: "#FAEEDA", labelColor: "#412402", noteColor: "#633806", actionColor: "#BA7517", border: "#EF9F27", accentBg: "#FAC775" },
-    suspect_move:   { bg: "#FAEEDA", labelColor: "#412402", noteColor: "#633806", actionColor: "#BA7517", border: "#EF9F27", accentBg: "#FAC775" },
-    mixed:          { bg: "var(--color-background-secondary)", labelColor: "var(--color-text-primary)", noteColor: "var(--color-text-secondary)", actionColor: "var(--color-text-tertiary)", border: "var(--color-border-secondary)", accentBg: "var(--color-background-tertiary)" },
-    exhaustion:     { bg: "#FCEBEB", labelColor: "#501313", noteColor: "#791F1F", actionColor: "#A32D2D", border: "#E24B4A", accentBg: "#F7C1C1" },
+    // Green — confirmed, reversal watch
+    confirmed_move: { bg: "#F0FAF5", labelColor: "#085041", noteColor: "#0F6E56", actionColor: "#085041", border: "#5DCAA5", pillBg: "#1D9E75", pillColor: "#ffffff" },
+    watch_reversal: { bg: "#F0FAF5", labelColor: "#085041", noteColor: "#0F6E56", actionColor: "#085041", border: "#5DCAA5", pillBg: "#1D9E75", pillColor: "#ffffff" },
+    // Soft blue-grey — coiling, waiting
+    coiling:        { bg: "#F1EFE8", labelColor: "#2C2C2A", noteColor: "#5F5E5A", actionColor: "#444441", border: "#B4B2A9", pillBg: "#888780", pillColor: "#ffffff" },
+    // Warm amber — caution, fade
+    likely_fade:    { bg: "#FFFBF2", labelColor: "#412402", noteColor: "#633806", actionColor: "#412402", border: "#EF9F27", pillBg: "#BA7517", pillColor: "#ffffff" },
+    suspect_move:   { bg: "#FFFBF2", labelColor: "#412402", noteColor: "#633806", actionColor: "#412402", border: "#EF9F27", pillBg: "#BA7517", pillColor: "#ffffff" },
+    // Neutral grey — mixed
+    mixed:          { bg: "var(--color-background-secondary)", labelColor: "var(--color-text-primary)", noteColor: "var(--color-text-secondary)", actionColor: "var(--color-text-secondary)", border: "var(--color-border-secondary)", pillBg: "var(--color-background-tertiary)", pillColor: "var(--color-text-secondary)" },
+    // Soft red — exhaustion
+    exhaustion:     { bg: "#FFF5F5", labelColor: "#501313", noteColor: "#791F1F", actionColor: "#501313", border: "#F09595", pillBg: "#E24B4A", pillColor: "#ffffff" },
   };
 
   const s = styles[signal] || styles["mixed"];
@@ -361,8 +366,8 @@ function TradeSignalBadge({ signal, icon, note, action }: {
           <span style={{ fontSize: 13, fontWeight: 500, color: s.labelColor }}>{label}</span>
         </div>
         {action && (
-          <span style={{ fontSize: 11, color: s.actionColor, background: s.accentBg, padding: "2px 8px", borderRadius: 99, fontWeight: 500 }}>
-            {action}
+          <span style={{ fontSize: 11, color: s.actionColor, background: "transparent", padding: "2px 0", fontWeight: 400, opacity: 0.8 }}>
+            → {action}
           </span>
         )}
       </div>
@@ -375,9 +380,9 @@ function TradeSignalBadge({ signal, icon, note, action }: {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: suffix ? 6 : 0 }}>
           {strikeList.map((strike, i) => (
             <span key={i} style={{
-              fontSize: 12, fontWeight: 500, color: s.labelColor,
-              background: s.accentBg, padding: "3px 10px",
-              borderRadius: 6, letterSpacing: "0.01em",
+              fontSize: 11, fontWeight: 500, color: s.pillColor,
+              background: s.pillBg, padding: "3px 10px",
+              borderRadius: 99, letterSpacing: "0.02em",
             }}>
               {strike}
             </span>

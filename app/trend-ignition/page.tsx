@@ -333,13 +333,24 @@ function TradeSignalBadge({ signal, icon, note, action }: {
   const s = styles[signal] || styles["mixed"];
   const label = signal.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
 
-  // Split note into main text and strike levels (after "at")
+  // Split note: "CE writers capping rally at ₹310 · ₹330 — expect resistance"
+  // → mainNote: "CE writers capping rally"
+  // → strikes: ["₹310", "₹330"]
+  // → suffix: "expect resistance"
   const atIdx = note.indexOf(" at ");
-  const mainNote = atIdx > -1 ? note.slice(0, atIdx) : note;
-  const strikePart = atIdx > -1 ? note.slice(atIdx + 4) : "";
+  let mainNote = note;
+  let strikeList: string[] = [];
+  let suffix = "";
 
-  // Parse strike levels from dot-separated string
-  const strikeList = strikePart ? strikePart.split(" · ").filter(Boolean) : [];
+  if (atIdx > -1) {
+    mainNote = note.slice(0, atIdx);
+    const afterAt = note.slice(atIdx + 4);
+    // Find the em-dash separator if present
+    const dashIdx = afterAt.indexOf(" — ");
+    const rawStrikes = dashIdx > -1 ? afterAt.slice(0, dashIdx) : afterAt;
+    suffix = dashIdx > -1 ? afterAt.slice(dashIdx + 3) : "";
+    strikeList = rawStrikes.split(" · ").filter(s => s.trim().length > 0);
+  }
 
   return (
     <div style={{ background: s.bg, borderRadius: 8, padding: "10px 12px", marginTop: 8, borderLeft: `3px solid ${s.border}` }}>
@@ -361,7 +372,7 @@ function TradeSignalBadge({ signal, icon, note, action }: {
       </div>
       {/* Strike level pills */}
       {strikeList.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: suffix ? 6 : 0 }}>
           {strikeList.map((strike, i) => (
             <span key={i} style={{
               fontSize: 12, fontWeight: 500, color: s.labelColor,
@@ -372,6 +383,10 @@ function TradeSignalBadge({ signal, icon, note, action }: {
             </span>
           ))}
         </div>
+      )}
+      {/* Suffix text after strikes e.g. "— expect resistance" */}
+      {suffix && (
+        <div style={{ fontSize: 11, color: s.noteColor, opacity: 0.8 }}>{suffix}</div>
       )}
     </div>
   );

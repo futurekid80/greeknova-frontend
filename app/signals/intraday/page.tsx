@@ -477,22 +477,50 @@ export default function IntradaySignalLog() {
                         <td colSpan={9} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
                           <div>
                             {/* Header */}
-                            <div className="flex items-center gap-3 mb-3">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
                               <p className="text-sm font-bold text-white">
                                 📊 {sig.symbol} OI Structure
                               </p>
                               <span className="text-xs text-gray-500">
                                 CMP ₹{wallsData[sig.symbol].cmp?.toLocaleString()}
                               </span>
-                              <span className="text-[10px] bg-red-950/40 text-red-400 border border-red-800/30 px-2 py-0.5 rounded">
-                                📈 CE Wall ₹{wallsData[sig.symbol].ce_wall?.toLocaleString()}
-                              </span>
-                              <span className="text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30 px-2 py-0.5 rounded">
-                                📉 PE Wall ₹{wallsData[sig.symbol].pe_wall?.toLocaleString()}
-                              </span>
-                              <span className="text-[10px] text-gray-500">
-                                Range: {wallsData[sig.symbol].trade_range_pct}%
-                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mb-3 flex-wrap">
+                              {/* Intraday levels — nearest significant strike */}
+                              <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
+                                <span className="text-[10px] text-gray-500 font-semibold">Intraday:</span>
+                                <span className="text-[10px] font-bold text-red-400">
+                                  📈 CE ₹{wallsData[sig.symbol].ce_wall?.toLocaleString()}
+                                </span>
+                                <span className="text-[10px] text-gray-600">·</span>
+                                <span className="text-[10px] font-bold text-emerald-400">
+                                  📉 PE ₹{wallsData[sig.symbol].pe_wall?.toLocaleString()}
+                                </span>
+                                <span className="text-[10px] text-gray-600">
+                                  · {wallsData[sig.symbol].trade_range_pct}%
+                                </span>
+                              </div>
+                              {/* Max Pain levels — highest OI regardless of proximity */}
+                              {(() => {
+                                const strikes = wallsData[sig.symbol].strikes || []
+                                const maxCeStrike = strikes.reduce((best: any, row: any) =>
+                                  row.ce_oi > (best?.ce_oi || 0) ? row : best, null)
+                                const maxPeStrike = strikes.reduce((best: any, row: any) =>
+                                  row.pe_oi > (best?.pe_oi || 0) ? row : best, null)
+                                if (!maxCeStrike || !maxPeStrike) return null
+                                return (
+                                  <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
+                                    <span className="text-[10px] text-gray-500 font-semibold">Max OI:</span>
+                                    <span className="text-[10px] font-bold text-red-400">
+                                      📈 CE ₹{maxCeStrike.strike?.toLocaleString()} · {(maxCeStrike.ce_oi/100000).toFixed(2)}L
+                                    </span>
+                                    <span className="text-[10px] text-gray-600">·</span>
+                                    <span className="text-[10px] font-bold text-emerald-400">
+                                      📉 PE ₹{maxPeStrike.strike?.toLocaleString()} · {(maxPeStrike.pe_oi/100000).toFixed(2)}L
+                                    </span>
+                                  </div>
+                                )
+                              })()}
                             </div>
 
                             {/* Strike table */}

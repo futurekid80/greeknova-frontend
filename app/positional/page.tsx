@@ -2,6 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
+import React from 'react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
@@ -22,7 +23,6 @@ interface RadarResult {
   ce_pct_of_total?: number; pe_pct_of_total?: number
   pcr_series?: number; composition?: string; composition_interp?: string; composition_short?: string
   bias_confirmed?: boolean; dominant?: string
-  // OI Walls
   ce_wall?: number; pe_wall?: number
   ce_wall_oi_L?: number; pe_wall_oi_L?: number
   trade_range?: number; trade_range_pct?: number; range_label?: string
@@ -56,16 +56,13 @@ const CONVICTION_META: Record<string, { bg: string; text: string; border: string
   IGNITION:   { bg: 'bg-emerald-950', text: 'text-emerald-400', border: 'border-emerald-800/50' },
 }
 
-// Compute reference strike for writers — nearest round number 3-5% OTM
 function getRefStrike(cmp: number, side: 'CE' | 'PE'): number {
   const pct = cmp > 5000 ? 0.03 : cmp > 1000 ? 0.04 : 0.05
   const raw = side === 'CE' ? cmp * (1 + pct) : cmp * (1 - pct)
-  // Round to nearest strike interval
   const interval = cmp > 20000 ? 100 : cmp > 5000 ? 50 : cmp > 1000 ? 20 : cmp > 500 ? 10 : 5
   return Math.round(raw / interval) * interval
 }
 
-// Derive writer's OI structure from signal + composition
 function getWriterTake(r: RadarResult): {
   oiType: string; oiColor: string; oiBg: string; oiBorder: string
   refStrike: number; refSide: 'CE' | 'PE'
@@ -85,36 +82,27 @@ function getWriterTake(r: RadarResult): {
   const safetyLabel = r.consistency_pct >= 70 ? 'HIGH' : r.consistency_pct >= 50 ? 'MEDIUM' : 'LOW'
   const safetyColor = safetyLabel === 'HIGH' ? 'text-emerald-400' : safetyLabel === 'MEDIUM' ? 'text-amber-400' : 'text-red-400'
 
-  // Writer Opportunity — explicit context
-  let opportunityLabel = ''
-  let opportunityColor = ''
-  let opportunityBg = ''
+  let opportunityLabel = '', opportunityColor = '', opportunityBg = ''
   if (isCEWriter && r.composition === 'CALL_DOMINATED') {
     opportunityLabel = '✅ CE writing context — call writers observably active'
-    opportunityColor = 'text-emerald-400'
-    opportunityBg = 'bg-emerald-950/20'
+    opportunityColor = 'text-emerald-400'; opportunityBg = 'bg-emerald-950/20'
   } else if (isCEWriter && r.composition === 'PUT_DOMINATED') {
     opportunityLabel = '⚠️ Mixed — PE writers dominant despite bearish price'
-    opportunityColor = 'text-amber-400'
-    opportunityBg = 'bg-amber-950/20'
+    opportunityColor = 'text-amber-400'; opportunityBg = 'bg-amber-950/20'
   } else if (isPEWriter && r.composition === 'PUT_DOMINATED') {
     opportunityLabel = '✅ PE writing context — put writers observably active'
-    opportunityColor = 'text-emerald-400'
-    opportunityBg = 'bg-emerald-950/20'
+    opportunityColor = 'text-emerald-400'; opportunityBg = 'bg-emerald-950/20'
   } else if (isPEWriter && r.composition === 'CALL_DOMINATED') {
     opportunityLabel = '⚠️ Mixed — CE writers dominant despite bullish price'
-    opportunityColor = 'text-amber-400'
-    opportunityBg = 'bg-amber-950/20'
+    opportunityColor = 'text-amber-400'; opportunityBg = 'bg-amber-950/20'
   } else {
     opportunityLabel = '⚪ Balanced OI — both sides active, monitor closely'
-    opportunityColor = 'text-gray-400'
-    opportunityBg = 'bg-gray-900/30'
+    opportunityColor = 'text-gray-400'; opportunityBg = 'bg-gray-900/30'
   }
 
   const conflictNote = (isCEWriter && r.composition === 'PUT_DOMINATED') ||
                        (isPEWriter && r.composition === 'CALL_DOMINATED')
-    ? '⚠️ Composition contradicts price direction — avoid'
-    : null
+    ? '⚠️ Composition contradicts price direction — avoid' : null
 
   const compNote = r.composition === 'PUT_DOMINATED'
     ? 'PE writers active · bullish institutional positioning'
@@ -124,9 +112,7 @@ function getWriterTake(r: RadarResult): {
 
   const cautionNote = r.signal === 'LONG_UNWINDING'
     ? '⚠️ Long positions exiting — monitor OI direction'
-    : r.signal === 'SHORT_COVERING'
-    ? '⚠️ Short covering — OI reducing'
-    : null
+    : r.signal === 'SHORT_COVERING' ? '⚠️ Short covering — OI reducing' : null
 
   return { oiType, oiColor, oiBg, oiBorder, refStrike, refSide, safetyLabel, safetyColor, structureNote: compNote, cautionNote, opportunityLabel, opportunityColor, opportunityBg, conflictNote }
 }
@@ -136,9 +122,7 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
   const min = Math.min(...data); const max = Math.max(...data)
   const range = max - min || 1
   const w = 80; const h = 28
-  const pts = data.map((v, i) =>
-    `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`
-  ).join(' ')
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(' ')
   return (
     <svg width={w} height={h} className="overflow-visible">
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
@@ -172,6 +156,79 @@ function ConvictionBadge({ level, label, emoji }: { level: string; label: string
   )
 }
 
+// ── OI Map Panel — identical to Intraday/CPR ──────────────────────────────────
+function OIMapPanel({ symbol, wallsData }: { symbol: string; wallsData: any }) {
+  const strikes = wallsData.strikes || []
+  const cmp = wallsData.cmp || 0
+  const interval = strikes.length > 1 ? Math.abs(strikes[0].strike - strikes[1].strike) : 50
+  const maxCeStrike = strikes.reduce((best: any, s: any) => s.ce_oi > (best?.ce_oi || 0) ? s : best, null)
+  const maxPeStrike = strikes.reduce((best: any, s: any) => s.pe_oi > (best?.pe_oi || 0) ? s : best, null)
+
+  return (
+    <tr>
+      <td colSpan={10} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
+        <div>
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <p className="text-sm font-bold text-white">📊 {symbol} OI Structure</p>
+            <span className="text-xs text-gray-500">CMP ₹{cmp?.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
+              <span className="text-[10px] text-gray-500 font-semibold">Intraday:</span>
+              <span className="text-[10px] font-bold text-red-400">📈 CE ₹{wallsData.intraday_ce_wall?.toLocaleString()}</span>
+              <span className="text-[10px] text-gray-600">·</span>
+              <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{wallsData.intraday_pe_wall?.toLocaleString()}</span>
+              <span className="text-[10px] text-gray-600">· {wallsData.intraday_range_pct}%</span>
+            </div>
+            {maxCeStrike && maxPeStrike && (
+              <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
+                <span className="text-[10px] text-gray-500 font-semibold">Max OI:</span>
+                <span className="text-[10px] font-bold text-red-400">📈 CE ₹{maxCeStrike.strike?.toLocaleString()} · {(maxCeStrike.ce_oi/100000).toFixed(2)}L</span>
+                <span className="text-[10px] text-gray-600">·</span>
+                <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{maxPeStrike.strike?.toLocaleString()} · {(maxPeStrike.pe_oi/100000).toFixed(2)}L</span>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-semibold mb-1 px-1">
+            <span>Strike</span>
+            <span className="text-red-400">CE OI</span>
+            <span className="text-emerald-400">PE OI</span>
+            <span>Dominant</span>
+            <span>Note</span>
+          </div>
+          <div className="space-y-0.5 max-h-64 overflow-y-auto">
+            {strikes.map((s: any) => {
+              const isAtm = Math.abs(s.strike - cmp) <= interval / 2
+              const isCeWall = s.strike === wallsData.ce_wall
+              const isPeWall = s.strike === wallsData.pe_wall
+              const dominant = s.ce_oi > s.pe_oi ? 'CE' : s.pe_oi > s.ce_oi ? 'PE' : '='
+              return (
+                <div key={s.strike}
+                  className={`grid grid-cols-5 gap-2 text-[10px] py-1 px-1 rounded ${
+                    isCeWall ? 'bg-red-950/30 border border-red-800/20'
+                    : isPeWall ? 'bg-emerald-950/30 border border-emerald-800/20'
+                    : isAtm ? 'bg-amber-950/20 border border-amber-800/20' : ''
+                  }`}>
+                  <span className={`font-bold ${isAtm ? 'text-amber-400' : 'text-white'}`}>
+                    {s.strike.toLocaleString()} {isAtm ? '★' : ''}
+                  </span>
+                  <span className="text-red-400">{s.ce_oi > 0 ? `${(s.ce_oi/100000).toFixed(2)}L` : '—'}</span>
+                  <span className="text-emerald-400">{s.pe_oi > 0 ? `${(s.pe_oi/100000).toFixed(2)}L` : '—'}</span>
+                  <span className={dominant === 'CE' ? 'text-red-400' : dominant === 'PE' ? 'text-emerald-400' : 'text-gray-500'}>{dominant}</span>
+                  <span className="text-gray-500 font-bold">
+                    {isCeWall ? '🔴 CE Wall' : isPeWall ? '🟢 PE Wall' : isAtm ? '⭐ ATM' : ''}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-[10px] text-gray-700 mt-2">Strikes within 15% of CMP · CE Wall = resistance · PE Wall = support · Informational only</p>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 export default function PositionalRadar() {
   const [data, setData]           = useState<RadarData | null>(null)
   const [loading, setLoading]     = useState(true)
@@ -184,6 +241,24 @@ export default function PositionalRadar() {
   const [typeFilter, setTypeFilter]             = useState<'all'|'index'|'stocks'>('all')
   const [writerView, setWriterView]             = useState(false)
 
+  // OI Map state
+  const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
+  const [wallsData, setWallsData] = useState<Record<string, any>>({})
+  const [wallsLoading, setWallsLoading] = useState<string | null>(null)
+
+  const fetchWalls = async (symbol: string) => {
+    if (expandedSymbol === symbol) { setExpandedSymbol(null); return }
+    if (wallsData[symbol]) { setExpandedSymbol(symbol); return }
+    setWallsLoading(symbol)
+    try {
+      const res = await fetch(`${API}/oi-walls/${symbol}`)
+      const json = await res.json()
+      setWallsData(prev => ({ ...prev, [symbol]: json }))
+      setExpandedSymbol(symbol)
+    } catch(e) { console.error(e) }
+    setWallsLoading(null)
+  }
+
   const fetchData = useCallback(async (consec?: number) => {
     setLoading(true)
     const c = consec ?? minConsec
@@ -195,11 +270,7 @@ export default function PositionalRadar() {
     setLoading(false)
   }, [minConsec])
 
-  function handleConsec(c: number) {
-    setMinConsec(c)
-    fetchData(c)
-  }
-
+  function handleConsec(c: number) { setMinConsec(c); fetchData(c) }
   useEffect(() => { fetchData(0) }, [])
 
   const results = (data?.results || [])
@@ -209,7 +280,6 @@ export default function PositionalRadar() {
     .filter(r => consisFilter === 'all' || r.consistency_label === consisFilter)
     .filter(r => convictionFilter === 'all' || r.conviction_level === convictionFilter)
     .filter(r => !accelOnly || r.accelerating)
-    // Writer's View: auto-filter to HIGH or MEDIUM consistency only (clearer OI structure)
     .filter(r => !writerView || r.consistency_pct >= 50)
 
   const s = data?.summary
@@ -236,13 +306,9 @@ export default function PositionalRadar() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Writer's View Toggle */}
-            <button
-              onClick={() => setWriterView(v => !v)}
+            <button onClick={() => setWriterView(v => !v)}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg border transition-all ${
-                writerView
-                  ? 'bg-purple-950/60 text-purple-300 border-purple-700/60'
-                  : 'bg-gray-900/40 text-gray-400 border-gray-700 hover:text-white'
+                writerView ? 'bg-purple-950/60 text-purple-300 border-purple-700/60' : 'bg-gray-900/40 text-gray-400 border-gray-700 hover:text-white'
               }`}>
               {writerView ? '📊 Trader View' : '✍️ Writer\'s View'}
             </button>
@@ -258,18 +324,9 @@ export default function PositionalRadar() {
           <div className="bg-purple-950/20 border border-purple-800/40 rounded-xl px-5 py-4 mb-5">
             <p className="text-xs text-purple-300 font-semibold mb-2">✍️ Writer's View — How to read this</p>
             <div className="grid grid-cols-3 gap-4 text-xs text-gray-400">
-              <div>
-                <p className="text-purple-300 font-bold mb-1">OI Structure</p>
-                <p>CE OI Structure = call writers observably active. PE OI Structure = put writers observably active. Based on multi-day OI direction.</p>
-              </div>
-              <div>
-                <p className="text-purple-300 font-bold mb-1">Reference Strike</p>
-                <p>Computed at ~3-5% OTM from current price. For informational reference only — always verify against live OI walls and max pain before any decision.</p>
-              </div>
-              <div>
-                <p className="text-purple-300 font-bold mb-1">Direction Safety</p>
-                <p>HIGH = OI direction held 70%+ of series days. MEDIUM = 50-70%. Higher safety = more consistent OI positioning observed.</p>
-              </div>
+              <div><p className="text-purple-300 font-bold mb-1">OI Structure</p><p>CE OI Structure = call writers observably active. PE OI Structure = put writers observably active. Based on multi-day OI direction.</p></div>
+              <div><p className="text-purple-300 font-bold mb-1">Reference Strike</p><p>Computed at ~3-5% OTM from current price. For informational reference only — always verify against live OI walls and max pain before any decision.</p></div>
+              <div><p className="text-purple-300 font-bold mb-1">Direction Safety</p><p>HIGH = OI direction held 70%+ of series days. MEDIUM = 50-70%. Higher safety = more consistent OI positioning observed.</p></div>
             </div>
             <p className="text-[10px] text-gray-600 mt-3">All data is informational only. Not investment advice. GreekNova is not SEBI-registered. Always consult a SEBI-registered advisor before trading.</p>
           </div>
@@ -279,18 +336,9 @@ export default function PositionalRadar() {
         {data && (
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-5 py-3 mb-5 flex items-center justify-between">
             <div className="flex items-center gap-6 text-sm">
-              <div>
-                <span className="text-gray-500 text-xs">Series</span>
-                <p className="text-white font-bold">{data.series_start} → {data.expiry}</p>
-              </div>
-              <div>
-                <span className="text-gray-500 text-xs">Trading days captured</span>
-                <p className="text-amber-400 font-black">{data.total_trading_days} days</p>
-              </div>
-              <div>
-                <span className="text-gray-500 text-xs">Monthly expiry</span>
-                <p className="text-cyan-400 font-bold">{data.expiry}</p>
-              </div>
+              <div><span className="text-gray-500 text-xs">Series</span><p className="text-white font-bold">{data.series_start} → {data.expiry}</p></div>
+              <div><span className="text-gray-500 text-xs">Trading days captured</span><p className="text-amber-400 font-black">{data.total_trading_days} days</p></div>
+              <div><span className="text-gray-500 text-xs">Monthly expiry</span><p className="text-cyan-400 font-bold">{data.expiry}</p></div>
             </div>
             <div className="text-xs text-gray-600">Full series · NSE monthly F&O</div>
           </div>
@@ -299,13 +347,11 @@ export default function PositionalRadar() {
         {/* Expiry week warning */}
         {data && Math.ceil((new Date(data.expiry).getTime() - Date.now()) / 86400000) <= 2 && (
           <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl px-4 py-3 mb-5">
-            <p className="text-xs text-amber-400">
-              <span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {data.expiry} expiry. Signals will rebuild from next Wednesday when a new series begins.
-            </p>
+            <p className="text-xs text-amber-400"><span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {data.expiry} expiry. Signals will rebuild from next Wednesday when a new series begins.</p>
           </div>
         )}
 
-        {/* Conviction legend — only in trader view */}
+        {/* Conviction legend */}
         {!writerView && (
           <div className="bg-gray-900/20 border border-gray-800/40 rounded-xl px-4 py-3 mb-5">
             <p className="text-xs text-gray-400 font-semibold mb-2">Signal conviction levels:</p>
@@ -319,9 +365,7 @@ export default function PositionalRadar() {
                 const meta = CONVICTION_META[level]
                 return (
                   <div key={level} className="flex items-center gap-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 ${meta.bg} ${meta.text} border ${meta.border} rounded font-bold`}>
-                      {emoji} {label}
-                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 ${meta.bg} ${meta.text} border ${meta.border} rounded font-bold`}>{emoji} {label}</span>
                     <span className="text-[10px] text-gray-600">{desc}</span>
                   </div>
                 )
@@ -330,7 +374,7 @@ export default function PositionalRadar() {
           </div>
         )}
 
-        {/* PRIMARY FILTER — Consecutive days */}
+        {/* PRIMARY FILTER */}
         <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-5 mb-5">
           <div className="flex items-center gap-3 mb-3">
             <span className="text-sm font-bold text-white">Minimum consecutive days trending:</span>
@@ -344,9 +388,7 @@ export default function PositionalRadar() {
               { val: 7, label: 'Active 7d+ streak', sub: 'Signal live last 7 days' },
             ].map(({ val, label, sub }) => (
               <button key={val} onClick={() => handleConsec(val)}
-                className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all text-left ${minConsec===val
-                  ? 'bg-white text-gray-900 border-white'
-                  : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+                className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all text-left ${minConsec===val ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
                 <div>{label}</div>
                 <div className="text-xs font-normal mt-0.5 text-gray-600">{sub}</div>
               </button>
@@ -378,18 +420,12 @@ export default function PositionalRadar() {
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {(['all','index','stocks'] as const).map(f => (
             <button key={f} onClick={() => setTypeFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${typeFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              {f}
-            </button>
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${typeFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>{f}</button>
           ))}
           <div className="w-px h-5 bg-gray-800 mx-1"/>
           {(['all','BULLISH','BEARISH'] as const).map(b => (
             <button key={b} onClick={() => setBiasFilter(b)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${biasFilter===b
-                ? b==='BULLISH' ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
-                : b==='BEARISH' ? 'bg-red-950 text-red-400 border-red-800'
-                : 'bg-white text-gray-900 border-white'
-                : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${biasFilter===b ? b==='BULLISH' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : b==='BEARISH' ? 'bg-red-950 text-red-400 border-red-800' : 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {b==='all'?'All Bias':b==='BULLISH'?'↑ Bullish':'↓ Bearish'}
             </button>
           ))}
@@ -403,32 +439,21 @@ export default function PositionalRadar() {
           <div className="w-px h-5 bg-gray-800 mx-1"/>
           {(['all','HIGH','MEDIUM','LOW'] as const).map(c => (
             <button key={c} onClick={() => setConsisFilter(c)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${consisFilter===c
-                ? c==='HIGH' ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
-                : c==='MEDIUM' ? 'bg-amber-950 text-amber-400 border-amber-800'
-                : c==='LOW' ? 'bg-red-950 text-red-400 border-red-800'
-                : 'bg-white text-gray-900 border-white'
-                : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${consisFilter===c ? c==='HIGH' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : c==='MEDIUM' ? 'bg-amber-950 text-amber-400 border-amber-800' : c==='LOW' ? 'bg-red-950 text-red-400 border-red-800' : 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {c==='all'?'All Consistency':c}
             </button>
           ))}
           {!writerView && <>
             <div className="w-px h-5 bg-gray-800 mx-1"/>
             {[
-              { val: 'all',        label: 'All Levels' },
-              { val: 'IGNITION',   label: '🟢 Ignition' },
+              { val: 'all', label: 'All Levels' },
+              { val: 'IGNITION', label: '🟢 Ignition' },
               { val: 'CONVICTION', label: '🟠 Conviction' },
-              { val: 'BUILDING',   label: '🟡 Building' },
-              { val: 'RADAR',      label: '🔵 Radar' },
+              { val: 'BUILDING', label: '🟡 Building' },
+              { val: 'RADAR', label: '🔵 Radar' },
             ].map(({ val, label }) => (
               <button key={val} onClick={() => setConvictionFilter(val)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${convictionFilter===val
-                  ? val==='IGNITION'   ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
-                  : val==='CONVICTION' ? 'bg-orange-950 text-orange-400 border-orange-800'
-                  : val==='BUILDING'   ? 'bg-yellow-950 text-yellow-400 border-yellow-800'
-                  : val==='RADAR'      ? 'bg-blue-950 text-blue-400 border-blue-800'
-                  : 'bg-white text-gray-900 border-white'
-                  : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${convictionFilter===val ? val==='IGNITION' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : val==='CONVICTION' ? 'bg-orange-950 text-orange-400 border-orange-800' : val==='BUILDING' ? 'bg-yellow-950 text-yellow-400 border-yellow-800' : val==='RADAR' ? 'bg-blue-950 text-blue-400 border-blue-800' : 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
                 {label}
               </button>
             ))}
@@ -439,9 +464,7 @@ export default function PositionalRadar() {
             </button>
           </>}
           <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setTypeFilter('all') }}
-            className="text-xs text-gray-600 hover:text-gray-400 transition-colors ml-1">
-            Clear filters
-          </button>
+            className="text-xs text-gray-600 hover:text-gray-400 transition-colors ml-1">Clear filters</button>
         </div>
 
         <p className="text-xs text-gray-600 mb-4">
@@ -459,9 +482,7 @@ export default function PositionalRadar() {
               <thead>
                 <tr className="bg-gray-900/60 border-b border-gray-800">
                   {tableHeaders.map((h, i) => (
-                    <th key={h} className={`text-xs font-semibold text-gray-500 px-3 py-3.5 ${i <= 3 ? 'text-left' : 'text-right'} ${i===0?'pl-5':''} ${i===tableHeaders.length-1?'pr-5 text-left':''}`}>
-                      {h}
-                    </th>
+                    <th key={h} className={`text-xs font-semibold text-gray-500 px-3 py-3.5 ${i <= 3 ? 'text-left' : 'text-right'} ${i===0?'pl-5':''} ${i===tableHeaders.length-1?'pr-5 text-left':''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -475,16 +496,15 @@ export default function PositionalRadar() {
                     ? 'bg-emerald-950/15 border-l-2 border-l-emerald-700'
                     : r.conviction_level === 'CONVICTION' && r.accelerating
                     ? 'bg-orange-950/15 border-l-2 border-l-orange-700'
-                    : r.conviction_level === 'CONVICTION'
-                    ? 'bg-orange-950/10'
-                    : r.accelerating
-                    ? 'bg-blue-950/8 border-l-2 border-l-blue-800'
+                    : r.conviction_level === 'CONVICTION' ? 'bg-orange-950/10'
+                    : r.accelerating ? 'bg-blue-950/8 border-l-2 border-l-blue-800'
                     : i % 2 === 0 ? '' : 'bg-gray-900/20'
 
                   return (
-                    <tr key={r.symbol} className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${rowBg}`}>
+                    <React.Fragment key={r.symbol}>
+                    <tr className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${rowBg}`}>
 
-                      {/* Symbol — same in both views */}
+                      {/* Symbol */}
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-black text-white">{r.symbol}</span>
@@ -508,18 +528,14 @@ export default function PositionalRadar() {
                       {writerView ? <>
                         {/* OI Structure */}
                         <td className="px-3 py-3.5">
-                          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${wt.oiColor} ${wt.oiBg} ${wt.oiBorder}`}>
-                            {wt.oiType}
-                          </span>
+                          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${wt.oiColor} ${wt.oiBg} ${wt.oiBorder}`}>{wt.oiType}</span>
                           <p className="text-[10px] text-gray-500 mt-1">{r.composition_short || '—'}</p>
                         </td>
-
-                        {/* Direction Held (was Consistency) */}
+                        {/* Direction Held */}
                         <td className="px-3 py-3.5 min-w-[110px]">
                           <ConsistencyBar pct={r.consistency_pct} label={r.consistency_label}/>
                           <p className="text-[10px] text-gray-600 mt-1">{r.match_days}/{r.total_days} days consistent</p>
                         </td>
-
                         {/* Consec */}
                         <td className="px-3 py-3.5">
                           <p className={`text-lg font-black ${r.consec_days >= 5 ? 'text-emerald-400' : r.consec_days >= 3 ? 'text-amber-400' : r.consec_days >= 1 ? 'text-white' : 'text-orange-400'}`}>
@@ -527,15 +543,11 @@ export default function PositionalRadar() {
                           </p>
                           <p className="text-[10px] text-gray-600">{r.consec_days > 0 ? 'in a row' : 'broke last day'}</p>
                         </td>
-
                         {/* OI Series */}
                         <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {r.oi_chg_pct > 0 ? '+' : ''}{r.oi_chg_pct}%
-                          </p>
+                          <p className={`text-sm font-black ${r.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.oi_chg_pct > 0 ? '+' : ''}{r.oi_chg_pct}%</p>
                           <p className="text-[10px] text-gray-600">total OI series</p>
                         </td>
-
                         {/* CE/PE Split */}
                         <td className="px-3 py-3.5 text-right">
                           {r.ce_pct_of_total !== undefined && r.pe_pct_of_total !== undefined ? (<>
@@ -548,79 +560,68 @@ export default function PositionalRadar() {
                               <div className="bg-red-500/70 h-full" style={{width:`${r.ce_pct_of_total}%`}}/>
                               <div className="bg-emerald-500/70 h-full" style={{width:`${r.pe_pct_of_total}%`}}/>
                             </div>
-                            {r.pcr_series !== undefined && (
-                              <p className="text-[10px] text-gray-600 mt-1">PCR {r.pcr_series.toFixed(2)}</p>
-                            )}
+                            {r.pcr_series !== undefined && <p className="text-[10px] text-gray-600 mt-1">PCR {r.pcr_series.toFixed(2)}</p>}
                           </>) : <span className="text-gray-700 text-xs">—</span>}
                         </td>
-
                         {/* Price Series */}
                         <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.cmp_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {r.cmp_chg_pct > 0 ? '+' : ''}{r.cmp_chg_pct}%
-                          </p>
+                          <p className={`text-sm font-black ${r.cmp_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.cmp_chg_pct > 0 ? '+' : ''}{r.cmp_chg_pct}%</p>
                           <p className="text-[10px] text-gray-600">₹{r.cmp_series[0]?.toFixed(0)} → ₹{r.cmp.toFixed(0)}</p>
                         </td>
-
                         {/* Writer's Take */}
                         <td className="px-5 py-3.5">
                           <div className={`rounded-lg border px-3 py-2 ${wt.oiBg} ${wt.oiBorder}`}>
-                            <p className={`text-[10px] font-bold ${wt.safetyColor} mb-1`}>
-                              Direction Safety: {wt.safetyLabel}
-                            </p>
-                            <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded mb-1.5 ${wt.opportunityColor} ${wt.opportunityBg}`}>
-                              {wt.opportunityLabel}
-                            </div>
+                            <p className={`text-[10px] font-bold ${wt.safetyColor} mb-1`}>Direction Safety: {wt.safetyLabel}</p>
+                            <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded mb-1.5 ${wt.opportunityColor} ${wt.opportunityBg}`}>{wt.opportunityLabel}</div>
                             <p className="text-[10px] text-gray-400 mb-1">{wt.structureNote}</p>
                             <p className="text-[10px] text-gray-500">
                               Ref strike: <span className="text-white font-bold">{wt.refStrike.toLocaleString()} {wt.refSide}</span>
                               <span className="text-gray-600"> · ~3-5% OTM</span>
                             </p>
-                            {wt.cautionNote && (
-                              <p className="text-[10px] text-amber-400 mt-1">{wt.cautionNote}</p>
-                            )}
+                            {wt.cautionNote && <p className="text-[10px] text-amber-400 mt-1">{wt.cautionNote}</p>}
                             {r.ce_wall && r.pe_wall && (
                               <div className="mt-1.5 pt-1.5 border-t border-gray-700/50">
                                 <p className="text-[10px] text-gray-500 mb-0.5">OI walls observed:</p>
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[10px] font-bold text-red-400">
-                                    📈 CE ₹{r.ce_wall.toLocaleString()} · {r.ce_wall_oi_L}L
-                                  </span>
-                                  <span className="text-[10px] font-bold text-emerald-400">
-                                    📉 PE ₹{r.pe_wall.toLocaleString()} · {r.pe_wall_oi_L}L
-                                  </span>
+                                  <span className="text-[10px] font-bold text-red-400">📈 CE ₹{r.ce_wall.toLocaleString()} · {r.ce_wall_oi_L}L</span>
+                                  <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{r.pe_wall.toLocaleString()} · {r.pe_wall_oi_L}L</span>
                                 </div>
-                                <p className="text-[10px] text-gray-600 mt-0.5">
-                                  Range: ₹{r.trade_range} · {r.trade_range_pct}% · {r.range_label}
-                                </p>
+                                <p className="text-[10px] text-gray-600 mt-0.5">Range: ₹{r.trade_range} · {r.trade_range_pct}% · {r.range_label}</p>
                               </div>
                             )}
+                            {/* OI Map button in Writer's View */}
+                            <button
+                              onClick={() => fetchWalls(r.symbol)}
+                              className={`mt-2 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                                expandedSymbol === r.symbol ? 'bg-cyan-950 text-cyan-300 border-cyan-700' : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
+                              }`}>
+                              {wallsLoading === r.symbol ? '⏳' : expandedSymbol === r.symbol ? '▲ Close' : '📊 OI Map'}
+                            </button>
                             <p className="text-[10px] text-gray-700 mt-1">Verify OI wall before use</p>
                           </div>
                         </td>
 
                       </> : <>
-                        {/* Original Trader View columns */}
-                        {/* Signal */}
+                        {/* Trader View — Signal column with OI Map button */}
                         <td className="px-3 py-3.5">
                           <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
                             {m.icon} {m.label}
                           </span>
                           {r.ce_wall && r.pe_wall && (
                             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                              <span className="text-[10px] font-bold text-red-400 bg-red-950/30 border border-red-800/30 px-1.5 py-0.5 rounded">
-                                📈 ₹{r.ce_wall.toLocaleString()}
-                              </span>
-                              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-1.5 py-0.5 rounded">
-                                📉 ₹{r.pe_wall.toLocaleString()}
-                              </span>
-                              {r.range_label && (
-                                <span className="text-[10px] text-gray-600">
-                                  {r.trade_range_pct}%
-                                </span>
-                              )}
+                              <span className="text-[10px] font-bold text-red-400 bg-red-950/30 border border-red-800/30 px-1.5 py-0.5 rounded">📈 ₹{r.ce_wall.toLocaleString()}</span>
+                              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-1.5 py-0.5 rounded">📉 ₹{r.pe_wall.toLocaleString()}</span>
+                              {r.range_label && <span className="text-[10px] text-gray-600">{r.trade_range_pct}%</span>}
                             </div>
                           )}
+                          {/* OI Map button in Trader View */}
+                          <button
+                            onClick={() => fetchWalls(r.symbol)}
+                            className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                              expandedSymbol === r.symbol ? 'bg-cyan-950 text-cyan-300 border-cyan-700' : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
+                            }`}>
+                            {wallsLoading === r.symbol ? '⏳' : expandedSymbol === r.symbol ? '▲ Close' : '📊 OI Map'}
+                          </button>
                         </td>
 
                         {/* Consistency */}
@@ -628,7 +629,6 @@ export default function PositionalRadar() {
                           <ConsistencyBar pct={r.consistency_pct} label={r.consistency_label}/>
                           <p className="text-[10px] text-gray-600 mt-1">{r.match_days}/{r.total_days} days</p>
                         </td>
-
                         {/* Consecutive */}
                         <td className="px-3 py-3.5">
                           <p className={`text-lg font-black ${r.consec_days >= 5 ? 'text-emerald-400' : r.consec_days >= 3 ? 'text-amber-400' : r.consec_days >= 1 ? 'text-white' : 'text-orange-400'}`}>
@@ -636,69 +636,45 @@ export default function PositionalRadar() {
                           </p>
                           <p className="text-[10px] text-gray-600">{r.consec_days > 0 ? 'in a row' : 'broke last day'}</p>
                         </td>
-
                         {/* OI */}
                         <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {r.oi_chg_pct > 0 ? '+' : ''}{r.oi_chg_pct}%
-                          </p>
-                          {r.accelerating && (
-                            <p className="text-[10px] text-blue-400">🚀 {r.oi_first_half_chg}% → {r.oi_second_half_chg}%</p>
-                          )}
+                          <p className={`text-sm font-black ${r.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.oi_chg_pct > 0 ? '+' : ''}{r.oi_chg_pct}%</p>
+                          {r.accelerating && <p className="text-[10px] text-blue-400">🚀 {r.oi_first_half_chg}% → {r.oi_second_half_chg}%</p>}
                         </td>
-
                         {/* Volume */}
                         <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.vol_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {r.vol_chg_pct > 0 ? '+' : ''}{r.vol_chg_pct}%
-                          </p>
+                          <p className={`text-sm font-black ${r.vol_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.vol_chg_pct > 0 ? '+' : ''}{r.vol_chg_pct}%</p>
                           <p className="text-[10px] text-gray-600">vs 7d avg ({r.vol_avg_7d}L)</p>
-                          {r.conviction_level === 'CONVICTION' && (
-                            <p className="text-[10px] text-orange-400">⚡ {r.vol_consec}d consec</p>
-                          )}
+                          {r.conviction_level === 'CONVICTION' && <p className="text-[10px] text-orange-400">⚡ {r.vol_consec}d consec</p>}
                         </td>
-
                         {/* Price */}
                         <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.cmp_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {r.cmp_chg_pct > 0 ? '+' : ''}{r.cmp_chg_pct}%
-                          </p>
+                          <p className={`text-sm font-black ${r.cmp_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.cmp_chg_pct > 0 ? '+' : ''}{r.cmp_chg_pct}%</p>
                           <p className="text-[10px] text-gray-600">₹{r.cmp_series[0]?.toFixed(0)} → ₹{r.cmp.toFixed(0)}</p>
                         </td>
-
                         {/* OI Sparkline */}
-                        <td className="px-3 py-3.5 text-right">
-                          <div className="flex justify-end">
-                            <Sparkline data={r.oi_series} color={oiColor}/>
-                          </div>
-                        </td>
-
+                        <td className="px-3 py-3.5 text-right"><div className="flex justify-end"><Sparkline data={r.oi_series} color={oiColor}/></div></td>
                         {/* Price Sparkline */}
-                        <td className="px-3 py-3.5 text-right">
-                          <div className="flex justify-end">
-                            <Sparkline data={r.cmp_series} color={cmpColor}/>
-                          </div>
-                        </td>
-
+                        <td className="px-3 py-3.5 text-right"><div className="flex justify-end"><Sparkline data={r.cmp_series} color={cmpColor}/></div></td>
                         {/* Deep Dive */}
                         <td className="px-5 py-3.5">
                           <div className="flex flex-col gap-1">
                             {r.has_uoa ? (
-                              <a href={`/uoa?symbol=${r.symbol}`}
-                                className="text-xs text-blue-400 hover:text-blue-300 font-bold">
-                                🐋 UOA ✅ →
-                              </a>
+                              <a href={`/uoa?symbol=${r.symbol}`} className="text-xs text-blue-400 hover:text-blue-300 font-bold">🐋 UOA ✅ →</a>
                             ) : (
                               <span className="text-xs text-gray-700">🐋 UOA —</span>
                             )}
-                            <a href={`/jungle?symbol=${r.symbol}`}
-                              className="text-xs text-amber-400 hover:text-amber-300">
-                              🌿 Jungle →
-                            </a>
+                            <a href={`/jungle?symbol=${r.symbol}`} className="text-xs text-amber-400 hover:text-amber-300">🌿 Jungle →</a>
                           </div>
                         </td>
                       </>}
                     </tr>
+
+                    {/* OI Map expandable panel */}
+                    {expandedSymbol === r.symbol && wallsData[r.symbol] && (
+                      <OIMapPanel symbol={r.symbol} wallsData={wallsData[r.symbol]} />
+                    )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
@@ -708,9 +684,7 @@ export default function PositionalRadar() {
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
             <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-4 text-3xl">📈</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">No signals match</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              {minConsec > 0 ? `No stocks had ${minConsec}+ consecutive days of this signal.` : 'Try changing the filters above.'}
-            </p>
+            <p className="text-sm text-gray-600 mb-3">{minConsec > 0 ? `No stocks had ${minConsec}+ consecutive days of this signal.` : 'Try changing the filters above.'}</p>
             <button onClick={() => { handleConsec(0); setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false) }}
               className="text-xs text-emerald-400 hover:text-emerald-300">Reset all filters</button>
           </div>

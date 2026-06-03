@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import React from 'react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
@@ -72,10 +73,29 @@ export default function CPRScanner() {
   const [typeFilter, setTypeFilter]       = useState<'all'|'index'|'stocks'>('all')
   const [confluenceType, setConfluenceType] = useState<'all'|'CONFIRMS'|'CONTRADICTS'>('all')
   const [signalFilter, setSignalFilter]   = useState<'all'|'LONG_BUILDUP'|'SHORT_BUILDUP'|'CALL_WRITING'|'PUT_WRITING'|'SHORT_COVERING'|'LONG_UNWINDING'>('all')
+
+  // OI Map state
+  const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
+  const [wallsData, setWallsData] = useState<Record<string, any>>({})
+  const [wallsLoading, setWallsLoading] = useState<string | null>(null)
+
   const router = useRouter()
   const [countdown, setCountdown] = useState(300)
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
+
+  const fetchWalls = async (symbol: string) => {
+    if (expandedSymbol === symbol) { setExpandedSymbol(null); return }
+    if (wallsData[symbol]) { setExpandedSymbol(symbol); return }
+    setWallsLoading(symbol)
+    try {
+      const res = await fetch(`${API}/oi-walls/${symbol}`)
+      const json = await res.json()
+      setWallsData(prev => ({ ...prev, [symbol]: json }))
+      setExpandedSymbol(symbol)
+    } catch(e) { console.error(e) }
+    setWallsLoading(null)
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -180,7 +200,6 @@ export default function CPRScanner() {
           const isAfterMarket = totalMins >= 16 * 60 + 30
           const isPreMarket = totalMins < 9 * 60 + 15
           const isWeekend = [0, 6].includes(ist.getUTCDay())
-
           if (isWeekend || isAfterMarket || isPreMarket) {
             return (
               <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl px-4 py-3 mb-5 flex items-center gap-3">
@@ -315,7 +334,8 @@ export default function CPRScanner() {
               </thead>
               <tbody>
                 {filtered.map((row, i) => (
-                  <tr key={row.symbol}
+                  <React.Fragment key={row.symbol}>
+                  <tr
                     className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${row.confluence ? 'bg-amber-950/5' : i%2===0?'':'bg-gray-900/10'}`}>
 
                     {/* Symbol */}
@@ -388,9 +408,7 @@ export default function CPRScanner() {
                         <div>
                           {row.best_signal && (row.best_signal as any).alignment && (
                             <div className={`text-[9px] font-bold mb-0.5 ${
-                              (row.best_signal as any).alignment_color === 'EMERALD'
-                                ? 'text-emerald-400'
-                                : 'text-amber-400'
+                              (row.best_signal as any).alignment_color === 'EMERALD' ? 'text-emerald-400' : 'text-amber-400'
                             }`}>
                               {(row.best_signal as any).alignment}
                             </div>
@@ -401,14 +419,14 @@ export default function CPRScanner() {
                               {row.best_signal.signal_type.replace(/_/g,' ')}
                             </span>
                           </div>
-                          <p className="text-[10px] font-bold text-white">{row.best_signal.strike.toLocaleString()} <span className={row.best_signal.option_type === 'CE' ? 'text-red-400' : 'text-emerald-400'}>{row.best_signal.option_type}</span> · <span className="text-gray-400">{row.best_signal.score}/5</span></p>
+                          <p className="text-[10px] font-bold text-white">
+                            {row.best_signal.strike.toLocaleString()} <span className={row.best_signal.option_type === 'CE' ? 'text-red-400' : 'text-emerald-400'}>{row.best_signal.option_type}</span> · <span className="text-gray-400">{row.best_signal.score}/5</span>
+                          </p>
                           {(row.best_signal as any).strikes_from_atm !== undefined && (
                             <p className={`text-[10px] font-semibold mt-0.5 ${
-                              (row.best_signal as any).strikes_from_atm <= 1
-                                ? 'text-emerald-400'
-                                : (row.best_signal as any).strikes_from_atm <= 2
-                                ? 'text-amber-400'
-                                : 'text-red-400'
+                              (row.best_signal as any).strikes_from_atm <= 1 ? 'text-emerald-400'
+                              : (row.best_signal as any).strikes_from_atm <= 2 ? 'text-amber-400'
+                              : 'text-red-400'
                             }`}>
                               {(row.best_signal as any).strikes_from_atm <= 1 ? '✅' :
                                (row.best_signal as any).strikes_from_atm <= 2 ? '⚠️' : '🔴'}{' '}
@@ -416,6 +434,16 @@ export default function CPRScanner() {
                             </p>
                           )}
                           {row.oi_signals.length > 1 && <p className="text-[10px] text-gray-700">+{row.oi_signals.length-1} more</p>}
+                          {/* OI Map button */}
+                          <button
+                            onClick={() => fetchWalls(row.symbol)}
+                            className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                              expandedSymbol === row.symbol
+                                ? 'bg-cyan-950 text-cyan-300 border-cyan-700'
+                                : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
+                            }`}>
+                            {wallsLoading === row.symbol ? '⏳' : expandedSymbol === row.symbol ? '▲ Close' : '📊 OI Map'}
+                          </button>
                         </div>
                       ) : (
                         <span className="text-xs text-gray-700">—</span>
@@ -430,6 +458,82 @@ export default function CPRScanner() {
                       </button>
                     </td>
                   </tr>
+
+                  {/* OI Map expandable panel */}
+                  {expandedSymbol === row.symbol && wallsData[row.symbol] && (
+                    <tr key={`${row.symbol}-walls`}>
+                      <td colSpan={8} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
+                        <div>
+                          <div className="flex items-center gap-3 mb-2 flex-wrap">
+                            <p className="text-sm font-bold text-white">📊 {row.symbol} OI Structure</p>
+                            <span className="text-xs text-gray-500">CMP ₹{wallsData[row.symbol].cmp?.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mb-3 flex-wrap">
+                            <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
+                              <span className="text-[10px] text-gray-500 font-semibold">Intraday:</span>
+                              <span className="text-[10px] font-bold text-red-400">📈 CE ₹{wallsData[row.symbol].intraday_ce_wall?.toLocaleString()}</span>
+                              <span className="text-[10px] text-gray-600">·</span>
+                              <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{wallsData[row.symbol].intraday_pe_wall?.toLocaleString()}</span>
+                              <span className="text-[10px] text-gray-600">· {wallsData[row.symbol].intraday_range_pct}%</span>
+                            </div>
+                            {(() => {
+                              const strikes = wallsData[row.symbol].strikes || []
+                              const maxCeStrike = strikes.reduce((best: any, s: any) => s.ce_oi > (best?.ce_oi || 0) ? s : best, null)
+                              const maxPeStrike = strikes.reduce((best: any, s: any) => s.pe_oi > (best?.pe_oi || 0) ? s : best, null)
+                              if (!maxCeStrike || !maxPeStrike) return null
+                              return (
+                                <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
+                                  <span className="text-[10px] text-gray-500 font-semibold">Max OI:</span>
+                                  <span className="text-[10px] font-bold text-red-400">📈 CE ₹{maxCeStrike.strike?.toLocaleString()} · {(maxCeStrike.ce_oi/100000).toFixed(2)}L</span>
+                                  <span className="text-[10px] text-gray-600">·</span>
+                                  <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{maxPeStrike.strike?.toLocaleString()} · {(maxPeStrike.pe_oi/100000).toFixed(2)}L</span>
+                                </div>
+                              )
+                            })()}
+                          </div>
+                          <div className="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-semibold mb-1 px-1">
+                            <span>Strike</span>
+                            <span className="text-red-400">CE OI</span>
+                            <span className="text-emerald-400">PE OI</span>
+                            <span>Dominant</span>
+                            <span>Note</span>
+                          </div>
+                          <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                            {wallsData[row.symbol].strikes?.map((s: any) => {
+                              const cmp = wallsData[row.symbol].cmp || 0
+                              const strikesArr = wallsData[row.symbol].strikes || []
+                              const interval = strikesArr.length > 1 ? Math.abs(strikesArr[0].strike - strikesArr[1].strike) : 50
+                              const isAtm = Math.abs(s.strike - cmp) <= interval / 2
+                              const isCeWall = s.strike === wallsData[row.symbol].ce_wall
+                              const isPeWall = s.strike === wallsData[row.symbol].pe_wall
+                              const dominant = s.ce_oi > s.pe_oi ? 'CE' : s.pe_oi > s.ce_oi ? 'PE' : '='
+                              return (
+                                <div key={s.strike}
+                                  className={`grid grid-cols-5 gap-2 text-[10px] py-1 px-1 rounded ${
+                                    isCeWall ? 'bg-red-950/30 border border-red-800/20'
+                                    : isPeWall ? 'bg-emerald-950/30 border border-emerald-800/20'
+                                    : isAtm ? 'bg-amber-950/20 border border-amber-800/20'
+                                    : ''
+                                  }`}>
+                                  <span className={`font-bold ${isAtm ? 'text-amber-400' : 'text-white'}`}>
+                                    {s.strike.toLocaleString()} {isAtm ? '★' : ''}
+                                  </span>
+                                  <span className="text-red-400">{s.ce_oi > 0 ? `${(s.ce_oi/100000).toFixed(2)}L` : '—'}</span>
+                                  <span className="text-emerald-400">{s.pe_oi > 0 ? `${(s.pe_oi/100000).toFixed(2)}L` : '—'}</span>
+                                  <span className={dominant === 'CE' ? 'text-red-400' : dominant === 'PE' ? 'text-emerald-400' : 'text-gray-500'}>{dominant}</span>
+                                  <span className="text-gray-500 font-bold">
+                                    {isCeWall ? '🔴 CE Wall' : isPeWall ? '🟢 PE Wall' : isAtm ? '⭐ ATM' : ''}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <p className="text-[10px] text-gray-700 mt-2">Strikes within 15% of CMP · CE Wall = resistance · PE Wall = support · Informational only</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

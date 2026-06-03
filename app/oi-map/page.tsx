@@ -229,11 +229,19 @@ export default function OIMapPage() {
     return () => clearInterval(tick);
   }, []);
 
-  // Refresh immediately when tab becomes visible again (after sleep/switch)
+  // Refresh when tab becomes visible — handles laptop sleep/tab switch
+  // Also resets the interval so countdown is accurate after wake
   useEffect(() => {
+    let lastHidden = Date.now();
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        fetchRef.current?.();
+      if (document.visibilityState === "hidden") {
+        lastHidden = Date.now();
+      } else if (document.visibilityState === "visible") {
+        const asleepMs = Date.now() - lastHidden;
+        if (asleepMs > 10000) {
+          // Asleep more than 10s — fetch fresh data immediately
+          fetchRef.current?.();
+        }
       }
     };
     document.addEventListener("visibilitychange", onVisible);

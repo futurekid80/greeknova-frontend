@@ -183,7 +183,7 @@ export default function OIMapPage() {
   const [data, setData]           = useState<OIMapData | null>(null);
   const [loading, setLoading]     = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const fetchRef = useRef<() => Promise<void>>();
+  const fetchRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   fetchRef.current = async () => {
     try {

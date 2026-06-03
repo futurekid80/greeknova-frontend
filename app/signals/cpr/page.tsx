@@ -71,6 +71,7 @@ export default function CPRScanner() {
   const [virginOnly, setVirginOnly]         = useState(false)
   const [typeFilter, setTypeFilter]       = useState<'all'|'index'|'stocks'>('all')
   const [confluenceType, setConfluenceType] = useState<'all'|'CONFIRMS'|'CONTRADICTS'>('all')
+  const [signalFilter, setSignalFilter]   = useState<'all'|'LONG_BUILDUP'|'SHORT_BUILDUP'|'CALL_WRITING'|'PUT_WRITING'|'SHORT_COVERING'|'LONG_UNWINDING'>('all')
   const router = useRouter()
   const [countdown, setCountdown] = useState(300)
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
@@ -105,6 +106,7 @@ export default function CPRScanner() {
     .filter(r => !virginOnly || r.is_virgin)
     .filter(r => typeFilter === 'all' || (typeFilter === 'index' ? r.is_index : !r.is_index))
     .filter(r => confluenceType === 'all' || r.confluence_type === confluenceType)
+    .filter(r => signalFilter === 'all' || r.best_signal?.signal_type === signalFilter)
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -269,6 +271,27 @@ export default function CPRScanner() {
             <button key={f} onClick={() => setTypeFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${typeFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {f}
+            </button>
+          ))}
+          <div className="w-px h-5 bg-gray-800 mx-1"/>
+          {(['all','LONG_BUILDUP','SHORT_BUILDUP','CALL_WRITING','PUT_WRITING','SHORT_COVERING','LONG_UNWINDING'] as const).map(f => (
+            <button key={f} onClick={() => setSignalFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${signalFilter===f
+                ? f==='LONG_BUILDUP'    ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                : f==='SHORT_BUILDUP'   ? 'bg-red-950 text-red-400 border-red-800'
+                : f==='CALL_WRITING'    ? 'bg-red-950/60 text-red-300 border-red-800/60'
+                : f==='PUT_WRITING'     ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                : f==='SHORT_COVERING'  ? 'bg-blue-950 text-blue-400 border-blue-800'
+                : f==='LONG_UNWINDING'  ? 'bg-amber-950 text-amber-400 border-amber-800'
+                : 'bg-white text-gray-900 border-white'
+                : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              {f==='all'            ? 'All Signals'
+                : f==='LONG_BUILDUP'  ? '🐂 Long Buildup'
+                : f==='SHORT_BUILDUP' ? '🐻 Short Buildup'
+                : f==='CALL_WRITING'  ? '✍️ Call Writing'
+                : f==='PUT_WRITING'   ? '✍️ Put Writing'
+                : f==='SHORT_COVERING'? '🔄 Short Covering'
+                : '⚠️ Long Unwinding'}
             </button>
           ))}
         </div>

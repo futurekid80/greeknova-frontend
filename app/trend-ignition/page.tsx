@@ -652,6 +652,20 @@ export default function TrendIgnitionPage() {
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem 1rem" }}>
+      {/* MCX nav strip */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+        <a href="/trend-ignition" style={{
+          fontSize: 12, padding: "4px 12px", borderRadius: 8, textDecoration: "none",
+          background: "#E1F5EE", color: "#085041", fontWeight: 500,
+          border: "0.5px solid #1D9E75",
+        }}>⚡ Trend ignition</a>
+        <a href="/oi-map" style={{
+          fontSize: 12, padding: "4px 12px", borderRadius: 8, textDecoration: "none",
+          background: "transparent", color: "var(--color-text-secondary)",
+          border: "0.5px solid var(--color-border-secondary)",
+        }}>📊 OI map</a>
+      </div>
+
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, color: "var(--color-text-primary)", display: "flex", alignItems: "center" }}>

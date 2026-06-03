@@ -229,6 +229,17 @@ export default function OIMapPage() {
     return () => clearInterval(tick);
   }, []);
 
+  // Refresh immediately when tab becomes visible again (after sleep/switch)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchRef.current?.();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   const meta = COMMODITIES.find(c => c.key === selected)!;
   const summary = data?.session_summary;
 

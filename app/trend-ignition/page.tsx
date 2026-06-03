@@ -624,11 +624,18 @@ export default function TrendIgnitionPage() {
     return () => clearInterval(tick);
   }, []);
 
-  // Refresh immediately when tab becomes visible again (after sleep/switch)
+  // Refresh when tab becomes visible — handles laptop sleep/tab switch
+  // Tracks how long tab was hidden — fetches immediately if > 10 seconds
   useEffect(() => {
+    let lastHidden = Date.now();
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        fetchRef.current?.(true);
+      if (document.visibilityState === "hidden") {
+        lastHidden = Date.now();
+      } else if (document.visibilityState === "visible") {
+        const asleepMs = Date.now() - lastHidden;
+        if (asleepMs > 10000) {
+          fetchRef.current?.(true);
+        }
       }
     };
     document.addEventListener("visibilitychange", onVisible);

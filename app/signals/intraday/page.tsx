@@ -27,6 +27,12 @@ interface Signal {
   vol_open: number
   vol_chg_pct: number
   vol_surge: boolean
+  atm_bias?: string | null
+  atm_bias_label?: string | null
+  atm_bias_color?: string | null
+  atm_strike?: number | null
+  atm_ce_oi?: number
+  atm_pe_oi?: number
   signal_type: string
   label: string
   bias: string
@@ -142,7 +148,21 @@ function fmt(n: number) {
   if (n >= 1000)     return `${(n/1000).toFixed(1)}K`
   return String(n)
 }
-
+function ATMBiasTag({ sig }: { sig: Signal }) {
+  if (!sig.atm_bias || sig.atm_bias === 'NEUTRAL') return null
+  const isFloor = sig.atm_bias === 'PE_FLOOR'
+  const style = isFloor
+    ? 'bg-emerald-950/60 border-emerald-800/50 text-emerald-400'
+    : 'bg-red-950/60 border-red-800/50 text-red-400'
+  // Warning if bias contradicts signal direction
+  const warning = (isFloor && sig.bias === 'BEARISH') || (!isFloor && sig.bias === 'BULLISH')
+  return (
+    <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border mt-1 ${style}`}>
+      {sig.atm_bias_label}
+      {warning && <span className="text-amber-400 ml-0.5">⚠️</span>}
+    </div>
+  )
+}
 export default function IntradaySignalLog() {
   const [data, setData]       = useState<LogData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -433,6 +453,16 @@ export default function IntradaySignalLog() {
                           }`}>
                           {wallsLoading === sig.symbol ? '⏳' : expandedSymbol === sig.symbol ? '▲ Close' : '📊 OI Map'}
                         </button>
+                        <button
+                          onClick={() => fetchWalls(sig.symbol)}
+                          className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                            expandedSymbol === sig.symbol
+                              ? 'bg-cyan-950 text-cyan-300 border-cyan-700'
+                              : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
+                          }`}>
+                          {wallsLoading === sig.symbol ? '⏳' : expandedSymbol === sig.symbol ? '▲ Close' : '📊 OI Map'}
+                        </button>
+                        <ATMBiasTag sig={sig} />
                       </td>
 
                       {/* CPR */}

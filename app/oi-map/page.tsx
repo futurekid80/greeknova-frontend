@@ -116,7 +116,11 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
       </div>
 
       {strikes.map((row) => {
-        const isPrice   = currentPrice > 0 && Math.abs(row.strike - currentPrice) < 50;
+        // Use half the typical strike step for proximity detection
+        const strikeStep = strikes.length > 1
+          ? Math.abs(strikes[0].strike - strikes[1].strike)
+          : 100;
+        const isPrice = currentPrice > 0 && Math.abs(row.strike - currentPrice) < strikeStep * 0.6;
         const isSupport = row.pe_oi > row.ce_oi * 1.5 && row.strike < currentPrice;
         const isResist  = row.ce_oi > row.pe_oi * 1.5 && row.strike > currentPrice;
 

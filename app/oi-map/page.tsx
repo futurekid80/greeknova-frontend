@@ -200,6 +200,7 @@ export default function OIMapPage() {
   const [data, setData]           = useState<OIMapData | null>(null);
   const [loading, setLoading]     = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState(30);
   const fetchRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   fetchRef.current = async () => {
@@ -208,6 +209,7 @@ export default function OIMapPage() {
       const json = await res.json();
       setData(json);
       setLastUpdate(new Date());
+      setCountdown(30);
     } catch (e) {
       console.error(e);
     } finally {
@@ -221,6 +223,11 @@ export default function OIMapPage() {
     const interval = setInterval(() => fetchRef.current?.(), 30000);
     return () => clearInterval(interval);
   }, [selected]);
+
+  useEffect(() => {
+    const tick = setInterval(() => setCountdown(c => c > 0 ? c - 1 : 30), 1000);
+    return () => clearInterval(tick);
+  }, []);
 
   const meta = COMMODITIES.find(c => c.key === selected)!;
   const summary = data?.session_summary;
@@ -251,8 +258,13 @@ export default function OIMapPage() {
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 4px", color: "var(--color-text-primary)" }}>OI map</h1>
         <p style={{ fontSize: 13, color: "var(--color-text-tertiary)", margin: 0 }}>
-          Strike-level OI distribution · {lastUpdate ? `updated ${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago` : "loading..."}
+          MCX · strike OI · next refresh in {countdown}s
         </p>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: 2, background: "var(--color-background-secondary)", borderRadius: 99, marginBottom: 16, overflow: "hidden" }}>
+        <div style={{ height: "100%", borderRadius: 99, width: `${((30 - countdown) / 30) * 100}%`, background: "var(--color-border-info, #185FA5)", transition: "width 1s linear" }} />
       </div>
 
       {/* Commodity selector */}

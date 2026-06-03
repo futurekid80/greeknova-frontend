@@ -125,6 +125,8 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
 
         const peDelta = row.pe_delta > 0 ? `+${row.pe_delta}` : row.pe_delta < 0 ? `${row.pe_delta}` : "";
         const ceDelta = row.ce_delta > 0 ? `+${row.ce_delta}` : row.ce_delta < 0 ? `${row.ce_delta}` : "";
+        const peOILabel = row.pe_oi >= 1000 ? `${(row.pe_oi/1000).toFixed(1)}K` : `${row.pe_oi}`;
+        const ceOILabel = row.ce_oi >= 1000 ? `${(row.ce_oi/1000).toFixed(1)}K` : `${row.ce_oi}`;
 
         const rowBg = isPrice ? "var(--color-background-secondary)" : "transparent";
         const strikeColor = isSupport ? "#085041" : isResist ? "#791F1F" : "var(--color-text-tertiary)";
@@ -133,14 +135,23 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
         return (
           <div key={row.strike} style={{ display: "flex", alignItems: "center", marginBottom: 3, background: rowBg, borderRadius: 4, padding: "1px 0" }}>
             {/* Strike label */}
-            <div style={{ width: 72, flexShrink: 0, fontSize: 11, fontWeight: isSupport || isResist ? 500 : 400, color: strikeColor, textAlign: "right", paddingRight: 8 }}>
-              {row.strike.toLocaleString("en-IN")}
-              {isPrice && <span style={{ color: "#1D9E75", marginLeft: 3 }}>◀</span>}
+            <div style={{ width: 72, flexShrink: 0, textAlign: "right", paddingRight: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: isSupport || isResist ? 500 : 400, color: strikeColor }}>
+                {row.strike.toLocaleString("en-IN")}
+                {isPrice && <span style={{ color: "#1D9E75", marginLeft: 3 }}>◀</span>}
+              </div>
+              {(isSupport || isResist) && (
+                <div style={{ fontSize: 10, color: isSupport ? "#1D9E75" : "#A32D2D", opacity: 0.8 }}>
+                  {isSupport ? peOILabel : ceOILabel}
+                </div>
+              )}
             </div>
 
             {/* PE bar — grows left */}
-            <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 4 }}>
-              {peDelta && <span style={{ fontSize: 10, color: peDelta.startsWith("+") ? "#1D9E75" : "#E24B4A" }}>{peDelta}</span>}
+            <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 3 }}>
+              {Math.abs(row.pe_delta) > 10 && (
+                <span style={{ fontSize: 10, color: row.pe_delta > 0 ? "#1D9E75" : "#E24B4A", opacity: 0.8 }}>{peDelta}</span>
+              )}
               <div style={{ height: barH, background: isSupport ? "#1D9E75" : "#E1F5EE", width: `${peWidth}%`, borderRadius: "2px 0 0 2px", minWidth: peWidth > 0 ? 2 : 0 }} />
             </div>
 
@@ -148,9 +159,11 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
             <div style={{ width: 1, flexShrink: 0, background: "var(--color-border-secondary)", height: barH }} />
 
             {/* CE bar — grows right */}
-            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 3 }}>
               <div style={{ height: barH, background: isResist ? "#E24B4A" : "#FCEBEB", width: `${ceWidth}%`, borderRadius: "0 2px 2px 0", minWidth: ceWidth > 0 ? 2 : 0 }} />
-              {ceDelta && <span style={{ fontSize: 10, color: ceDelta.startsWith("+") ? "#1D9E75" : "#E24B4A" }}>{ceDelta}</span>}
+              {Math.abs(row.ce_delta) > 10 && (
+                <span style={{ fontSize: 10, color: row.ce_delta > 0 ? "#1D9E75" : "#E24B4A", opacity: 0.8 }}>{ceDelta}</span>
+              )}
             </div>
           </div>
         );
@@ -265,25 +278,32 @@ export default function OIMapPage() {
             </div>
           </div>
 
-          {/* OI Accumulation bars */}
+          {/* OI Map — shown first, most important */}
           <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 12, padding: "1rem 1.1rem", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 10 }}>
-              Session OI accumulation
-              <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-tertiary)", marginLeft: 8 }}>each bar = 5-min scan</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                Strike OI distribution
+              </div>
+              <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                ₹{data.current_price?.toLocaleString("en-IN")} · ATM {data.atm_strike?.toLocaleString("en-IN")}
+              </div>
             </div>
-            <AccumulationBars history={data.oi_history} commodity={selected} />
-          </div>
-
-          {/* OI Map */}
-          <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 12, padding: "1rem 1.1rem" }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 4 }}>
-              Strike OI distribution
-            </div>
-            <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 12 }}>
-              PE (green) = put writers defending support · CE (red) = call writers capping resistance
+            <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 12 }}>
+              PE (green) = put writers defending · CE (red) = call writers capping
             </div>
             <OIMapChart strikes={data.strike_oi} currentPrice={data.current_price} />
           </div>
+
+          {/* OI Accumulation bars — only show when data exists */}
+          {data.oi_history.length > 0 && (
+            <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 12, padding: "1rem 1.1rem" }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 10 }}>
+                Session OI accumulation
+                <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-tertiary)", marginLeft: 8 }}>each bar = 5-min scan</span>
+              </div>
+              <AccumulationBars history={data.oi_history} commodity={selected} />
+            </div>
+          )}
         </>
       )}
 

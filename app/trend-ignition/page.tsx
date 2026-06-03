@@ -624,6 +624,17 @@ export default function TrendIgnitionPage() {
     return () => clearInterval(tick);
   }, []);
 
+  // Refresh immediately when tab becomes visible again (after sleep/switch)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchRef.current?.(true);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   // Alert permission
   useEffect(() => {
     if ("Notification" in window) {

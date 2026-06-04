@@ -44,13 +44,11 @@ interface Signal {
   cpr_position: string | null
   cpr_width_emoji: string | null
   cpr_is_virgin: boolean | null
-  // Options confirmation
   options_confirmation: boolean
   options_confirms: boolean | null
   options_alignment: string | null
   options_alignment_color: string | null
-options_signal: OptionsSignal | null
-  // OI Walls
+  options_signal: OptionsSignal | null
   ce_wall: number | null
   pe_wall: number | null
   ce_wall_oi_L: number | null
@@ -118,11 +116,9 @@ function OptionsConfirmation({ sig }: { sig: Signal }) {
   if (!sig.options_confirmation || !sig.options_signal) {
     return <span className="text-[10px] text-gray-600">—</span>
   }
-
   const opt = sig.options_signal
   const isConfirms = sig.options_confirms === true
   const icon = OPTIONS_SIGNAL_ICONS[opt.signal_type] || '👁️'
-
   return (
     <div className="flex flex-col gap-1">
       <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
@@ -132,12 +128,8 @@ function OptionsConfirmation({ sig }: { sig: Signal }) {
       }`}>
         {isConfirms ? '✅' : '⚠️'} {sig.options_alignment}
       </div>
-      <p className="text-[10px] text-gray-400">
-        {icon} {opt.label}
-      </p>
-      <p className="text-[10px] text-gray-600">
-        {opt.strike.toLocaleString()} {opt.option_type} · Score {opt.score}/5
-      </p>
+      <p className="text-[10px] text-gray-400">{icon} {opt.label}</p>
+      <p className="text-[10px] text-gray-600">{opt.strike.toLocaleString()} {opt.option_type} · Score {opt.score}/5</p>
     </div>
   )
 }
@@ -148,13 +140,13 @@ function fmt(n: number) {
   if (n >= 1000)     return `${(n/1000).toFixed(1)}K`
   return String(n)
 }
+
 function ATMBiasTag({ sig }: { sig: Signal }) {
   if (!sig.atm_bias || sig.atm_bias === 'NEUTRAL') return null
   const isFloor = sig.atm_bias === 'PE_FLOOR'
   const style = isFloor
     ? 'bg-emerald-950/60 border-emerald-800/50 text-emerald-400'
     : 'bg-red-950/60 border-red-800/50 text-red-400'
-  // Warning if bias contradicts signal direction
   const warning = (isFloor && sig.bias === 'BEARISH') || (!isFloor && sig.bias === 'BULLISH')
   return (
     <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border mt-1 ${style}`}>
@@ -163,28 +155,25 @@ function ATMBiasTag({ sig }: { sig: Signal }) {
     </div>
   )
 }
+
 export default function IntradaySignalLog() {
-  const [data, setData]       = useState<LogData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [biasFilter, setBiasFilter] = useState<'all'|'BULLISH'|'BEARISH'>('all')
-  const [sigFilter, setSigFilter]   = useState<'all'|'LONG_BUILDUP'|'SHORT_BUILDUP'|'SHORT_COVERING'|'LONG_UNWINDING'>('all')
-  const [minPersist, setMinPersist] = useState(1)
+  const [data, setData]           = useState<LogData | null>(null)
+  // FIX 3: stale data ref — show last known data while reloading
+  const [staleData, setStaleData] = useState<LogData | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [biasFilter, setBiasFilter]   = useState<'all'|'BULLISH'|'BEARISH'>('all')
+  const [sigFilter, setSigFilter]     = useState<'all'|'LONG_BUILDUP'|'SHORT_BUILDUP'|'SHORT_COVERING'|'LONG_UNWINDING'>('all')
+  const [minPersist, setMinPersist]   = useState(1)
   const [confirmedOnly, setConfirmedOnly] = useState(false)
-  const [countdown, setCountdown]   = useState(300)
+  const [countdown, setCountdown]     = useState(300)
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
-  const [wallsData, setWallsData] = useState<Record<string, any>>({})
+  const [wallsData, setWallsData]     = useState<Record<string, any>>({})
   const [wallsLoading, setWallsLoading] = useState<string | null>(null)
   const router = useRouter()
 
   const fetchWalls = async (symbol: string) => {
-    if (expandedSymbol === symbol) {
-      setExpandedSymbol(null)
-      return
-    }
-    if (wallsData[symbol]) {
-      setExpandedSymbol(symbol)
-      return
-    }
+    if (expandedSymbol === symbol) { setExpandedSymbol(null); return }
+    if (wallsData[symbol]) { setExpandedSymbol(symbol); return }
     setWallsLoading(symbol)
     try {
       const res = await fetch(`${API}/oi-walls/${symbol}`)
@@ -194,6 +183,7 @@ export default function IntradaySignalLog() {
     } catch(e) { console.error(e) }
     setWallsLoading(null)
   }
+
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
 
@@ -203,6 +193,8 @@ export default function IntradaySignalLog() {
       const res  = await fetch(`${API}/signal-log`)
       const json = await res.json()
       setData(json)
+      // FIX 3: only update stale if we got real signals
+      if (json?.signals?.length > 0) setStaleData(json)
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [])
@@ -219,7 +211,10 @@ export default function IntradaySignalLog() {
 
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
-  const signals = data?.signals || []
+
+  // FIX 3: use stale data when fresh data is empty during reload
+  const displayData = (data?.signals?.length === 0 && staleData && loading) ? staleData : data
+  const signals = displayData?.signals || []
 
   const filtered = signals
     .filter(s => biasFilter === 'all' || s.bias === biasFilter)
@@ -233,7 +228,6 @@ export default function IntradaySignalLog() {
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/signals/intraday" />
-
       <div className="max-w-7xl mx-auto px-6 py-8">
 
         {/* Header */}
@@ -245,9 +239,9 @@ export default function IntradaySignalLog() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {data && (
+            {displayData && (
               <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
-                <Clock size={11}/>{data.open_time} → {data.latest_time} · {data.snapshots} snapshots
+                <Clock size={11}/>{displayData.open_time} → {displayData.latest_time} · {displayData.snapshots} snapshots
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
@@ -259,8 +253,8 @@ export default function IntradaySignalLog() {
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
             </button>
           </div>
-            
         </div>
+
         {/* HIGH CONV Alert Banner */}
         {confirmedCount > 0 && (
           <div className="mb-4 flex items-center gap-3 bg-emerald-950/30 border border-emerald-700/50 rounded-xl px-4 py-3">
@@ -270,10 +264,7 @@ export default function IntradaySignalLog() {
                 {confirmedCount} HIGH CONV signal{confirmedCount > 1 ? 's' : ''} active
               </p>
               <p className="text-xs text-gray-400">
-                {signals
-                  .filter(s => s.options_confirmation && s.options_confirms === true)
-                  .map(s => s.symbol)
-                  .join(' · ')}
+                {signals.filter(s => s.options_confirmation && s.options_confirms === true).map(s => s.symbol).join(' · ')}
               </p>
             </div>
             <span className="text-[10px] text-gray-600">Updates every 5 mins</span>
@@ -284,17 +275,17 @@ export default function IntradaySignalLog() {
         <div className="grid grid-cols-5 gap-3 mb-6">
           <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">🐂 Long Buildup</p>
-            <p className="text-2xl font-black text-emerald-400">{data?.long_buildup || 0}</p>
+            <p className="text-2xl font-black text-emerald-400">{displayData?.long_buildup || 0}</p>
             <p className="text-xs text-gray-600">FUT OI ↑ + Price ↑</p>
           </div>
           <div className="bg-red-950/20 border border-red-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">🐻 Short Buildup</p>
-            <p className="text-2xl font-black text-red-400">{data?.short_buildup || 0}</p>
+            <p className="text-2xl font-black text-red-400">{displayData?.short_buildup || 0}</p>
             <p className="text-xs text-gray-600">FUT OI ↑ + Price ↓</p>
           </div>
           <div className="bg-cyan-950/20 border border-cyan-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">🔄 Unwinding</p>
-            <p className="text-2xl font-black text-cyan-400">{(data?.short_covering || 0) + (data?.long_unwinding || 0)}</p>
+            <p className="text-2xl font-black text-cyan-400">{(displayData?.short_covering || 0) + (displayData?.long_unwinding || 0)}</p>
             <p className="text-xs text-gray-600">FUT OI ↓ — positions closing</p>
           </div>
           <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-4">
@@ -335,7 +326,6 @@ export default function IntradaySignalLog() {
             </button>
           ))}
           <div className="w-px h-5 bg-gray-800 mx-1"/>
-          {/* Confirmed only toggle */}
           <button onClick={() => setConfirmedOnly(!confirmedOnly)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${confirmedOnly
               ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
@@ -357,10 +347,10 @@ export default function IntradaySignalLog() {
           <div className="space-y-2">{[1,2,3,4,5].map(i=>(
             <div key={i} className="h-14 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>
           ))}</div>
-        ) : data?.message && signals.length === 0 ? (
+        ) : displayData?.message && signals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
             <div className="text-4xl mb-4">📋</div>
-            <p className="text-gray-500">{data.message}</p>
+            <p className="text-gray-500">{displayData.message}</p>
           </div>
         ) : filtered.length > 0 ? (
           <div className="rounded-2xl border border-gray-800 overflow-hidden">
@@ -378,23 +368,18 @@ export default function IntradaySignalLog() {
                   const isHighConviction = sig.options_confirmation && sig.options_confirms === true
                   return (
                     <React.Fragment key={`${sig.symbol}-${i}`}>
-                    <tr
-                      className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${
-                        isHighConviction ? 'bg-emerald-950/10 border-l-2 border-l-emerald-700'
-                        : i%2===0 ? '' : 'bg-gray-900/10'
-                      }`}>
+                    <tr className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${
+                      isHighConviction ? 'bg-emerald-950/10 border-l-2 border-l-emerald-700'
+                      : i%2===0 ? '' : 'bg-gray-900/10'
+                    }`}>
 
                       {/* Symbol */}
                       <td className="px-5 py-3">
-                        <div 
-                          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => router.push(`/uoa?symbol=${sig.symbol}`)}
-                        >
+                        <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => router.push(`/uoa?symbol=${sig.symbol}`)}>
                           <p className="text-sm font-black text-white underline-offset-2 hover:underline">{sig.symbol}</p>
                           {isHighConviction && (
-                            <span className="text-[9px] px-1 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800/50 rounded font-bold">
-                              HIGH CONV
-                            </span>
+                            <span className="text-[9px] px-1 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800/50 rounded font-bold">HIGH CONV</span>
                           )}
                         </div>
                         <p className="text-xs text-gray-500">₹{sig.cmp.toLocaleString()}</p>
@@ -424,7 +409,7 @@ export default function IntradaySignalLog() {
                         <p className="text-[10px] text-gray-600">{fmt(sig.vol_now)} vs open {fmt(sig.vol_open)}</p>
                       </td>
 
-                      {/* Signal */}
+                      {/* Signal — FIX 1: single OI Map button only */}
                       <td className="px-4 py-3 text-center">
                         <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
                           {m.icon} {sig.label}
@@ -438,21 +423,11 @@ export default function IntradaySignalLog() {
                               📉 PE ₹{sig.pe_wall.toLocaleString()}
                             </span>
                             {sig.range_label && (
-                              <span className="text-[10px] text-gray-600">
-                                {sig.trade_range_pct}% {sig.range_label}
-                              </span>
+                              <span className="text-[10px] text-gray-600">{sig.trade_range_pct}% {sig.range_label}</span>
                             )}
                           </div>
                         )}
-                        <button
-                          onClick={() => fetchWalls(sig.symbol)}
-                          className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                            expandedSymbol === sig.symbol
-                              ? 'bg-cyan-950 text-cyan-300 border-cyan-700'
-                              : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
-                          }`}>
-                          {wallsLoading === sig.symbol ? '⏳' : expandedSymbol === sig.symbol ? '▲ Close' : '📊 OI Map'}
-                        </button>
+                        {/* FIX 1: only ONE OI Map button */}
                         <button
                           onClick={() => fetchWalls(sig.symbol)}
                           className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
@@ -469,12 +444,8 @@ export default function IntradaySignalLog() {
                       <td className="px-4 py-3 text-center">
                         {sig.cpr_position ? (
                           <>
-                            <p className={`text-xs font-bold ${CPR_COLOR[sig.cpr_position] || 'text-gray-400'}`}>
-                              {sig.cpr_position}
-                            </p>
-                            <p className="text-[10px] text-gray-600">
-                              {sig.cpr_is_virgin ? '🔵 Virgin' : ''} {sig.cpr_width_emoji || ''}
-                            </p>
+                            <p className={`text-xs font-bold ${CPR_COLOR[sig.cpr_position] || 'text-gray-400'}`}>{sig.cpr_position}</p>
+                            <p className="text-[10px] text-gray-600">{sig.cpr_is_virgin ? '🔵 Virgin' : ''} {sig.cpr_width_emoji || ''}</p>
                           </>
                         ) : <span className="text-[10px] text-gray-600">—</span>}
                       </td>
@@ -506,54 +477,33 @@ export default function IntradaySignalLog() {
                       <tr key={`${sig.symbol}-walls`}>
                         <td colSpan={9} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
                           <div>
-                            {/* Header */}
                             <div className="flex items-center gap-3 mb-2 flex-wrap">
-                              <p className="text-sm font-bold text-white">
-                                📊 {sig.symbol} OI Structure
-                              </p>
-                              <span className="text-xs text-gray-500">
-                                CMP ₹{wallsData[sig.symbol].cmp?.toLocaleString()}
-                              </span>
+                              <p className="text-sm font-bold text-white">📊 {sig.symbol} OI Structure</p>
+                              <span className="text-xs text-gray-500">CMP ₹{wallsData[sig.symbol].cmp?.toLocaleString()}</span>
                             </div>
                             <div className="flex items-center gap-2 mb-3 flex-wrap">
-                              {/* Intraday levels — nearest significant strike */}
                               <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
                                 <span className="text-[10px] text-gray-500 font-semibold">Intraday:</span>
-                                <span className="text-[10px] font-bold text-red-400">
-                                  📈 CE ₹{wallsData[sig.symbol].intraday_ce_wall?.toLocaleString()}
-                                </span>
+                                <span className="text-[10px] font-bold text-red-400">📈 CE ₹{wallsData[sig.symbol].intraday_ce_wall?.toLocaleString()}</span>
                                 <span className="text-[10px] text-gray-600">·</span>
-                                <span className="text-[10px] font-bold text-emerald-400">
-                                  📉 PE ₹{wallsData[sig.symbol].intraday_pe_wall?.toLocaleString()}
-                                </span>
-                                <span className="text-[10px] text-gray-600">
-                                  · {wallsData[sig.symbol].intraday_range_pct}%
-                                </span>
+                                <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{wallsData[sig.symbol].intraday_pe_wall?.toLocaleString()}</span>
+                                <span className="text-[10px] text-gray-600">· {wallsData[sig.symbol].intraday_range_pct}%</span>
                               </div>
-                              {/* Max Pain levels — highest OI regardless of proximity */}
                               {(() => {
                                 const strikes = wallsData[sig.symbol].strikes || []
-                                const maxCeStrike = strikes.reduce((best: any, row: any) =>
-                                  row.ce_oi > (best?.ce_oi || 0) ? row : best, null)
-                                const maxPeStrike = strikes.reduce((best: any, row: any) =>
-                                  row.pe_oi > (best?.pe_oi || 0) ? row : best, null)
+                                const maxCeStrike = strikes.reduce((best: any, row: any) => row.ce_oi > (best?.ce_oi || 0) ? row : best, null)
+                                const maxPeStrike = strikes.reduce((best: any, row: any) => row.pe_oi > (best?.pe_oi || 0) ? row : best, null)
                                 if (!maxCeStrike || !maxPeStrike) return null
                                 return (
                                   <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
                                     <span className="text-[10px] text-gray-500 font-semibold">Max OI:</span>
-                                    <span className="text-[10px] font-bold text-red-400">
-                                      📈 CE ₹{maxCeStrike.strike?.toLocaleString()} · {(maxCeStrike.ce_oi/100000).toFixed(2)}L
-                                    </span>
+                                    <span className="text-[10px] font-bold text-red-400">📈 CE ₹{maxCeStrike.strike?.toLocaleString()} · {(maxCeStrike.ce_oi/100000).toFixed(2)}L</span>
                                     <span className="text-[10px] text-gray-600">·</span>
-                                    <span className="text-[10px] font-bold text-emerald-400">
-                                      📉 PE ₹{maxPeStrike.strike?.toLocaleString()} · {(maxPeStrike.pe_oi/100000).toFixed(2)}L
-                                    </span>
+                                    <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{maxPeStrike.strike?.toLocaleString()} · {(maxPeStrike.pe_oi/100000).toFixed(2)}L</span>
                                   </div>
                                 )
                               })()}
                             </div>
-
-                            {/* Strike table */}
                             <div className="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-semibold mb-1 px-1">
                               <span>Strike</span>
                               <span className="text-red-400">CE OI</span>
@@ -564,48 +514,28 @@ export default function IntradaySignalLog() {
                             <div className="space-y-0.5 max-h-64 overflow-y-auto">
                               {wallsData[sig.symbol].strikes?.map((row: any) => {
                                 const cmp = wallsData[sig.symbol].cmp || 0
-                                const strikes = wallsData[sig.symbol].strikes || []
-                                const intervals = strikes.length > 1
-                                  ? Math.abs(strikes[0].strike - strikes[1].strike)
-                                  : 50
+                                const strikesArr = wallsData[sig.symbol].strikes || []
+                                const intervals = strikesArr.length > 1 ? Math.abs(strikesArr[0].strike - strikesArr[1].strike) : 50
                                 const isAtm = Math.abs(row.strike - cmp) <= intervals / 2
                                 const isCeWall = row.strike === wallsData[sig.symbol].ce_wall
                                 const isPeWall = row.strike === wallsData[sig.symbol].pe_wall
                                 const dominant = row.ce_oi > row.pe_oi ? 'CE' : row.pe_oi > row.ce_oi ? 'PE' : '='
                                 return (
-                                  <div key={row.strike}
-                                    className={`grid grid-cols-5 gap-2 text-[10px] py-1 px-1 rounded ${
-                                      isCeWall ? 'bg-red-950/30 border border-red-800/20' 
-                                      : isPeWall ? 'bg-emerald-950/30 border border-emerald-800/20'
-                                      : isAtm ? 'bg-amber-950/20 border border-amber-800/20'
-                                      : ''
-                                    }`}>
-                                    <span className={`font-bold ${isAtm ? 'text-amber-400' : 'text-white'}`}>
-                                      {row.strike.toLocaleString()} {isAtm ? '★' : ''}
-                                    </span>
-                                    <span className="text-red-400">
-                                      {row.ce_oi > 0 ? `${(row.ce_oi/100000).toFixed(2)}L` : '—'}
-                                    </span>
-                                    <span className="text-emerald-400">
-                                      {row.pe_oi > 0 ? `${(row.pe_oi/100000).toFixed(2)}L` : '—'}
-                                    </span>
-                                    <span className={
-                                      dominant === 'CE' ? 'text-red-400' 
-                                      : dominant === 'PE' ? 'text-emerald-400' 
-                                      : 'text-gray-500'
-                                    }>
-                                      {dominant}
-                                    </span>
-                                    <span className="text-gray-500 font-bold">
-                                      {isCeWall ? '🔴 CE Wall' : isPeWall ? '🟢 PE Wall' : isAtm ? '⭐ ATM' : ''}
-                                    </span>
+                                  <div key={row.strike} className={`grid grid-cols-5 gap-2 text-[10px] py-1 px-1 rounded ${
+                                    isCeWall ? 'bg-red-950/30 border border-red-800/20'
+                                    : isPeWall ? 'bg-emerald-950/30 border border-emerald-800/20'
+                                    : isAtm ? 'bg-amber-950/20 border border-amber-800/20' : ''
+                                  }`}>
+                                    <span className={`font-bold ${isAtm ? 'text-amber-400' : 'text-white'}`}>{row.strike.toLocaleString()} {isAtm ? '★' : ''}</span>
+                                    <span className="text-red-400">{row.ce_oi > 0 ? `${(row.ce_oi/100000).toFixed(2)}L` : '—'}</span>
+                                    <span className="text-emerald-400">{row.pe_oi > 0 ? `${(row.pe_oi/100000).toFixed(2)}L` : '—'}</span>
+                                    <span className={dominant === 'CE' ? 'text-red-400' : dominant === 'PE' ? 'text-emerald-400' : 'text-gray-500'}>{dominant}</span>
+                                    <span className="text-gray-500 font-bold">{isCeWall ? '🔴 CE Wall' : isPeWall ? '🟢 PE Wall' : isAtm ? '⭐ ATM' : ''}</span>
                                   </div>
                                 )
                               })}
                             </div>
-                            <p className="text-[10px] text-gray-700 mt-2">
-                              Strikes within 15% of CMP · CE Wall = resistance · PE Wall = support · Informational only
-                            </p>
+                            <p className="text-[10px] text-gray-700 mt-2">Strikes within 15% of CMP · CE Wall = resistance · PE Wall = support · Informational only</p>
                           </div>
                         </td>
                       </tr>
@@ -626,11 +556,12 @@ export default function IntradaySignalLog() {
         <div className="mt-6 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
           <p className="text-xs text-gray-600 leading-relaxed">
             <span className="text-gray-400 font-semibold">How to read: </span>
-            FUT OI Chg = futures open interest change from day open · Price Chg = change from today's 9:15 AM open (not yesterday's close) · A positive Price Chg after a gap-down open = institutional buying the dip · Volume = today's volume vs opening volume ·
+            FUT OI Chg = futures open interest change from day open · Price Chg = change from today's 9:15 AM open ·
+            Volume = today's volume vs opening volume ·
             <span className="text-amber-400"> ⚡ Surge</span> = volume {'>'} 50% above open ·
-            <span className="text-emerald-400"> ✅ Confirms</span> = options market activity aligns with FUT signal (e.g. Put Writing + Long Buildup) ·
+            <span className="text-emerald-400"> ✅ Confirms</span> = options activity aligns with FUT signal ·
             <span className="text-amber-400"> ⚠️ Contradicts</span> = options signal opposes FUT direction — treat with caution ·
-            <span className="text-gray-300"> HIGH CONV</span> = FUT + Options both confirm — higher conviction setup ·
+            <span className="text-gray-300"> HIGH CONV</span> = FUT + near-ATM options both confirm ·
             Observational only · Not investment advice
           </p>
         </div>

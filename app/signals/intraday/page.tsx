@@ -71,6 +71,7 @@ interface LogData {
   short_covering: number
   long_unwinding: number
   message?: string
+  is_eod_snapshot?: boolean
 }
 
 const SIGNAL_META: Record<string, { color: string; bg: string; border: string; icon: string }> = {
@@ -256,6 +257,17 @@ export default function IntradaySignalLog() {
             </button>
           </div>
         </div>
+
+        {/* EOD Snapshot Banner */}
+        {displayData?.is_eod_snapshot && (
+          <div className="mb-4 flex items-center gap-3 bg-gray-900/40 border border-gray-700/50 rounded-xl px-4 py-3">
+            <span className="text-lg">🌙</span>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-gray-400">EOD Snapshot — signals active at market close</p>
+              <p className="text-xs text-gray-600">Showing sustained signals from today's session · Live data resumes at 9:15 AM tomorrow</p>
+            </div>
+          </div>
+        )}
 
         {/* HIGH CONV Alert Banner */}
         {confirmedCount > 0 && (

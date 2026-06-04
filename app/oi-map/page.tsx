@@ -123,6 +123,7 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
   const baseY = TOP_PAD + BAR_MAX_H;
 
   return (
+    <div>
     <div style={{ overflowX: "auto", overflowY: "hidden" }}>
       <svg width={totalW} height={totalH} style={{ display: "block", minWidth: totalW }}>
         <defs>
@@ -237,6 +238,7 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
         <line x1={0} y1={baseY} x2={totalW} y2={baseY}
           stroke="#333" strokeWidth={1} />
       </svg>
+    </div>
 
       {/* Legend */}
       <div style={{ display: "flex", gap: 14, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
@@ -276,6 +278,7 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
 }
 
 export default function OIMapPage() {
+
   if (!MCX_ENABLED) {
     return <div style={{ padding: "4rem 2rem", textAlign: "center", color: "var(--color-text-secondary)" }}><h2>404 — Page not found</h2></div>;
   }

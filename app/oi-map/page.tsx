@@ -103,89 +103,163 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
     </div>
   );
 
-  const maxOI = Math.max(...strikes.flatMap(s => [s.ce_oi, s.pe_oi]), 1);
+  // Sort ascending for left-to-right display
+  const sorted = [...strikes].sort((a, b) => a.strike - b.strike);
+  const maxOI = Math.max(...sorted.flatMap(s => [s.ce_oi, s.pe_oi]), 1);
+  const BAR_W = 22;
+  const GAP = 2;
+  const GROUP = BAR_W * 2 + GAP + 10;
+  const BAR_MAX_H = 110;
+  const LABEL_H = 36;
+  const TOP_PAD = 20;
+  const totalH = BAR_MAX_H + LABEL_H + TOP_PAD;
+  const totalW = sorted.length * GROUP + 20;
+
+  const strikeStep = sorted.length > 1 ? Math.abs(sorted[1].strike - sorted[0].strike) : 100;
+
+  function bH(oi: number) { return Math.max(2, Math.round((oi / maxOI) * BAR_MAX_H)); }
+  function oiLabel(oi: number) { return oi >= 1000 ? `${(oi / 1000).toFixed(1)}K` : `${oi}`; }
+
+  const baseY = TOP_PAD + BAR_MAX_H;
 
   return (
-    <div>
-      {/* Header labels */}
-      <div style={{ display: "flex", fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 6 }}>
-        <div style={{ width: 72, flexShrink: 0 }} />
-        <div style={{ flex: 1, textAlign: "right", paddingRight: 8 }}>PE OI · support</div>
-        <div style={{ width: 1, background: "var(--color-border-secondary)", flexShrink: 0 }} />
-        <div style={{ flex: 1, paddingLeft: 8 }}>CE OI · resistance</div>
-      </div>
+    <div style={{ overflowX: "auto", overflowY: "hidden" }}>
+      <svg width={totalW} height={totalH} style={{ display: "block", minWidth: totalW }}>
+        <defs>
+          {/* Diagonal stripe — PE adding (dark green on green) */}
+          <pattern id="pe-stripe" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+            <rect width="5" height="5" fill="#1D9E75" />
+            <line x1="0" y1="0" x2="0" y2="5" stroke="#085041" strokeWidth="2.5" />
+          </pattern>
+          {/* Diagonal stripe — CE adding (dark red on red) */}
+          <pattern id="ce-stripe" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+            <rect width="5" height="5" fill="#E24B4A" />
+            <line x1="0" y1="0" x2="0" y2="5" stroke="#7B1818" strokeWidth="2.5" />
+          </pattern>
+        </defs>
 
-      {strikes.map((row) => {
-        // Use half the typical strike step for proximity detection
-        const strikeStep = strikes.length > 1
-          ? Math.abs(strikes[0].strike - strikes[1].strike)
-          : 100;
-        const isPrice = currentPrice > 0 && Math.abs(row.strike - currentPrice) < strikeStep * 0.6;
-        const isSupport = row.pe_oi > row.ce_oi * 1.5 && row.strike < currentPrice;
-        const isResist  = row.ce_oi > row.pe_oi * 1.5 && row.strike > currentPrice;
+        {sorted.map((row, i) => {
+          const gx = 10 + i * GROUP;
+          const peX = gx;
+          const ceX = gx + BAR_W + GAP;
+          const midX = gx + BAR_W + GAP / 2;
 
-        const peWidth  = Math.round((row.pe_oi / maxOI) * 100);
-        const ceWidth  = Math.round((row.ce_oi / maxOI) * 100);
+          const isPrice   = Math.abs(row.strike - currentPrice) < strikeStep * 0.6;
+          const isSupport = row.pe_oi > row.ce_oi * 1.5 && row.strike < currentPrice;
+          const isResist  = row.ce_oi > row.pe_oi * 1.5 && row.strike > currentPrice;
 
-        const peDelta = row.pe_delta > 0 ? `+${row.pe_delta}` : row.pe_delta < 0 ? `${row.pe_delta}` : "";
-        const ceDelta = row.ce_delta > 0 ? `+${row.ce_delta}` : row.ce_delta < 0 ? `${row.ce_delta}` : "";
-        const peOILabel = row.pe_oi >= 1000 ? `${(row.pe_oi/1000).toFixed(1)}K` : `${row.pe_oi}`;
-        const ceOILabel = row.ce_oi >= 1000 ? `${(row.ce_oi/1000).toFixed(1)}K` : `${row.ce_oi}`;
+          const peH = bH(row.pe_oi);
+          const ceH = bH(row.ce_oi);
 
-        const rowBg = isPrice ? "var(--color-background-secondary)" : "transparent";
-        const strikeColor = isSupport ? "#085041" : isResist ? "#791F1F" : "var(--color-text-tertiary)";
-        const barH = isSupport || isResist ? 16 : 13;
+          // Adding stripe height — proportional to delta vs total
+          const peDeltaFrac = row.pe_delta > 0 ? Math.min(row.pe_delta / row.pe_oi, 1) : 0;
+          const ceDeltaFrac = row.ce_delta > 0 ? Math.min(row.ce_delta / row.ce_oi, 1) : 0;
+          const peStripeH = Math.max(2, Math.round(peH * peDeltaFrac));
+          const ceStripeH = Math.max(2, Math.round(ceH * ceDeltaFrac));
 
-        return (
-          <div key={row.strike} style={{ display: "flex", alignItems: "center", marginBottom: 3, background: rowBg, borderRadius: 4, padding: "1px 0" }}>
-            {/* Strike label */}
-            <div style={{ width: 72, flexShrink: 0, textAlign: "right", paddingRight: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: isSupport || isResist ? 500 : 400, color: strikeColor }}>
-                {row.strike.toLocaleString("en-IN")}
-                {isPrice && <span style={{ color: "#1D9E75", marginLeft: 3 }}>◀</span>}
-              </div>
-              {(isSupport || isResist) && (
-                <div style={{ fontSize: 10, color: isSupport ? "#1D9E75" : "#A32D2D", opacity: 0.8 }}>
-                  {isSupport ? peOILabel : ceOILabel}
-                </div>
+          // Covering = hollow dashed overlay at top
+          const peCoverFrac = row.pe_delta < 0 ? Math.min(Math.abs(row.pe_delta) / Math.max(row.pe_oi, 1), 1) : 0;
+          const ceCoverFrac = row.ce_delta < 0 ? Math.min(Math.abs(row.ce_delta) / Math.max(row.ce_oi, 1), 1) : 0;
+          const peCoverH = Math.max(2, Math.round(peH * peCoverFrac));
+          const ceCoverH = Math.max(2, Math.round(ceH * ceCoverFrac));
+
+          const peBaseColor = isSupport ? "#1D9E75" : "#6EC4A7";
+          const ceBaseColor = isResist  ? "#E24B4A" : "#F0A0A0";
+          const labelFill   = isPrice ? "#1D9E75" : isSupport ? "#1D9E75" : isResist ? "#E24B4A" : "#888";
+          const labelWeight = isPrice || isSupport || isResist ? "bold" : "normal";
+
+          return (
+            <g key={row.strike}>
+              {/* Price dashed line */}
+              {isPrice && (
+                <line x1={midX} y1={TOP_PAD} x2={midX} y2={baseY + 2}
+                  stroke="#1D9E75" strokeWidth={1} strokeDasharray="3 3" opacity={0.6} />
               )}
-            </div>
 
-            {/* PE bar — grows left */}
-            <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 3 }}>
-              {Math.abs(row.pe_delta) > 10 && (
-                <span style={{ fontSize: 10, color: row.pe_delta > 0 ? "#1D9E75" : "#E24B4A", opacity: 0.8 }}>{peDelta}</span>
+              {/* ── PE bar (left) ── */}
+              {/* Base solid */}
+              <rect x={peX} y={baseY - peH} width={BAR_W} height={peH}
+                fill={peBaseColor} rx={2} />
+              {/* Stripe overlay — adding */}
+              {peDeltaFrac > 0 && (
+                <rect x={peX} y={baseY - peH} width={BAR_W} height={peStripeH}
+                  fill="url(#pe-stripe)" rx={2} />
               )}
-              <div style={{ height: barH, background: isSupport ? "#1D9E75" : "#E1F5EE", width: `${peWidth}%`, borderRadius: "2px 0 0 2px", minWidth: peWidth > 0 ? 2 : 0 }} />
-            </div>
-
-            {/* Center divider */}
-            <div style={{ width: 1, flexShrink: 0, background: "var(--color-border-secondary)", height: barH }} />
-
-            {/* CE bar — grows right */}
-            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 3 }}>
-              <div style={{ height: barH, background: isResist ? "#E24B4A" : "#FCEBEB", width: `${ceWidth}%`, borderRadius: "0 2px 2px 0", minWidth: ceWidth > 0 ? 2 : 0 }} />
-              {Math.abs(row.ce_delta) > 10 && (
-                <span style={{ fontSize: 10, color: row.ce_delta > 0 ? "#1D9E75" : "#E24B4A", opacity: 0.8 }}>{ceDelta}</span>
+              {/* Hollow covering overlay */}
+              {peCoverFrac > 0 && (
+                <rect x={peX} y={baseY - peH} width={BAR_W} height={peCoverH}
+                  fill="var(--color-background-primary, #111)"
+                  stroke="#1D9E75" strokeWidth={1.5} strokeDasharray="3 2" rx={2} />
               )}
-            </div>
-          </div>
-        );
-      })}
+
+              {/* ── CE bar (right) ── */}
+              <rect x={ceX} y={baseY - ceH} width={BAR_W} height={ceH}
+                fill={ceBaseColor} rx={2} />
+              {ceDeltaFrac > 0 && (
+                <rect x={ceX} y={baseY - ceH} width={BAR_W} height={ceStripeH}
+                  fill="url(#ce-stripe)" rx={2} />
+              )}
+              {ceCoverFrac > 0 && (
+                <rect x={ceX} y={baseY - ceH} width={BAR_W} height={ceCoverH}
+                  fill="var(--color-background-primary, #111)"
+                  stroke="#E24B4A" strokeWidth={1.5} strokeDasharray="3 2" rx={2} />
+              )}
+
+              {/* OI label above dominant bars */}
+              {isSupport && peH > 20 && (
+                <text x={peX + BAR_W / 2} y={baseY - peH - 4} textAnchor="middle"
+                  fontSize={9} fill="#1D9E75" fontWeight="600">
+                  {oiLabel(row.pe_oi)}
+                </text>
+              )}
+              {isResist && ceH > 20 && (
+                <text x={ceX + BAR_W / 2} y={baseY - ceH - 4} textAnchor="middle"
+                  fontSize={9} fill="#E24B4A" fontWeight="600">
+                  {oiLabel(row.ce_oi)}
+                </text>
+              )}
+
+              {/* Strike label */}
+              <text x={midX} y={baseY + 14} textAnchor="middle"
+                fontSize={9.5} fill={labelFill} fontWeight={labelWeight}>
+                {row.strike % 1000 === 0 || row.strike < 1000
+                  ? row.strike
+                  : row.strike.toLocaleString("en-IN")}
+              </text>
+              {isPrice && (
+                <text x={midX} y={baseY + 25} textAnchor="middle" fontSize={8} fill="#1D9E75">▲</text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Baseline */}
+        <line x1={0} y1={baseY} x2={totalW} y2={baseY}
+          stroke="#333" strokeWidth={1} />
+      </svg>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ width: 10, height: 10, background: "#1D9E75", borderRadius: 2, display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>PE dominant — support</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ width: 10, height: 10, background: "#E24B4A", borderRadius: 2, display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>CE dominant — resistance</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>delta = OI change this scan</span>
-        </div>
+      <div style={{ display: "flex", gap: 14, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+        {[
+          { color: "#1D9E75", label: "PE base", stripe: false, hollow: false },
+          { color: "#1D9E75", label: "PE adding", stripe: true, hollow: false },
+          { color: "#1D9E75", label: "PE covering", stripe: false, hollow: true },
+          { color: "#E24B4A", label: "CE base", stripe: false, hollow: false },
+          { color: "#E24B4A", label: "CE adding", stripe: true, hollow: false },
+          { color: "#E24B4A", label: "CE covering", stripe: false, hollow: true },
+        ].map(({ color, label, stripe, hollow }) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <svg width={12} height={12}>
+              <rect width={12} height={12}
+                fill={hollow ? "transparent" : (stripe ? `url(#${color === "#1D9E75" ? "pe" : "ce"}-stripe)` : color)}
+                stroke={hollow ? color : "none"}
+                strokeWidth={hollow ? 1.5 : 0}
+                strokeDasharray={hollow ? "3 2" : "none"}
+                rx={2} />
+            </svg>
+            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

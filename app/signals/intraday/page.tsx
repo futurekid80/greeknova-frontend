@@ -50,6 +50,9 @@ interface Signal {
   options_alignment_color: string | null
   options_signal: OptionsSignal | null
   conv_stars?: string
+  vol_rank?: number
+  vol_rank_label?: string
+  vol_rank_color?: string
   ce_wall: number | null
   pe_wall: number | null
   ce_wall_oi_L: number | null
@@ -423,6 +426,13 @@ export default function IntradaySignalLog() {
                           {sig.vol_surge && <span className="ml-1 text-[10px]">⚡</span>}
                         </p>
                         <p className="text-[10px] text-gray-600">{fmt(sig.vol_now)} vs open {fmt(sig.vol_open)}</p>
+                        {sig.vol_rank_label && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border mt-0.5 inline-block ${
+                            sig.vol_rank_color === 'PURPLE'  ? 'text-purple-400 bg-purple-950/50 border-purple-800/50' :
+                            sig.vol_rank_color === 'EMERALD' ? 'text-emerald-400 bg-emerald-950/50 border-emerald-800/50' :
+                            'text-amber-400 bg-amber-950/50 border-amber-800/50'
+                          }`}>{sig.vol_rank_label}</span>
+                        )}
                       </td>
 
                       {/* Signal — FIX 1: single OI Map button only */}
@@ -581,6 +591,8 @@ export default function IntradaySignalLog() {
             <span className="text-emerald-300"> 🌟 HIGH CONV</span> = writer within 2 strikes ·
             <span className="text-emerald-300"> 🌟🌟 HIGH CONV</span> = writer at ATM or 1 strike away (gold standard) ·
             <span className="text-emerald-300"> 🌟🌟🌟 HIGH CONV</span> = writer beyond current price (extreme conviction) ·
+            <span className="text-amber-400"> 📊 Vol &gt; 1D/2D/3D</span> = today's volume exceeds last 1/2/3 consecutive days — higher = stronger conviction ·
+            <span className="text-emerald-400"> 📊 Vol &gt; 5D</span> = 5-day volume breakout — rare, very significant ·
             Observational only · Not investment advice
           </p>
         </div>

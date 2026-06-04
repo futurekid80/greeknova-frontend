@@ -113,7 +113,7 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
   const LABEL_H = 36;
   const TOP_PAD = 20;
   const totalH = BAR_MAX_H + LABEL_H + TOP_PAD;
-  const totalW = sorted.length * GROUP + 20;
+  const totalW = sorted.length * GROUP + 40;
 
   const strikeStep = sorted.length > 1 ? Math.abs(sorted[1].strike - sorted[0].strike) : 100;
 
@@ -245,9 +245,9 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
           <span style={{ width: 12, height: 12, background: "#6EC4A7", borderRadius: 2, display: "inline-block" }} />
           <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>PE base</span>
         </div>
-        {/* PE adding — diagonal lines approximated with gradient */}
+        {/* PE adding — diagonal lines */}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ width: 12, height: 12, background: "repeating-linear-gradient(45deg,#1D9E75,#1D9E75 2px,#085041 2px,#085041 4px)", borderRadius: 2, display: "inline-block" }} />
+          <div style={{ width: 12, height: 12, background: "repeating-linear-gradient(45deg,#1D9E75,#1D9E75 2px,#085041 2px,#085041 4px)", borderRadius: 2, flexShrink: 0 }}></div>
           <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>PE adding</span>
         </div>
         {/* PE covering */}
@@ -262,7 +262,7 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
         </div>
         {/* CE adding */}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ width: 12, height: 12, background: "repeating-linear-gradient(45deg,#E24B4A,#E24B4A 2px,#7B1818 2px,#7B1818 4px)", borderRadius: 2, display: "inline-block" }} />
+          <div style={{ width: 12, height: 12, background: "repeating-linear-gradient(45deg,#E24B4A,#E24B4A 2px,#7B1818 2px,#7B1818 4px)", borderRadius: 2, flexShrink: 0 }}></div>
           <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>CE adding</span>
         </div>
         {/* CE covering */}

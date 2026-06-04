@@ -103,8 +103,8 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
     </div>
   );
 
-  // Sort ascending for left-to-right display
-  const sorted = [...strikes].sort((a, b) => a.strike - b.strike);
+  // Sort ascending for left-to-right display, filter out zero/invalid strikes
+  const sorted = [...strikes].filter(s => s.strike > 0).sort((a, b) => a.strike - b.strike);
   const maxOI = Math.max(...sorted.flatMap(s => [s.ce_oi, s.pe_oi]), 1);
   const BAR_W = 22;
   const GAP = 2;
@@ -239,27 +239,37 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
       </svg>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: 14, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
-        {[
-          { color: "#1D9E75", label: "PE base", stripe: false, hollow: false },
-          { color: "#1D9E75", label: "PE adding", stripe: true, hollow: false },
-          { color: "#1D9E75", label: "PE covering", stripe: false, hollow: true },
-          { color: "#E24B4A", label: "CE base", stripe: false, hollow: false },
-          { color: "#E24B4A", label: "CE adding", stripe: true, hollow: false },
-          { color: "#E24B4A", label: "CE covering", stripe: false, hollow: true },
-        ].map(({ color, label, stripe, hollow }) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <svg width={12} height={12}>
-              <rect width={12} height={12}
-                fill={hollow ? "transparent" : (stripe ? `url(#${color === "#1D9E75" ? "pe" : "ce"}-stripe)` : color)}
-                stroke={hollow ? color : "none"}
-                strokeWidth={hollow ? 1.5 : 0}
-                strokeDasharray={hollow ? "3 2" : "none"}
-                rx={2} />
-            </svg>
-            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{label}</span>
-          </div>
-        ))}
+      <div style={{ display: "flex", gap: 14, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+        {/* PE base */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 12, background: "#6EC4A7", borderRadius: 2, display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>PE base</span>
+        </div>
+        {/* PE adding — diagonal lines approximated with gradient */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 12, background: "repeating-linear-gradient(45deg,#1D9E75,#1D9E75 2px,#085041 2px,#085041 4px)", borderRadius: 2, display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>PE adding</span>
+        </div>
+        {/* PE covering */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 12, border: "1.5px dashed #1D9E75", borderRadius: 2, display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>PE covering</span>
+        </div>
+        {/* CE base */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 12, background: "#F0A0A0", borderRadius: 2, display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>CE base</span>
+        </div>
+        {/* CE adding */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 12, background: "repeating-linear-gradient(45deg,#E24B4A,#E24B4A 2px,#7B1818 2px,#7B1818 4px)", borderRadius: 2, display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>CE adding</span>
+        </div>
+        {/* CE covering */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 12, border: "1.5px dashed #E24B4A", borderRadius: 2, display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>CE covering</span>
+        </div>
       </div>
     </div>
   );

@@ -106,12 +106,12 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
   // Sort ascending for left-to-right display, filter out zero/invalid strikes
   const sorted = [...strikes].filter(s => s.strike > 0).sort((a, b) => a.strike - b.strike);
   const maxOI = Math.max(...sorted.flatMap(s => [s.ce_oi, s.pe_oi]), 1);
-  const BAR_W = 22;
-  const GAP = 2;
-  const GROUP = BAR_W * 2 + GAP + 10;
-  const BAR_MAX_H = 110;
-  const LABEL_H = 36;
-  const TOP_PAD = 20;
+  const BAR_W = 34;
+  const GAP = 4;
+  const GROUP = BAR_W * 2 + GAP + 18;
+  const BAR_MAX_H = 180;
+  const LABEL_H = 40;
+  const TOP_PAD = 28;
   const totalH = BAR_MAX_H + LABEL_H + TOP_PAD;
   const totalW = sorted.length * GROUP + 40;
 
@@ -127,15 +127,15 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
     <div style={{ overflowX: "auto", overflowY: "hidden" }}>
       <svg width={totalW} height={totalH} style={{ display: "block", minWidth: totalW }}>
         <defs>
-          {/* Diagonal stripe — PE adding (dark green on green) */}
-          <pattern id="pe-stripe" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
-            <rect width="5" height="5" fill="#1D9E75" />
-            <line x1="0" y1="0" x2="0" y2="5" stroke="#085041" strokeWidth="2.5" />
+          {/* Diagonal stripe — PE adding */}
+          <pattern id="pe-stripe" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+            <rect width="8" height="8" fill="#1D9E75" />
+            <line x1="0" y1="0" x2="0" y2="8" stroke="#04291E" strokeWidth="4" />
           </pattern>
-          {/* Diagonal stripe — CE adding (dark red on red) */}
-          <pattern id="ce-stripe" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
-            <rect width="5" height="5" fill="#E24B4A" />
-            <line x1="0" y1="0" x2="0" y2="5" stroke="#7B1818" strokeWidth="2.5" />
+          {/* Diagonal stripe — CE adding */}
+          <pattern id="ce-stripe" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+            <rect width="8" height="8" fill="#E24B4A" />
+            <line x1="0" y1="0" x2="0" y2="8" stroke="#5A0A0A" strokeWidth="4" />
           </pattern>
         </defs>
 
@@ -190,7 +190,7 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
               {peCoverFrac > 0 && (
                 <rect x={peX} y={baseY - peH} width={BAR_W} height={peCoverH}
                   fill="var(--color-background-primary, #111)"
-                  stroke="#1D9E75" strokeWidth={1.5} strokeDasharray="3 2" rx={2} />
+                  stroke="#1D9E75" strokeWidth={2.5} strokeDasharray="4 2" rx={2} opacity={0.9} />
               )}
 
               {/* ── CE bar (right) ── */}
@@ -203,26 +203,26 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPr
               {ceCoverFrac > 0 && (
                 <rect x={ceX} y={baseY - ceH} width={BAR_W} height={ceCoverH}
                   fill="var(--color-background-primary, #111)"
-                  stroke="#E24B4A" strokeWidth={1.5} strokeDasharray="3 2" rx={2} />
+                  stroke="#E24B4A" strokeWidth={2.5} strokeDasharray="4 2" rx={2} opacity={0.9} />
               )}
 
-              {/* OI label above dominant bars */}
-              {isSupport && peH > 20 && (
-                <text x={peX + BAR_W / 2} y={baseY - peH - 4} textAnchor="middle"
-                  fontSize={9} fill="#1D9E75" fontWeight="600">
+              {/* OI label above every bar */}
+              {peH > 8 && (
+                <text x={peX + BAR_W / 2} y={baseY - peH - 5} textAnchor="middle"
+                  fontSize={10} fill={isSupport ? "#1D9E75" : "#6EC4A7"} fontWeight={isSupport ? "700" : "400"}>
                   {oiLabel(row.pe_oi)}
                 </text>
               )}
-              {isResist && ceH > 20 && (
-                <text x={ceX + BAR_W / 2} y={baseY - ceH - 4} textAnchor="middle"
-                  fontSize={9} fill="#E24B4A" fontWeight="600">
+              {ceH > 8 && (
+                <text x={ceX + BAR_W / 2} y={baseY - ceH - 5} textAnchor="middle"
+                  fontSize={10} fill={isResist ? "#E24B4A" : "#F0A0A0"} fontWeight={isResist ? "700" : "400"}>
                   {oiLabel(row.ce_oi)}
                 </text>
               )}
 
               {/* Strike label */}
-              <text x={midX} y={baseY + 14} textAnchor="middle"
-                fontSize={9.5} fill={labelFill} fontWeight={labelWeight}>
+              <text x={midX} y={baseY + 16} textAnchor="middle"
+                fontSize={11} fill={labelFill} fontWeight={labelWeight}>
                 {row.strike % 1000 === 0 || row.strike < 1000
                   ? row.strike
                   : row.strike.toLocaleString("en-IN")}

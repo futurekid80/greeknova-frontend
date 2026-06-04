@@ -49,6 +49,7 @@ interface Signal {
   options_alignment: string | null
   options_alignment_color: string | null
   options_signal: OptionsSignal | null
+  conv_stars?: string
   ce_wall: number | null
   pe_wall: number | null
   ce_wall_oi_L: number | null
@@ -127,6 +128,7 @@ function OptionsConfirmation({ sig }: { sig: Signal }) {
           : 'text-amber-400 bg-amber-950/40 border-amber-800/50'
       }`}>
         {isConfirms ? '✅' : '⚠️'} {sig.options_alignment}
+        {isConfirms && sig.conv_stars && <span className="ml-0.5">{sig.conv_stars}</span>}
       </div>
       <p className="text-[10px] text-gray-400">{icon} {opt.label}</p>
       <p className="text-[10px] text-gray-600">{opt.strike.toLocaleString()} {opt.option_type} · Score {opt.score}/5</p>
@@ -379,7 +381,9 @@ export default function IntradaySignalLog() {
                           onClick={() => router.push(`/uoa?symbol=${sig.symbol}`)}>
                           <p className="text-sm font-black text-white underline-offset-2 hover:underline">{sig.symbol}</p>
                           {isHighConviction && (
-                            <span className="text-[9px] px-1 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800/50 rounded font-bold">HIGH CONV</span>
+                            <span className="text-[9px] px-1 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800/50 rounded font-bold">
+                              {sig.conv_stars && <span className="mr-0.5">{sig.conv_stars}</span>}HIGH CONV
+                            </span>
                           )}
                         </div>
                         <p className="text-xs text-gray-500">₹{sig.cmp.toLocaleString()}</p>
@@ -556,12 +560,15 @@ export default function IntradaySignalLog() {
         <div className="mt-6 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
           <p className="text-xs text-gray-600 leading-relaxed">
             <span className="text-gray-400 font-semibold">How to read: </span>
-            FUT OI Chg = futures open interest change from day open · Price Chg = change from today's 9:15 AM open ·
+            FUT OI Chg = futures open interest change from day open · Price Chg = change from today's 9:15 AM open (not yesterday's close) ·
             Volume = today's volume vs opening volume ·
             <span className="text-amber-400"> ⚡ Surge</span> = volume {'>'} 50% above open ·
-            <span className="text-emerald-400"> ✅ Confirms</span> = options activity aligns with FUT signal ·
+            <span className="text-emerald-400"> ✅ Confirms</span> = near-ATM options activity aligns with FUT signal (within 2 strikes of CMP) ·
             <span className="text-amber-400"> ⚠️ Contradicts</span> = options signal opposes FUT direction — treat with caution ·
-            <span className="text-gray-300"> HIGH CONV</span> = FUT + near-ATM options both confirm ·
+            <span className="text-gray-300"> HIGH CONV</span> = FUT + near-ATM options confirmed ·
+            <span className="text-emerald-300"> 🌟 HIGH CONV</span> = writer within 2 strikes ·
+            <span className="text-emerald-300"> 🌟🌟 HIGH CONV</span> = writer at ATM or 1 strike away (gold standard) ·
+            <span className="text-emerald-300"> 🌟🌟🌟 HIGH CONV</span> = writer beyond current price (extreme conviction) ·
             Observational only · Not investment advice
           </p>
         </div>

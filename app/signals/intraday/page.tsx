@@ -364,7 +364,7 @@ export default function IntradaySignalLog() {
             ✅ Confirmed Only
           </button>
           <div className="w-px h-5 bg-gray-800 mx-1"/>
-  const [minPersist, setMinPersist]   = useState(1)  // always default to 1 on load
+  const [minPersist, setMinPersist]   = useState(1)
         </div>
 
         <p className="text-xs text-gray-600 mb-4">{filtered.length} stocks · Futures OI only · Informational</p>

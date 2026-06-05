@@ -24,6 +24,7 @@ interface OIRecord { symbol:string; strike:number; option_type:string; oi:number
 interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }
 interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
 interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean }
+
 function fmtOI(n: number) {
   const abs = Math.abs(n)
   if (abs >= 10000000) return `${(n/10000000).toFixed(2)}Cr`
@@ -184,7 +185,7 @@ function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: numb
 // ── Today's Spotlight ─────────────────────────────────────────────────────────
 function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
   const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
-const isMarketData  = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
+  const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
   const topOIBuilder  = isMarketData
     ? [...stocksOnly].sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))[0]
     : [...stocksOnly].filter(s => s.cpr_position === 'ABOVE_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
@@ -193,9 +194,8 @@ const isMarketData  = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
     : [...stocksOnly].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
   const usedSymbols = new Set([topOIBuilder?.symbol, topOIUnwinder?.symbol])
   const narrowestCPR = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(c.symbol) && !usedSymbols.has(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
-
   const cards = [
-      {
+    {
       label: isMarketData ? '🔥 Highest OI Buildup' : '🟢 Narrowest Above CPR',
       symbol: topOIBuilder?.symbol,
       value: topOIBuilder?.oi_chg_pct !== undefined ? `+${topOIBuilder.oi_chg_pct.toFixed(1)}% OI` : '—',
@@ -217,9 +217,7 @@ const isMarketData  = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
       color: 'text-orange-400', bg: 'bg-orange-950/20', border: 'border-orange-800/30',
     },
   ]
-
   if (!topOIBuilder && !narrowestCPR) return null
-
   return (
     <div className="grid grid-cols-3 gap-4 mb-6">
       {cards.map(c => (
@@ -234,13 +232,241 @@ const isMarketData  = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
   )
 }
 
+// ── Activity Leaders ──────────────────────────────────────────────────────────
+function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
+  stocks: PulseStock[]
+  uoaSignals: any[]
+  onSymbolClick: (sym: string) => void
+}) {
+  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
+  const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
+  const cmpMap = Object.fromEntries(stocks.map(s => [s.symbol, s.cmp]))
+  const dayHighBreakouts = isMarketData
+    ? [...stocksOnly].filter(s => (s.price_chg_pct||0) > 0.5).sort((a,b) => (b.price_chg_pct||0) - (a.price_chg_pct||0)).slice(0,3)
+    : []
+  const putWriters = uoaSignals
+    .filter(s => s.signal_type === 'PUT_WRITING' && s.score >= 3)
+    .map(s => ({ ...s, otm_distance_pct: (() => { const c = cmpMap[s.symbol] || 0; return c > 0 ? Math.round(Math.abs(s.strike - c) / c * 1000) / 10 : null })() }))
+    .sort((a,b) => { const dA = a.otm_distance_pct ?? 99; const dB = b.otm_distance_pct ?? 99; return dA !== dB ? dA - dB : b.score - a.score })
+    .slice(0,3)
+  const callWriters = uoaSignals
+    .filter(s => s.signal_type === 'CALL_WRITING' && s.score >= 3)
+    .map(s => ({ ...s, otm_distance_pct: (() => { const c = cmpMap[s.symbol] || 0; return c > 0 ? Math.round(Math.abs(s.strike - c) / c * 1000) / 10 : null })() }))
+    .sort((a,b) => { const dA = a.otm_distance_pct ?? 99; const dB = b.otm_distance_pct ?? 99; return dA !== dB ? dA - dB : b.score - a.score })
+    .slice(0,3)
+  const volSurge = isMarketData
+    ? [...stocksOnly].filter(s => s.vol_surge || Math.abs(s.oi_chg_pct||0) > 5).sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0)).slice(0,3)
+    : []
+  if (!isMarketData && putWriters.length === 0 && callWriters.length === 0) return null
+  return (
+    <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="bg-emerald-950/20 border border-emerald-800/30 rounded-xl p-4">
+        <p className="text-xs text-gray-500 mb-3">🔝 Day High Breakouts</p>
+        {dayHighBreakouts.length > 0 ? (
+          <div className="space-y-2">
+            {dayHighBreakouts.map(s => (
+              <button key={s.symbol} onClick={() => onSymbolClick(s.symbol)} className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
+                <span className="text-xs font-bold text-white">{s.symbol}</span>
+                <span className="text-xs font-bold text-emerald-400">+{s.price_chg_pct?.toFixed(2)}%</span>
+              </button>
+            ))}
+          </div>
+        ) : <p className="text-xs text-gray-600">{isMarketData ? 'No breakouts yet' : 'Available during market hours'}</p>}
+      </div>
+      <div className="bg-emerald-950/10 border border-emerald-800/20 rounded-xl p-4">
+        <p className="text-xs text-gray-500 mb-3">✍️ Top Put Writers</p>
+        {putWriters.length > 0 ? (
+          <div className="space-y-2">
+            {putWriters.map((s,i) => (
+              <button key={i} onClick={() => onSymbolClick(s.symbol)} className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
+                <div className="text-left">
+                  <p className="text-xs font-bold text-white">{s.symbol}</p>
+                  <p className="text-[10px] text-gray-500">{s.strike} PE · {s.score}/5</p>
+                </div>
+                <span className={`text-[10px] font-bold ${s.otm_distance_pct != null ? s.otm_distance_pct <= 2 ? 'text-emerald-400' : s.otm_distance_pct <= 5 ? 'text-amber-400' : 'text-red-400' : 'text-gray-500'}`}>
+                  {s.otm_distance_pct != null ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}%` : '—'}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : <p className="text-xs text-gray-600">No put writing signals</p>}
+      </div>
+      <div className="bg-red-950/10 border border-red-800/20 rounded-xl p-4">
+        <p className="text-xs text-gray-500 mb-3">✍️ Top Call Writers</p>
+        {callWriters.length > 0 ? (
+          <div className="space-y-2">
+            {callWriters.map((s,i) => (
+              <button key={i} onClick={() => onSymbolClick(s.symbol)} className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
+                <div className="text-left">
+                  <p className="text-xs font-bold text-white">{s.symbol}</p>
+                  <p className="text-[10px] text-gray-500">{s.strike} CE · {s.score}/5</p>
+                </div>
+                <span className={`text-[10px] font-bold ${s.otm_distance_pct != null ? s.otm_distance_pct <= 2 ? 'text-emerald-400' : s.otm_distance_pct <= 5 ? 'text-amber-400' : 'text-red-400' : 'text-gray-500'}`}>
+                  {s.otm_distance_pct != null ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}%` : '—'}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : <p className="text-xs text-gray-600">No call writing signals</p>}
+      </div>
+      <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl p-4">
+        <p className="text-xs text-gray-500 mb-3">⚡ Vol Surge Leaders</p>
+        {volSurge.length > 0 ? (
+          <div className="space-y-2">
+            {volSurge.map(s => (
+              <button key={s.symbol} onClick={() => onSymbolClick(s.symbol)} className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
+                <span className="text-xs font-bold text-white">{s.symbol}</span>
+                <span className="text-xs font-bold text-amber-400">{(s.oi_chg_pct||0) > 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}% OI</span>
+              </button>
+            ))}
+          </div>
+        ) : <p className="text-xs text-gray-600">{isMarketData ? 'No volume surges yet' : 'Available during market hours'}</p>}
+      </div>
+    </div>
+  )
+}
+
+// ── Vol + OI Breakout Widget ──────────────────────────────────────────────────
+const VOL_SIGNAL_COLORS: Record<string, string> = {
+  LONG_BUILDUP: 'text-emerald-400', SHORT_BUILDUP: 'text-red-400',
+  SHORT_COVERING: 'text-cyan-400',  LONG_UNWINDING: 'text-orange-400',
+}
+const VOL_SIGNAL_ICONS: Record<string, string> = {
+  LONG_BUILDUP: '🐂', SHORT_BUILDUP: '🐻',
+  SHORT_COVERING: '🔄', LONG_UNWINDING: '⚠️',
+}
+const VOL_CTX_COLORS: Record<string, string> = {
+  EMERALD: 'text-emerald-400', RED: 'text-red-400',
+  AMBER: 'text-amber-400', CYAN: 'text-cyan-400', GRAY: 'text-gray-500',
+}
+const VOL_CPR_COLORS: Record<string, string> = {
+  'Above CPR': 'text-emerald-400', 'Below CPR': 'text-red-400', 'Inside CPR': 'text-amber-400',
+}
+
+function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void }) {
+  const [data, setData]       = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [stale, setStale]     = useState<any>(null)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const res  = await fetch(`${API}/vol-oi-breakout`)
+        const json = await res.json()
+        setData(json)
+        if (json?.signals?.length > 0) setStale(json)
+      } catch(e) { console.error(e) }
+      setLoading(false)
+    }
+    load()
+    const t = setInterval(load, 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const display = (data?.signals?.length === 0 && stale) ? stale : data
+  const signals = display?.signals || []
+  const isEOD   = display?.is_eod_snapshot
+
+  if (loading && !stale) return (
+    <div className="bg-gray-900/20 border border-gray-800 rounded-2xl p-5 mb-6 animate-pulse">
+      <div className="h-5 w-56 bg-gray-800 rounded mb-4"/>
+      <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 bg-gray-800 rounded-xl"/>)}</div>
+    </div>
+  )
+
+  if (!signals.length) return null
+
+  return (
+    <div className="bg-gray-900/20 border border-gray-800 rounded-2xl p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-black text-white">📊 Volume + OI Breakout</h2>
+            {isEOD && (
+              <span className="text-[10px] px-2 py-0.5 bg-gray-800 text-gray-400 border border-gray-700 rounded-full">
+                🌙 EOD Snapshot
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Volume {'>'} 1.5× 5-day avg + OI building · {display?.total || 0} qualifying today
+          </p>
+        </div>
+      </div>
+
+      {/* Column headers */}
+      <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
+        <div className="col-span-2">Symbol</div>
+        <div className="col-span-2 text-center">Vol Ratio</div>
+        <div className="col-span-2 text-center">OI Chg</div>
+        <div className="col-span-2">Signal</div>
+        <div className="col-span-3">Price Context</div>
+        <div className="col-span-1">CPR</div>
+      </div>
+
+      {/* Rows — top 5 */}
+      <div className="space-y-0.5">
+        {signals.slice(0, 5).map((s: any) => (
+          <div key={s.symbol}
+            className="grid grid-cols-12 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors cursor-pointer"
+            onClick={() => onSymbolClick(s.symbol)}>
+            <div className="col-span-2">
+              <p className="text-xs font-black text-white hover:underline">{s.symbol}</p>
+              <p className="text-[10px] text-gray-500">₹{s.cmp?.toLocaleString()}</p>
+            </div>
+            <div className="col-span-2 text-center">
+              <p className={`text-xs font-bold ${s.vol_ratio >= 3 ? 'text-purple-400' : s.vol_ratio >= 2 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {s.vol_ratio}× avg
+              </p>
+              <p className="text-[10px] text-gray-600">{(s.vol_latest/100000).toFixed(1)}L today</p>
+            </div>
+            <div className="col-span-2 text-center">
+              <p className={`text-xs font-bold ${s.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {s.oi_chg_pct > 0 ? '+' : ''}{s.oi_chg_pct}%
+              </p>
+              <p className={`text-[10px] ${s.price_chg_pct >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                Price {s.price_chg_pct >= 0 ? '+' : ''}{s.price_chg_pct}%
+              </p>
+            </div>
+            <div className="col-span-2">
+              <span className={`text-xs font-bold ${VOL_SIGNAL_COLORS[s.signal_type] || 'text-gray-400'}`}>
+                {VOL_SIGNAL_ICONS[s.signal_type]} {s.signal_label}
+              </span>
+            </div>
+            <div className="col-span-3">
+              <p className={`text-[10px] font-bold ${VOL_CTX_COLORS[s.price_ctx_color] || 'text-gray-400'}`}>
+                {s.price_context}
+              </p>
+              <p className="text-[10px] text-gray-600">
+                H:{s.day_high?.toLocaleString()} L:{s.day_low?.toLocaleString()}
+              </p>
+            </div>
+            <div className="col-span-1">
+              {s.cpr_position ? (
+                <p className={`text-[10px] font-bold ${VOL_CPR_COLORS[s.cpr_position] || 'text-gray-400'}`}>
+                  {s.cpr_position === 'Above CPR' ? '↑ Above' : s.cpr_position === 'Below CPR' ? '↓ Below' : '⟷ Inside'}
+                </p>
+              ) : <span className="text-gray-600 text-[10px]">—</span>}
+              {s.cpr_width_label && (
+                <p className="text-[10px] text-gray-600">{s.cpr_width_emoji}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-gray-700 mt-3 px-1">
+        Vol ratio = today's volume ÷ 5-day avg · Price context shows where CMP sits in today's range · Informational only
+      </p>
+    </div>
+  )
+}
+
 // ── Market Pulse Feed ─────────────────────────────────────────────────────────
 function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
   const [tab, setTab] = useState<'warzone'|'oi_build'|'oi_unwind'|'all'>('warzone')
   const [search, setSearch] = useState('')
-
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))
-
   const enriched = stocks.map(s => ({
     ...s,
     width_pct:    s.width_pct    ?? cprMap[s.symbol]?.width_pct,
@@ -250,45 +476,35 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
     has_oi_signal: s.has_oi_signal ?? cprMap[s.symbol]?.has_oi_signal ?? false,
     confluence:   s.confluence   ?? cprMap[s.symbol]?.confluence ?? false,
   }))
-
-const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
-
+  const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
   const warZone  = enriched.filter(s => (s.width_pct||1) < 0.3 && s.has_oi_signal)
   const oiBuild  = isMarketData
     ? [...enriched].filter(s => (s.oi_chg_pct||0) > 0).sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))
-    : [...enriched].sort((a,b) => (a.width_pct||1) - (b.width_pct||1)) // post-market: narrowest CPR first
+    : [...enriched].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))
   const oiUnwind = isMarketData
     ? [...enriched].filter(s => (s.oi_chg_pct||0) < 0).sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))
-    : [...enriched].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1)) // post-market: below CPR narrowest first
-  const all      = [...enriched].sort((a,b) => {
+    : [...enriched].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))
+  const all = [...enriched].sort((a,b) => {
     const aW = (a.width_pct||1)<0.3 && a.has_oi_signal ? 0 : (a.width_pct||1)<0.3 ? 1 : 2
     const bW = (b.width_pct||1)<0.3 && b.has_oi_signal ? 0 : (b.width_pct||1)<0.3 ? 1 : 2
     if (aW !== bW) return aW - bW
     return Math.abs(b.oi_chg_pct||0) - Math.abs(a.oi_chg_pct||0)
   })
-
   const tabData: Record<string, PulseStock[]> = { warzone: warZone, oi_build: oiBuild, oi_unwind: oiUnwind, all }
-
-  const filtered = (tabData[tab] || all).filter(s =>
-    search ? s.symbol.includes(search.toUpperCase()) : true
-  )
-
+  const filtered = (tabData[tab] || all).filter(s => search ? s.symbol.includes(search.toUpperCase()) : true)
   const signalColors: Record<string, string> = {
     LONG_BUILDUP:'text-emerald-400', SHORT_BUILDUP:'text-red-400',
     SHORT_COVERING:'text-cyan-400', LONG_UNWINDING:'text-amber-400',
     PUT_WRITING:'text-emerald-400', CALL_WRITING:'text-red-400', NEUTRAL:'text-gray-500',
   }
-
   const tabs = [
-    { key: 'warzone',   label: `⚡ War Zone`,                                    count: warZone.length },
+    { key: 'warzone',   label: `⚡ War Zone`,                                      count: warZone.length },
     { key: 'oi_build',  label: isMarketData ? `📈 OI Builders` : `📈 Narrow CPR`, count: oiBuild.length },
     { key: 'oi_unwind', label: isMarketData ? `📉 OI Unwinders` : `📉 Below CPR`, count: oiUnwind.length },
-    { key: 'all',       label: `📊 All`,                                          count: all.length },
+    { key: 'all',       label: `📊 All`,                                            count: all.length },
   ]
-
   return (
     <div>
-      {/* Tabs + search */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
@@ -298,22 +514,17 @@ const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
         ))}
         <div className="relative ml-auto">
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500"/>
-          <input value={search} onChange={e => setSearch(e.target.value.toUpperCase())}
-            placeholder="Search..."
+          <input value={search} onChange={e => setSearch(e.target.value.toUpperCase())} placeholder="Search..."
             className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg pl-7 pr-3 py-1.5 w-28 focus:outline-none focus:border-emerald-500"/>
           {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"><X size={10}/></button>}
         </div>
       </div>
-
-      {/* Tab description */}
       <p className="text-xs text-gray-600 mb-3">
         {tab === 'warzone'   && 'Narrow CPR (<0.30%) + active OI signal — highest conviction setups'}
-        {tab === 'oi_build'  && (isMarketData ? 'Stocks with increasing Open Interest today — fresh positioning' : 'OI change: previous close vs latest close · High % normal during expiry week')}
-        {tab === 'oi_unwind' && (isMarketData ? 'Stocks with decreasing Open Interest today — positions being squared off' : 'Stocks below CPR with narrow range — watch for continuation')}
+        {tab === 'oi_build'  && (isMarketData ? 'Stocks with increasing Open Interest today — fresh positioning' : 'OI change: previous close vs latest close')}
+        {tab === 'oi_unwind' && (isMarketData ? 'Stocks with decreasing Open Interest today — positions being squared off' : 'Stocks below CPR with narrow range')}
         {tab === 'all'       && 'All 66 F&O symbols ranked by War Zone status then OI activity'}
       </p>
-
-      {/* Table header */}
       <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
         <div className="col-span-2">Symbol</div>
         <div className="col-span-2 text-right">CMP</div>
@@ -322,12 +533,10 @@ const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
         <div className="col-span-2">CPR</div>
         <div className="col-span-2 text-right">Zone</div>
       </div>
-
-      {/* Rows */}
       <div className="space-y-0.5">
         {filtered.length === 0 ? (
           <div className="text-center py-10 text-gray-600 text-sm">
-            {tab === 'warzone' ? 'No War Zone stocks right now — market may be closed or no narrow CPR + OI confluence today' : 'No data available'}
+            {tab === 'warzone' ? 'No War Zone stocks right now' : 'No data available'}
           </div>
         ) : filtered.map(s => {
           const tag = getWarZoneTag(s)
@@ -384,23 +593,19 @@ const isMarketData = enriched.some(s => (s.oi_chg_pct||0) !== 0)
   )
 }
 
-// ── Extended Market View (collapsed drawer) ───────────────────────────────────
+// ── Extended Market View ──────────────────────────────────────────────────────
 function ExtendedView({ stocks }: { stocks: PulseStock[] }) {
-const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(true)
   const [activeTab, setActiveTab] = useState<'gainers'|'losers'|'active'>('gainers')
-
   const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
   const gainers = [...stocksOnly].filter(s => (s.price_chg_pct||0) > 0).sort((a,b) => (b.price_chg_pct||0) - (a.price_chg_pct||0)).slice(0,10)
   const losers  = [...stocksOnly].filter(s => (s.price_chg_pct||0) < 0).sort((a,b) => (a.price_chg_pct||0) - (b.price_chg_pct||0)).slice(0,10)
   const active  = [...stocksOnly].sort((a,b) => Math.abs(b.oi_chg_pct||0) - Math.abs(a.oi_chg_pct||0)).slice(0,10)
-
   const tabData = { gainers, losers, active }
   const rows = tabData[activeTab] || []
-
   return (
     <div className="border border-gray-800/50 rounded-2xl overflow-hidden mt-4">
-      <button onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-900/30 hover:bg-gray-900/60 transition-colors">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-900/30 hover:bg-gray-900/60 transition-colors">
         <div className="flex items-center gap-2">
           <BarChart2 size={14} className="text-gray-500"/>
           <span className="text-sm font-bold text-gray-400">Extended Market View</span>
@@ -411,11 +616,7 @@ const [open, setOpen] = useState(true)
       {open && (
         <div className="p-5 bg-gray-900/10">
           <div className="flex gap-2 mb-4">
-            {[
-              { key: 'gainers', label: '📈 Top Gainers' },
-              { key: 'losers',  label: '📉 Top Losers' },
-              { key: 'active',  label: '🔄 Most Active OI' },
-            ].map(t => (
+            {[{ key: 'gainers', label: '📈 Top Gainers' }, { key: 'losers', label: '📉 Top Losers' }, { key: 'active', label: '🔄 Most Active OI' }].map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key as any)}
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${activeTab === t.key ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
                 {t.label}
@@ -532,174 +733,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-// ── Activity Leaders ──────────────────────────────────────────────────────────
-function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
-  stocks: PulseStock[]
-  uoaSignals: any[]
-  onSymbolClick: (sym: string) => void
-}) {
-  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
-  const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
-  const cmpMap = Object.fromEntries(stocks.map(s => [s.symbol, s.cmp]))
-
-  // Day High Breakouts — stocks where price_chg_pct is positive and high
-  const dayHighBreakouts = isMarketData
-    ? [...stocksOnly]
-        .filter(s => (s.price_chg_pct||0) > 0.5)
-        .sort((a,b) => (b.price_chg_pct||0) - (a.price_chg_pct||0))
-        .slice(0,3)
-    : []
-
-  // Top Put Writers — near-ATM, score >= 3, sorted by strikes_from_atm
-  const putWriters = uoaSignals
-    .filter(s => s.signal_type === 'PUT_WRITING' && s.score >= 3)
-    .map(s => ({
-      ...s,
-      otm_distance_pct: (() => { const c = cmpMap[s.symbol] || 0; return c > 0 ? Math.round(Math.abs(s.strike - c) / c * 1000) / 10 : null })()
-    }))
-    .sort((a,b) => {
-      const distA = a.otm_distance_pct ?? 99
-      const distB = b.otm_distance_pct ?? 99
-      if (distA !== distB) return distA - distB
-      return b.score - a.score
-    })
-    .slice(0,3)
-
-  const callWriters = uoaSignals
-    .filter(s => s.signal_type === 'CALL_WRITING' && s.score >= 3)
-    .map(s => ({
-      ...s,
-      otm_distance_pct: (() => { const c = cmpMap[s.symbol] || 0; return c > 0 ? Math.round(Math.abs(s.strike - c) / c * 1000) / 10 : null })()
-    }))
-    .sort((a,b) => {
-      const distA = a.otm_distance_pct ?? 99
-      const distB = b.otm_distance_pct ?? 99
-      if (distA !== distB) return distA - distB
-      return b.score - a.score
-    })
-    .slice(0,3)
-
-  // Volume Surge Leaders
-  const volSurge = isMarketData
-    ? [...stocksOnly]
-        .filter(s => s.vol_surge || Math.abs(s.oi_chg_pct||0) > 5)
-        .sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))
-        .slice(0,3)
-    : []
-
-
-  if (!isMarketData && putWriters.length === 0 && callWriters.length === 0) return null
-
-  return (
-    <div className="grid grid-cols-4 gap-3 mb-6">
-
-      {/* Day High Breakouts */}
-      <div className="bg-emerald-950/20 border border-emerald-800/30 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-3">🔝 Day High Breakouts</p>
-        {dayHighBreakouts.length > 0 ? (
-          <div className="space-y-2">
-            {dayHighBreakouts.map(s => (
-              <button key={s.symbol} onClick={() => onSymbolClick(s.symbol)}
-                className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
-                <span className="text-xs font-bold text-white">{s.symbol}</span>
-                <span className="text-xs font-bold text-emerald-400">+{s.price_chg_pct?.toFixed(2)}%</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-gray-600">
-            {isMarketData ? 'No breakouts yet' : 'Available during market hours'}
-          </p>
-        )}
-      </div>
-
-      {/* Top Put Writers */}
-      <div className="bg-emerald-950/10 border border-emerald-800/20 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-3">✍️ Top Put Writers</p>
-        {putWriters.length > 0 ? (
-          <div className="space-y-2">
-            {putWriters.map((s,i) => (
-              <button key={i} onClick={() => onSymbolClick(s.symbol)}
-                className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
-                <div className="text-left">
-                  <p className="text-xs font-bold text-white">{s.symbol}</p>
-                  <p className="text-[10px] text-gray-500">{s.strike} PE · {s.score}/5</p>
-                </div>
-               <span className={`text-[10px] font-bold ${
-                  s.otm_distance_pct != null
-                    ? s.otm_distance_pct <= 2 ? 'text-emerald-400'
-                    : s.otm_distance_pct <= 5 ? 'text-amber-400'
-                    : 'text-red-400'
-                    : 'text-gray-500'
-                }`}>
-                  {s.otm_distance_pct != null
-                    ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}%`
-                    : '—'}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-gray-600">No put writing signals</p>
-        )}
-      </div>
-
-      {/* Top Call Writers */}
-      <div className="bg-red-950/10 border border-red-800/20 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-3">✍️ Top Call Writers</p>
-        {callWriters.length > 0 ? (
-          <div className="space-y-2">
-            {callWriters.map((s,i) => (
-              <button key={i} onClick={() => onSymbolClick(s.symbol)}
-                className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
-                <div className="text-left">
-                  <p className="text-xs font-bold text-white">{s.symbol}</p>
-                  <p className="text-[10px] text-gray-500">{s.strike} CE · {s.score}/5</p>
-                </div>
-                <span className={`text-[10px] font-bold ${
-                  s.otm_distance_pct != null
-                    ? s.otm_distance_pct <= 2 ? 'text-emerald-400'
-                    : s.otm_distance_pct <= 5 ? 'text-amber-400'
-                    : 'text-red-400'
-                    : 'text-gray-500'
-                }`}>
-                  {s.otm_distance_pct != null
-                    ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}%`
-                    : '—'}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-gray-600">No call writing signals</p>
-        )}
-      </div>
-
-      {/* Volume Surge Leaders */}
-      <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-3">⚡ Vol Surge Leaders</p>
-        {volSurge.length > 0 ? (
-          <div className="space-y-2">
-            {volSurge.map(s => (
-              <button key={s.symbol} onClick={() => onSymbolClick(s.symbol)}
-                className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
-                <span className="text-xs font-bold text-white">{s.symbol}</span>
-                <span className="text-xs font-bold text-amber-400">
-                  {(s.oi_chg_pct||0) > 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}% OI
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-gray-600">
-            {isMarketData ? 'No volume surges yet' : 'Available during market hours'}
-          </p>
-        )}
-      </div>
-
-    </div>
-  )
-}
 export default function MarketPulse() {
   const [analyses, setAnalyses]       = useState<IndexAnalysis[]>([])
   const [cmps, setCmps]               = useState<Record<string,number>>({})
@@ -710,7 +743,7 @@ export default function MarketPulse() {
   const [lastUpdate, setLastUpdate]   = useState('')
   const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [uoaSignals, setUoaSignals] = useState<any[]>([])
+  const [uoaSignals, setUoaSignals]   = useState<any[]>([])
 
   useEffect(() => {
     async function checkAuth() {
@@ -720,22 +753,15 @@ export default function MarketPulse() {
     checkAuth()
   }, [])
 
-async function fetchData() {
+  async function fetchData() {
     setLoading(true)
-
-    // Fix 3 — Show cached CPR instantly while fresh data loads
     try {
       const cached = sessionStorage.getItem('gn_cpr_cache')
       const cacheTime = sessionStorage.getItem('gn_cpr_time')
       const cacheAge = cacheTime ? Date.now() - Number(cacheTime) : Infinity
-      if (cached && cacheAge < 5 * 60 * 1000) {
-        setCprData(JSON.parse(cached))
-        setLoading(false) // Show page immediately with cached data
-      }
+      if (cached && cacheAge < 5 * 60 * 1000) { setCprData(JSON.parse(cached)); setLoading(false) }
     } catch {}
-
     try {
-      // Fix 2 — Fetch CPR + OI Pulse in parallel
       const [cprRes, pulseRes, uoaRes] = await Promise.all([
         fetch(`${API}/cpr-scanner`),
         fetch(`${API}/oi-pulse`),
@@ -743,42 +769,28 @@ async function fetchData() {
       ])
       const [cprJson, pulseJson, uoaJson] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json()])
       setUoaSignals(uoaJson?.signals || [])
-
       const cprRows: CPRRow[] = cprJson?.data || []
       setCprData(cprRows)
-      
-
-      // Fix 3 — Update cache
       try {
         sessionStorage.setItem('gn_cpr_cache', JSON.stringify(cprRows))
         sessionStorage.setItem('gn_cpr_time', String(Date.now()))
       } catch {}
-
       const cprMap = Object.fromEntries(cprRows.map((c: CPRRow) => [c.symbol, c]))
-
       const pulseItems = pulseJson?.items || []
       const enrichedPulse: PulseStock[] = pulseItems.map((p: any) => ({
-        symbol:        p.symbol,
-        cmp:           p.ltp || p.cmp || 0,
-        oi_chg_pct:    p.oi_chg_pct || 0,
-        price_chg_pct: p.price_chg_pct || 0,
-        signal:        p.signal || 'NEUTRAL',
-        label:         p.label || '—',
-        oi_now:        p.oi_now,
-        oi_prev:       p.oi_prev,
-        vol_surge:     p.vol_surge || false,
+        symbol: p.symbol, cmp: p.ltp || p.cmp || 0,
+        oi_chg_pct: p.oi_chg_pct || 0, price_chg_pct: p.price_chg_pct || 0,
+        signal: p.signal || 'NEUTRAL', label: p.label || '—',
+        oi_now: p.oi_now, oi_prev: p.oi_prev, vol_surge: p.vol_surge || false,
         has_oi_signal: (cprMap[p.symbol] as CPRRow)?.has_oi_signal || false,
-        width_pct:     (cprMap[p.symbol] as CPRRow)?.width_pct,
-        width_pts:     (cprMap[p.symbol] as CPRRow)?.width_pts,
-        width_emoji:   (cprMap[p.symbol] as CPRRow)?.width_emoji,
-        cpr_position:  (cprMap[p.symbol] as CPRRow)?.cpr_position,
-        confluence:    (cprMap[p.symbol] as CPRRow)?.confluence || false,
+        width_pct: (cprMap[p.symbol] as CPRRow)?.width_pct,
+        width_pts: (cprMap[p.symbol] as CPRRow)?.width_pts,
+        width_emoji: (cprMap[p.symbol] as CPRRow)?.width_emoji,
+        cpr_position: (cprMap[p.symbol] as CPRRow)?.cpr_position,
+        confluence: (cprMap[p.symbol] as CPRRow)?.confluence || false,
       }))
       setPulseStocks(enrichedPulse)
-
-      // Show feed immediately — don't wait for index cards
       setLoading(false)
-
       let bull=0, bear=0, neut=0
       pulseItems.forEach((s: any) => {
         if (s.price_chg_pct > 0 && s.oi_chg_pct > 0) bull++
@@ -786,39 +798,22 @@ async function fetchData() {
         else neut++
       })
       setBreadth({ bullish:bull, bearish:bear, neutral:neut, total:pulseItems.length })
-
-      // Fix 1 — Fetch index cards separately, indices only (300 rows vs 50,000+)
       const { data: latest } = await supabase.from('oi_snapshots').select('timestamp').eq('symbol','NIFTY')
         .gte('timestamp', new Date(Date.now()-2*24*60*60*1000).toISOString().slice(0,10)+'T00:00:00+00:00')
         .order('timestamp',{ascending:false}).limit(1)
-
       if (latest?.length) {
         const ts = latest[0].timestamp
         setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))
-
-        // Fetch CMP + index OI snapshots in parallel
         const [cmpResult, ...indexBatches] = await Promise.all([
           supabase.from('cmp_prices').select('*').order('timestamp',{ascending:false}).limit(200),
-          supabase.from('oi_snapshots').select('*')
-            .eq('timestamp',ts)
-            .in('symbol',['NIFTY','BANKNIFTY','FINNIFTY'])
-            .range(0,999),
-          supabase.from('oi_snapshots').select('*')
-            .eq('timestamp',ts)
-            .in('symbol',['NIFTY','BANKNIFTY','FINNIFTY'])
-            .range(1000,1999),
+          supabase.from('oi_snapshots').select('*').eq('timestamp',ts).in('symbol',['NIFTY','BANKNIFTY','FINNIFTY']).range(0,999),
+          supabase.from('oi_snapshots').select('*').eq('timestamp',ts).in('symbol',['NIFTY','BANKNIFTY','FINNIFTY']).range(1000,1999),
         ])
-
         const cmpMap2: Record<string,number> = {}
         const seen = new Set<string>()
-        cmpResult.data?.forEach((c:any) => {
-          if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)}
-        })
+        cmpResult.data?.forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
         setCmps(cmpMap2)
-
-        // Combine index batches
         const indexData = indexBatches.flatMap(b => b.data || [])
-
         const results = ['NIFTY','BANKNIFTY','FINNIFTY']
           .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
           .filter(Boolean) as IndexAnalysis[]
@@ -833,22 +828,17 @@ async function fetchData() {
 
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))
   const warZoneCount = pulseStocks.filter(s => (s.width_pct||1)<0.3 && s.has_oi_signal).length
-
-  // Feed source — pulse during market, CPR fallback post-market
   const feedStocks: PulseStock[] = pulseStocks.length > 0 ? pulseStocks : cprData.map(c => ({
     symbol: c.symbol, cmp: c.last_cmp||c.cmp||0, oi_chg_pct:0, price_chg_pct:0,
     signal:'NEUTRAL', label:'—', has_oi_signal:c.has_oi_signal||false,
     width_pct:c.width_pct, width_pts:c.width_pts, width_emoji:c.width_emoji,
     cpr_position:c.cpr_position, confluence:c.confluence||false,
   }))
-
   const suggestions = searchQuery.length >= 1 ? ALL_SYMBOLS.filter(s => s.startsWith(searchQuery.toUpperCase())).slice(0,8) : []
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/"/>
-
-      {/* Live ticker */}
       <div className="bg-gray-950 border-b border-gray-800/50 overflow-hidden">
         <div className="flex items-center h-9">
           <div className="flex-shrink-0 bg-emerald-950 border-r border-emerald-800/50 px-3 h-full flex items-center">
@@ -873,8 +863,6 @@ async function fetchData() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-
-        {/* Header */}
         <div className="flex items-end justify-between mb-6">
           <div>
             <h1 className="text-3xl font-black text-white tracking-tight mb-1">Market Pulse</h1>
@@ -905,7 +893,7 @@ async function fetchData() {
                 onKeyDown={e => e.key==='Enter' && searchQuery && setSearchedSymbol(searchQuery)}
                 placeholder="Deep dive any F&O stock… RELIANCE, TCS, NIFTY"
                 className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-xl pl-9 pr-4 py-3 focus:outline-none focus:border-emerald-500 placeholder:text-gray-600"/>
-{suggestions.length > 0 && !searchedSymbol && (
+              {suggestions.length > 0 && !searchedSymbol && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
                   {suggestions.map(s => (
                     <button key={s} onClick={() => { setSearchedSymbol(s); setSearchQuery(s) }}
@@ -926,9 +914,9 @@ async function fetchData() {
 
         {/* Index cards */}
         {loading && analyses.length === 0 ? (
-  <div className="grid grid-cols-3 gap-4 mb-6">
-    {[1,2,3].map(i => (
-      <div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4">
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            {[1,2,3].map(i => (
+              <div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4">
                 <div className="flex justify-between"><div className="h-5 w-24 bg-gray-800 rounded"/><div className="h-6 w-20 bg-gray-800 rounded-full"/></div>
                 <div className="grid grid-cols-3 gap-2">{[1,2,3].map(j=><div key={j} className="h-16 bg-gray-800 rounded-xl"/>)}</div>
               </div>
@@ -945,13 +933,12 @@ async function fetchData() {
         ) : (
           <div className="flex flex-col items-center justify-center py-8 text-center mb-6">
             <div className="flex items-center gap-2 text-gray-600 text-sm">
-              <RefreshCw size={14} className="animate-spin"/>
-              Loading index data...
+              <RefreshCw size={14} className="animate-spin"/>Loading index data...
             </div>
           </div>
         )}
 
-        {/* Today's Spotlight */}
+        {/* Spotlight */}
         {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}
 
         {/* Activity Leaders */}
@@ -962,6 +949,10 @@ async function fetchData() {
             onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym) }}
           />
         )}
+
+        {/* Vol + OI Breakout */}
+        <VolOIBreakout onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym) }}/>
+
         {/* Market Breadth */}
         {breadth.total > 0 && (
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-6">
@@ -1002,12 +993,10 @@ async function fetchData() {
             ? <MarketPulseFeed stocks={feedStocks} cprData={cprData}/>
             : <div className="text-center py-12 text-gray-600 text-sm">{loading ? 'Loading…' : 'No data available'}</div>
           }
-
-          {/* Extended View drawer */}
           {feedStocks.length > 0 && <ExtendedView stocks={feedStocks}/>}
         </div>
 
-        {/* SEBI disclaimer */}
+        {/* Disclaimer */}
         <div className="mt-6 bg-gray-900/20 border border-gray-800/40 rounded-xl p-3">
           <p className="text-xs text-gray-600">
             <span className="text-gray-400 font-semibold">Disclaimer:</span> All data is informational only. Not investment advice. GreekNova is not SEBI-registered. Always consult a SEBI-registered advisor before trading.

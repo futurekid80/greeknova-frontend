@@ -390,7 +390,7 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
             )}
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Volume {'>'} 1.5× 5-day avg + OI building · {signals.length} stocks
+            Volume {'>'} 1.5× 5-day avg + OI building · {Math.min(signals.length, 7)} stocks
           </p>
         </div>
       </div>

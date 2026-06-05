@@ -205,10 +205,24 @@ export default function IntradaySignalLog() {
     setLoading(false)
   }, [])
 
+  // Check if market is open (9:15 AM - 3:30 PM IST)
+  const isMarketOpen = () => {
+    const now = new Date()
+    const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+    const h = ist.getHours(), m = ist.getMinutes()
+    const mins = h * 60 + m
+    return mins >= 555 && mins <= 930  // 9:15 AM to 3:30 PM
+  }
+
   useEffect(() => {
     fetchData()
-    intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
-    countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
+    // Only auto-refresh during market hours
+    intervalRef.current = setInterval(() => {
+      if (isMarketOpen()) { fetchData(); setCountdown(300) }
+    }, 5*60*1000)
+    countdownRef.current = setInterval(() => {
+      if (isMarketOpen()) setCountdown(p => Math.max(0, p-1))
+    }, 1000)
     return () => {
       if (intervalRef.current)  clearInterval(intervalRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
@@ -218,8 +232,8 @@ export default function IntradaySignalLog() {
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
 
-  // FIX 3: use stale data when fresh data is empty during reload
-  const displayData = (data?.signals?.length === 0 && staleData && loading) ? staleData : data
+  // Always show stale data while loading — never show blank
+  const displayData = (loading && staleData) ? staleData : (data || staleData)
   const signals = displayData?.signals || []
 
   const filtered = signals
@@ -350,11 +364,7 @@ export default function IntradaySignalLog() {
             ✅ Confirmed Only
           </button>
           <div className="w-px h-5 bg-gray-800 mx-1"/>
-          <div className="flex items-center gap-2 bg-gray-900/30 border border-gray-800 rounded-lg px-3 py-1.5">
-            <span className="text-xs text-gray-500">Min snapshots:</span>
-            <input type="range" min="1" max="10" value={minPersist} onChange={e => setMinPersist(Number(e.target.value))} className="w-16 accent-amber-400"/>
-            <span className="text-xs font-black text-amber-400">{minPersist}+</span>
-          </div>
+  const [minPersist, setMinPersist]   = useState(1)  // always default to 1 on load
         </div>
 
         <p className="text-xs text-gray-600 mb-4">{filtered.length} stocks · Futures OI only · Informational</p>

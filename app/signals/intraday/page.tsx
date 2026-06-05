@@ -364,7 +364,14 @@ export default function IntradaySignalLog() {
             ✅ Confirmed Only
           </button>
           <div className="w-px h-5 bg-gray-800 mx-1"/>
-  const [minPersist, setMinPersist]   = useState(1)
+          <div className="flex items-center gap-2 bg-gray-900/30 border border-gray-800 rounded-lg px-3 py-1.5">
+            <span className="text-xs text-gray-500">Min snapshots:</span>
+            <input type="range" min="1" max="10" value={minPersist} onChange={e => setMinPersist(Number(e.target.value))} className="w-16 accent-amber-400"/>
+            <span className="text-xs font-black text-amber-400">{minPersist}+</span>
+            {minPersist > 1 && (
+              <button onClick={() => setMinPersist(1)} className="text-[10px] text-gray-500 hover:text-white px-1 border border-gray-700 rounded">↺</button>
+            )}
+          </div>
         </div>
 
         <p className="text-xs text-gray-600 mb-4">{filtered.length} stocks · Futures OI only · Informational</p>

@@ -407,7 +407,7 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
 
       {/* Rows — top 5 */}
       <div className="space-y-0.5">
-        {signals.slice(0, 5).map((s: any) => (
+        {signals.slice(0, 7).map((s: any) => (
           <div key={s.symbol}
             className="grid grid-cols-12 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors cursor-pointer"
             onClick={() => onSymbolClick(s.symbol)}>

@@ -29,6 +29,15 @@ interface RadarResult {
   has_uoa?: boolean
 }
 
+ignition_score?: number
+  ignition_score_breakdown?: {
+    consec_3plus: boolean
+    high_consistency: boolean
+    bias_confirmed: boolean
+    cpr_confirms: boolean
+    vol_building: boolean
+  }
+
 interface RadarData {
   expiry: string; series_start: string
   total_trading_days: number; min_consec: number
@@ -143,6 +152,57 @@ function ConsistencyBar({ pct, label }: { pct: number; label: string }) {
       <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden w-full">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }}/>
       </div>
+    </div>
+  )
+}
+
+function IgnitionScoreBar({ score, breakdown }: {
+  score: number
+  breakdown: {
+    consec_3plus: boolean
+    high_consistency: boolean
+    bias_confirmed: boolean
+    cpr_confirms: boolean
+    vol_building: boolean
+  }
+}) {
+  const labels = [
+    { key: 'consec_3plus',     icon: '📅', tip: '3+ consecutive days'        },
+    { key: 'high_consistency', icon: '📊', tip: 'HIGH consistency (70%+)'    },
+    { key: 'bias_confirmed',   icon: '⚖️',  tip: 'CE/PE composition confirms' },
+    { key: 'cpr_confirms',     icon: '📌', tip: 'CPR position confirms'       },
+    { key: 'vol_building',     icon: '📈', tip: 'Volume building 2+ days'     },
+  ]
+  const scoreColor = score === 5 ? 'text-emerald-400' : score === 4 ? 'text-amber-400' : 'text-orange-400'
+  const barColor   = score === 5 ? 'bg-emerald-500'   : score === 4 ? 'bg-amber-400'   : 'bg-orange-400'
+  return (
+    <div className="mt-1.5">
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className={`text-[10px] font-black ${scoreColor}`}>Quality {score}/5</span>
+        <div className="flex gap-0.5">
+          {[1,2,3,4,5].map(i => (
+            <div key={i} className={`w-3 h-1.5 rounded-sm ${i <= score ? barColor : 'bg-gray-800'}`}/>
+          ))}
+        </div>
+      </div>
+      <div className="flex gap-1 flex-wrap">
+        {labels.map(({ key, icon, tip }) => {
+          const passed = breakdown[key as keyof typeof breakdown]
+          return (
+            <span key={key} title={tip}
+              className={`text-[9px] px-1 py-0.5 rounded border font-bold ${
+                passed
+                  ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40'
+                  : 'bg-gray-900/40 text-gray-600 border-gray-800/40 opacity-50'
+              }`}>
+              {icon}
+            </span>
+          )
+        })}
+      </div>
+      <p className="text-[9px] text-gray-700 mt-0.5">
+        {score === 5 ? 'All factors aligned — highest conviction' : score === 4 ? 'Strong signal — one factor pending' : 'Signal active — wait for confirmation'}
+      </p>
     </div>
   )
 }
@@ -522,6 +582,9 @@ export default function PositionalRadar() {
                             <p className="text-[10px] text-emerald-500">⚡ FUT: {r.fut_signal_today.replace(/_/g, ' ')}</p>
                             <p className="text-[10px] text-gray-700">positional threshold only</p>
                           </div>
+                        )}
+                        {r.ignition && r.ignition_score !== undefined && r.ignition_score_breakdown && (
+                          <IgnitionScoreBar score={r.ignition_score} breakdown={r.ignition_score_breakdown}/>
                         )}
                       </td>
 

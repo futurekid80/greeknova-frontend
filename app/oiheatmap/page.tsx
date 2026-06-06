@@ -20,15 +20,12 @@ const STOCKS = [
 interface HeatCell {
   ts: string; oi: number; intensity: number
 }
-
 interface HeatRow {
   strike: number; values: HeatCell[]
 }
-
 interface CmpPoint {
   timestamp: string; cmp: number | null
 }
-
 interface HeatmapData {
   symbol: string; date: string; expiry: string; expiries: string[]
   timestamps: string[]; time_labels: string[]
@@ -50,7 +47,6 @@ function fmtDate(d: string) {
   catch { return d }
 }
 
-// Color intensity for CE (red shades) and PE (green shades)
 function getCEColor(intensity: number): string {
   if (intensity === 0) return 'bg-gray-900/20'
   if (intensity < 10)  return 'bg-red-950/30'
@@ -69,17 +65,15 @@ function getPEColor(intensity: number): string {
   return 'bg-emerald-500'
 }
 
-function HeatCell({ intensity, oi, isCE, isWall, isAtm, isVacuum }:
+function HeatCellComp({ intensity, oi, isCE, isWall, isAtm, isVacuum }:
   { intensity: number; oi: number; isCE: boolean; isWall: boolean; isAtm: boolean; isVacuum: boolean }) {
   const baseColor = isCE ? getCEColor(intensity) : getPEColor(intensity)
-  const border = isWall  ? (isCE ? 'ring-1 ring-red-400' : 'ring-1 ring-emerald-400')
+  const border = isWall   ? (isCE ? 'ring-1 ring-red-400' : 'ring-1 ring-emerald-400')
                : isVacuum ? 'ring-1 ring-amber-500/50'
                : isAtm    ? 'ring-1 ring-amber-400/50'
                : ''
-
   return (
     <div className={`relative w-full h-7 ${baseColor} ${border} transition-colors group cursor-default`}>
-      {/* Tooltip on hover */}
       {oi > 0 && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 whitespace-nowrap">
           <div className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 text-[10px] text-white shadow-xl">
@@ -87,17 +81,29 @@ function HeatCell({ intensity, oi, isCE, isWall, isAtm, isVacuum }:
           </div>
         </div>
       )}
-      {/* Wall indicator */}
       {isWall && (
         <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black ${isCE ? 'text-red-300' : 'text-emerald-300'}`}>
           W
         </div>
       )}
-      {/* Vacuum indicator — only show ⚡ on first cell of vacuum row, not every cell */}
       {isVacuum && intensity === 0 && (
         <div className="absolute inset-0 bg-amber-950/20"/>
       )}
     </div>
+  )
+}
+
+// Safe max — returns 0 for empty arrays instead of -Infinity
+function safeMax(arr: number[]): number {
+  if (!arr || arr.length === 0) return 0
+  return Math.max(...arr)
+}
+
+// Safe reduce for finding closest strike
+function closestStrike(strikes: number[], cmp: number): number | null {
+  if (!strikes || strikes.length === 0) return null
+  return strikes.reduce((prev, curr) =>
+    Math.abs(curr - cmp) < Math.abs(prev - cmp) ? curr : prev
   )
 }
 
@@ -118,7 +124,6 @@ export default function OIHeatmap() {
     try {
       const params = new URLSearchParams()
       if (expiry) params.set('expiry', expiry)
-      // Cache-busting: add timestamp so browser never serves stale response
       params.set('_t', Date.now().toString())
       const res  = await fetch(`${API}/oi-heatmap/${symbol}?${params}`, { cache: 'no-store' })
       const json = await res.json()
@@ -128,37 +133,30 @@ export default function OIHeatmap() {
     setLoading(false)
   }, [symbol, expiry])
 
-  // ── FIX: keep a ref always pointing to latest fetchData ──────────────
-  // This prevents the stale closure bug where the interval calls an old
-  // version of fetchData that has outdated symbol/expiry in its closure.
   const fetchDataRef = useRef(fetchData)
   useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
-  // ─────────────────────────────────────────────────────────────────────
 
   useEffect(() => { setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
 
-  // Auto refresh every 5 mins — uses ref so interval never goes stale
   useEffect(() => {
     setCountdown(300)
     if (intervalRef.current)  clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
-
-    // Use fetchDataRef.current() so each tick always calls the LATEST fetchData
     intervalRef.current  = setInterval(() => { fetchDataRef.current(); setCountdown(300) }, 5*60*1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
-
     return () => {
       if (intervalRef.current)  clearInterval(intervalRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
     }
-  }, []) // Empty deps — interval set once; fetchDataRef handles staying current
+  }, [])
 
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
 
-  // Find walls and ATM for each timestamp
-  const ceWalls = data?.timestamps.map((ts, tIdx) => {
+  // Safe wall detection
+  const ceWalls = data?.timestamps.map((_, tIdx) => {
+    if (!data.ce_data.length) return 0
     let maxOI = 0, wallStrike = 0
     data.ce_data.forEach(row => {
       const oi = row.values[tIdx]?.oi || 0
@@ -167,7 +165,8 @@ export default function OIHeatmap() {
     return wallStrike
   }) || []
 
-  const peWalls = data?.timestamps.map((ts, tIdx) => {
+  const peWalls = data?.timestamps.map((_, tIdx) => {
+    if (!data.pe_data.length) return 0
     let maxOI = 0, wallStrike = 0
     data.pe_data.forEach(row => {
       const oi = row.values[tIdx]?.oi || 0
@@ -176,42 +175,35 @@ export default function OIHeatmap() {
     return wallStrike
   }) || []
 
-  // Get ATM strike per timestamp from cmp_series
-  const atmPerTime = data?.timestamps.map((ts, tIdx) => {
+  // Safe ATM per timestamp
+  const atmPerTime = data?.timestamps.map((_, tIdx) => {
     const cmp = data.cmp_series[tIdx]?.cmp
     if (!cmp || !data.strikes.length) return null
-    return data.strikes.reduce((prev, curr) =>
-      Math.abs(curr - cmp) < Math.abs(prev - cmp) ? curr : prev
-    )
+    return closestStrike(data.strikes, cmp)
   }) || []
 
-  // Reverse strikes for display (highest on top)
-  const atmStrike = data?.latest_cmp 
-  ? data.strikes.reduce((prev, curr) => 
-      Math.abs(curr - data.latest_cmp) < Math.abs(prev - data.latest_cmp) ? curr : prev
-    )
-  : null
+  // Safe ATM strike for display filtering
+  const atmStrike = (data?.latest_cmp && data?.strikes.length)
+    ? closestStrike(data.strikes, data.latest_cmp)
+    : null
 
-const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
-  if (!atmStrike) return true
-  const strikeInterval = symbol === 'BANKNIFTY' ? 100 : 50
-  const range = 15 * strikeInterval  // ±15 strikes from ATM
-  return Math.abs(strike - atmStrike) <= range
-}) : []
+  const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
+    if (!atmStrike) return true
+    const strikeInterval = symbol === 'BANKNIFTY' ? 100 : 50
+    const range = 15 * strikeInterval
+    return Math.abs(strike - atmStrike) <= range
+  }) : []
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/oiheatmap"/>
-
       <div className="max-w-full mx-auto px-6 py-8">
 
         {/* Header */}
         <div className="flex items-end justify-between mb-6">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">🌡️ OI Heatmap Timeline</h1>
-            <p className="text-gray-500 text-sm">
-              How OI built or crumbled at each strike throughout the day · Every 5-min snapshot
-            </p>
+            <p className="text-gray-500 text-sm">How OI built or crumbled at each strike throughout the day · Every 5-min snapshot</p>
           </div>
           <div className="flex items-center gap-3">
             {data?.expiries && data.expiries.length > 0 && (
@@ -255,7 +247,6 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
             <option value="">Stocks ▾</option>
             {STOCKS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-
           <div className="ml-auto flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
             {(['CE','PE','BOTH'] as const).map(v => (
               <button key={v} onClick={() => setView(v)}
@@ -315,16 +306,14 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
         ) : !data || data.strikes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
             <div className="text-4xl mb-4">🌡️</div>
-            <p className="text-gray-500">No heatmap data available</p>
+            <p className="text-gray-500">No heatmap data available — market may be closed or no data for this symbol</p>
           </div>
         ) : (
           <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden">
 
-            {/* Time header row */}
+            {/* Time header */}
             <div className="flex border-b border-gray-800 bg-gray-900/60 sticky top-0 z-10">
-              <div className="w-24 shrink-0 px-3 py-2 text-[10px] text-gray-500 font-bold border-r border-gray-800">
-                STRIKE
-              </div>
+              <div className="w-24 shrink-0 px-3 py-2 text-[10px] text-gray-500 font-bold border-r border-gray-800">STRIKE</div>
               {view !== 'PE' && (
                 <div className="flex-1 border-r border-gray-800">
                   <div className="text-center py-1 text-[10px] text-red-400 font-bold border-b border-gray-800">CE OI →</div>
@@ -356,11 +345,8 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
               {displayStrikes.map(strike => {
                 const ceRow = data.ce_data.find(r => r.strike === strike)
                 const peRow = data.pe_data.find(r => r.strike === strike)
-
                 return (
                   <div key={strike} className="flex border-b border-gray-800/40 hover:bg-gray-800/10 transition-colors">
-
-                    {/* Strike label */}
                     <div className="w-24 shrink-0 flex items-center px-3 border-r border-gray-800">
                       <div>
                         <p className={`text-xs font-black ${
@@ -369,9 +355,7 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
                           peWalls.includes(strike) ? 'text-emerald-400' :
                           atmPerTime[atmPerTime.length - 1] === strike ? 'text-amber-400' :
                           'text-gray-400'
-                        }`}>
-                          {strike.toLocaleString()}
-                        </p>
+                        }`}>{strike.toLocaleString()}</p>
                         {ceWalls.includes(strike) && <p className="text-[8px] text-red-500">CE WALL</p>}
                         {peWalls.includes(strike) && <p className="text-[8px] text-emerald-500">PE WALL</p>}
                         {atmPerTime[atmPerTime.length - 1] === strike && !ceWalls.includes(strike) && !peWalls.includes(strike) && (
@@ -379,39 +363,33 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
                         )}
                       </div>
                     </div>
-
-                    {/* CE heatmap cells */}
                     {view !== 'PE' && (
                       <div className="flex-1 flex border-r border-gray-800">
                         {(ceRow?.values || []).map((cell, tIdx) => {
-                          const isWall  = ceWalls[tIdx] === strike && cell.intensity > 30
-                          const isAtm   = atmPerTime[atmPerTime.length - 1] === strike
-                          const isVac   = cell.intensity < 5 && (peRow?.values[tIdx]?.intensity || 0) < 5
+                          const isWall = ceWalls[tIdx] === strike && cell.intensity > 30
+                          const isAtm  = atmPerTime[atmPerTime.length - 1] === strike
+                          const isVac  = cell.intensity < 5 && (peRow?.values[tIdx]?.intensity || 0) < 5
                           return (
                             <div key={tIdx} className="flex-1 border-r border-gray-800/20 last:border-0"
                               onMouseEnter={() => setHoveredCell({ strike, timeIdx: tIdx, oi: cell.oi, type: 'CE' })}
                               onMouseLeave={() => setHoveredCell(null)}>
-                              <HeatCell intensity={cell.intensity} oi={cell.oi} isCE={true}
-                                isWall={isWall} isAtm={isAtm} isVacuum={isVac}/>
+                              <HeatCellComp intensity={cell.intensity} oi={cell.oi} isCE={true} isWall={isWall} isAtm={isAtm} isVacuum={isVac}/>
                             </div>
                           )
                         })}
                       </div>
                     )}
-
-                    {/* PE heatmap cells */}
                     {view !== 'CE' && (
                       <div className="flex-1 flex">
                         {(peRow?.values || []).map((cell, tIdx) => {
-                          const isWall  = peWalls[tIdx] === strike && cell.intensity > 30
-                          const isAtm   = atmPerTime[atmPerTime.length - 1] === strike
-                          const isVac   = cell.intensity < 5 && (ceRow?.values[tIdx]?.intensity || 0) < 5
+                          const isWall = peWalls[tIdx] === strike && cell.intensity > 30
+                          const isAtm  = atmPerTime[atmPerTime.length - 1] === strike
+                          const isVac  = cell.intensity < 5 && (ceRow?.values[tIdx]?.intensity || 0) < 5
                           return (
                             <div key={tIdx} className="flex-1 border-r border-gray-800/20 last:border-0"
                               onMouseEnter={() => setHoveredCell({ strike, timeIdx: tIdx, oi: cell.oi, type: 'PE' })}
                               onMouseLeave={() => setHoveredCell(null)}>
-                              <HeatCell intensity={cell.intensity} oi={cell.oi} isCE={false}
-                                isWall={isWall} isAtm={isAtm} isVacuum={isVac}/>
+                              <HeatCellComp intensity={cell.intensity} oi={cell.oi} isCE={false} isWall={isWall} isAtm={isAtm} isVacuum={isVac}/>
                             </div>
                           )
                         })}
@@ -422,7 +400,7 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
               })}
             </div>
 
-            {/* Hover info bar */}
+            {/* Hover info */}
             <div className="px-4 py-2 border-t border-gray-800 bg-gray-900/40 h-8 flex items-center">
               {hoveredCell ? (
                 <p className="text-xs text-gray-400">
@@ -438,16 +416,17 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
           </div>
         )}
 
-        {/* ── Auto Interpretation Panel ─────────────────────────────── */}
-        {data && data.strikes.length > 0 && (() => {
+        {/* Auto Interpretation Panel — fully guarded against empty arrays */}
+        {data && data.strikes.length > 0 && data.timestamps.length > 0 && (() => {
           const insights: { icon: string; text: string; color: string }[] = []
-          const lastIdx = data.timestamps.length - 1
+          const lastIdx  = data.timestamps.length - 1
           const firstIdx = 0
 
-          // 1. Find conviction CE wall (held longest)
+          // 1. CE wall conviction
           const cePeakStrike = (() => {
             let maxDuration = 0, bestStrike = 0
             data.ce_data.forEach(row => {
+              if (!row.values.length) return
               const duration = row.values.filter(v => v.intensity > 60).length
               if (duration > maxDuration) { maxDuration = duration; bestStrike = row.strike }
             })
@@ -462,10 +441,11 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
             })
           }
 
-          // 2. Find conviction PE wall
+          // 2. PE wall conviction
           const pePeakStrike = (() => {
             let maxDuration = 0, bestStrike = 0
             data.pe_data.forEach(row => {
+              if (!row.values.length) return
               const duration = row.values.filter(v => v.intensity > 60).length
               if (duration > maxDuration) { maxDuration = duration; bestStrike = row.strike }
             })
@@ -480,11 +460,12 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
             })
           }
 
-          // 3. Check if CE wall is fading (peak OI vs latest OI)
+          // 3. CE wall fading — guarded
           if (cePeakStrike.strike > 0) {
             const wallRow = data.ce_data.find(r => r.strike === cePeakStrike.strike)
-            if (wallRow) {
-              const peakOI  = Math.max(...wallRow.values.map(v => v.oi))
+            if (wallRow && wallRow.values.length > 0) {
+              const oiValues = wallRow.values.map(v => v.oi)
+              const peakOI   = safeMax(oiValues)
               const latestOI = wallRow.values[lastIdx]?.oi || 0
               const fadePct  = peakOI > 0 ? Math.round((peakOI - latestOI) / peakOI * 100) : 0
               if (fadePct > 30) {
@@ -497,11 +478,12 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
             }
           }
 
-          // 4. Check if PE wall is fading
+          // 4. PE wall fading — guarded
           if (pePeakStrike.strike > 0) {
             const wallRow = data.pe_data.find(r => r.strike === pePeakStrike.strike)
-            if (wallRow) {
-              const peakOI   = Math.max(...wallRow.values.map(v => v.oi))
+            if (wallRow && wallRow.values.length > 0) {
+              const oiValues = wallRow.values.map(v => v.oi)
+              const peakOI   = safeMax(oiValues)
               const latestOI = wallRow.values[lastIdx]?.oi || 0
               const fadePct  = peakOI > 0 ? Math.round((peakOI - latestOI) / peakOI * 100) : 0
               if (fadePct > 30) {
@@ -514,7 +496,7 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
             }
           }
 
-          // 5. Nearest vacuum above current ATM
+          // 5. Vacuum zones — guarded
           const lastAtm = atmPerTime[lastIdx]
           if (lastAtm) {
             const vacuumAbove = data.strikes
@@ -533,7 +515,6 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
               })
             }
 
-            // Vacuum below
             const vacuumBelow = [...data.strikes]
               .filter(s => s < lastAtm)
               .reverse()
@@ -552,7 +533,7 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
             }
           }
 
-          // 6. ATM movement since open
+          // 6. ATM movement
           const openAtm  = atmPerTime[firstIdx]
           const closeAtm = atmPerTime[lastIdx]
           if (openAtm && closeAtm && openAtm !== closeAtm) {
@@ -590,8 +571,7 @@ const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
             Dark = low OI · Bright = high OI · Watch how walls appear and disappear across time.
             A wall that builds steadily = institutional conviction.
             A wall that appears suddenly = aggressive positioning.
-            A wall that crumbles = positions being closed.
-            · Not investment advice
+            A wall that crumbles = positions being closed. · Not investment advice
           </p>
         </div>
       </div>

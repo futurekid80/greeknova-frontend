@@ -27,9 +27,7 @@ interface RadarResult {
   ce_wall_oi_L?: number; pe_wall_oi_L?: number
   trade_range?: number; trade_range_pct?: number; range_label?: string
   has_uoa?: boolean
-}
-
-ignition_score?: number
+  ignition_score?: number
   ignition_score_breakdown?: {
     consec_3plus: boolean
     high_consistency: boolean
@@ -37,6 +35,7 @@ ignition_score?: number
     cpr_confirms: boolean
     vol_building: boolean
   }
+}
 
 interface RadarData {
   expiry: string; series_start: string

@@ -390,7 +390,7 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
             )}
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Volume {'>'} 1.5× 5-day avg + OI building · {Math.min(signals.length, 7)} stocks
+            Volume {'>'} 1.5× 5-day avg + OI building · {display?.total || 0} qualifying today
           </p>
         </div>
       </div>
@@ -407,7 +407,7 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
 
       {/* Rows — top 5 */}
       <div className="space-y-0.5">
-        {signals.slice(0, 7).map((s: any) => (
+        {signals.slice(0, 5).map((s: any) => (
           <div key={s.symbol}
             className="grid grid-cols-12 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors cursor-pointer"
             onClick={() => onSymbolClick(s.symbol)}>
@@ -798,16 +798,16 @@ export default function MarketPulse() {
         else neut++
       })
       setBreadth({ bullish:bull, bearish:bear, neutral:neut, total:pulseItems.length })
-      const { data: latest } = await supabase.from('oi_snapshots').select('timestamp').eq('symbol','NIFTY')
+      const { data: latest } = await supabase.from('oi_snapshots').select('timestamp').eq('symbol','NIFTY').eq('option_type','FUT')
         .gte('timestamp', new Date(Date.now()-2*24*60*60*1000).toISOString().slice(0,10)+'T00:00:00+00:00')
         .order('timestamp',{ascending:false}).limit(1)
       if (latest?.length) {
         const ts = latest[0].timestamp
         setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))
         const [cmpResult, ...indexBatches] = await Promise.all([
-          supabase.from('cmp_prices').select('*').order('timestamp',{ascending:false}).limit(200),
-          supabase.from('oi_snapshots').select('*').eq('timestamp',ts).in('symbol',['NIFTY','BANKNIFTY','FINNIFTY']).range(0,999),
-          supabase.from('oi_snapshots').select('*').eq('timestamp',ts).in('symbol',['NIFTY','BANKNIFTY','FINNIFTY']).range(1000,1999),
+          supabase.from('cmp_prices').select('symbol,cmp').order('timestamp',{ascending:false}).limit(200),
+          supabase.from('oi_snapshots').select('symbol,strike,option_type,oi,volume,last_price,expiry').eq('timestamp',ts).in('symbol',['NIFTY','BANKNIFTY','FINNIFTY']).range(0,999),
+          supabase.from('oi_snapshots').select('symbol,strike,option_type,oi,volume,last_price,expiry').eq('timestamp',ts).in('symbol',['NIFTY','BANKNIFTY','FINNIFTY']).range(1000,1999),
         ])
         const cmpMap2: Record<string,number> = {}
         const seen = new Set<string>()

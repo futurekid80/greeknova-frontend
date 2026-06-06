@@ -416,10 +416,10 @@ export default function PositionalRadar() {
             <p className="text-xs text-gray-400 font-semibold mb-2">Signal conviction levels:</p>
             <div className="flex items-center gap-6 flex-wrap">
               {[
-                { level: 'RADAR',      emoji: '🔵', label: 'Radar',      desc: 'Early signal, 1-2 days. Watch only.' },
-                { level: 'BUILDING',   emoji: '🟡', label: 'Building',   desc: '2-3 days consecutive. Add to watchlist.' },
-                { level: 'CONVICTION', emoji: '🟠', label: 'Conviction', desc: '3+ days + volume surge + accelerating. High confidence.' },
-                { level: 'IGNITION',   emoji: '🟢', label: 'Ignition',   desc: 'Conviction + FUT confirming same direction today. Execute.' },
+                { level: 'RADAR',      emoji: '🔵', label: 'Radar',      desc: 'OI >3% + Price >0.5% over series. 0-1 consecutive days. Watch only.' },
+                { level: 'BUILDING',   emoji: '🟡', label: 'Building',   desc: '2+ consecutive days signal direction held. Add to watchlist.' },
+                { level: 'CONVICTION', emoji: '🟠', label: 'Conviction', desc: '3+ consecutive days + vol >7d avg by 20% OR OI accelerating. High confidence.' },
+                { level: 'IGNITION',   emoji: '🟢', label: 'Ignition',   desc: 'Conviction + FUT confirms bias today (OI >2%, price >0.2%). Quality score shown.' },
               ].map(({ level, emoji, label, desc }) => {
                 const meta = CONVICTION_META[level]
                 return (

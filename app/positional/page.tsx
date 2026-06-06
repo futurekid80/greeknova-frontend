@@ -168,7 +168,7 @@ function IgnitionScoreBar({ score, breakdown }: {
   const labels = [
     { key: 'consec_3plus',     icon: '📅', tip: '3+ consecutive days'        },
     { key: 'high_consistency', icon: '📊', tip: 'HIGH consistency (70%+)'    },
-    { key: 'bias_confirmed',   icon: '⚖️',  tip: 'CE/PE composition confirms' },
+    { key: 'bias_confirmed',   icon: '⚖',  tip: 'CE/PE composition confirms' },
     { key: 'cpr_confirms',     icon: '📌', tip: 'CPR position confirms'       },
     { key: 'vol_building',     icon: '📈', tip: 'Volume building 2+ days'     },
   ]

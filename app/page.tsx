@@ -769,6 +769,7 @@ export default function MarketPulse() {
   const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [uoaSignals, setUoaSignals]   = useState<any[]>([])
+  const [activeSector, setActiveSector] = useState<string|null>(null)
 
   useEffect(() => {
     async function checkAuth() {
@@ -964,31 +965,68 @@ export default function MarketPulse() {
         )}
         
         {/* Sector Performance */}
-        {feedStocks.length > 0 && (() => {
-          const sectorPerf = getSectorPerf(feedStocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol)))
-          const hasData = sectorPerf.some(s => s.avg !== 0)
-          return (
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Sector Performance</h2>
-                <span className="text-xs text-gray-600">{hasData ? 'Avg % change of F&O stocks' : 'CPR-based ranking'}</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {sectorPerf.map(({ sector, avg, count }) => (
-                  <div key={sector}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium
-                      ${avg > 0 ? 'bg-emerald-950/40 border-emerald-800/50' : avg < 0 ? 'bg-red-950/40 border-red-800/50' : 'bg-gray-900/40 border-gray-800/50'}`}>
-                    <span className="text-gray-300 font-normal">{sector}</span>
-                    <span className={avg > 0 ? 'text-emerald-400 font-bold' : avg < 0 ? 'text-red-400 font-bold' : 'text-gray-500'}>
-                      {avg > 0 ? '+' : ''}{avg}%
-                    </span>
-                    <span className="text-gray-600">({count})</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        })()}
+{feedStocks.length > 0 && (() => {
+  const sectorPerf = getSectorPerf(feedStocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol)))
+  const hasData = sectorPerf.some(s => s.avg !== 0)
+  
+  const sectorStocks = activeSector
+    ? feedStocks.filter(s => (SECTOR_MAP[activeSector] || []).includes(s.symbol))
+        .sort((a, b) => (b.price_chg_pct || 0) - (a.price_chg_pct || 0))
+    : []
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Sector Performance</h2>
+        <span className="text-xs text-gray-600">{hasData ? 'Avg % change · click sector to drill down' : 'CPR-based ranking'}</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {sectorPerf.map(({ sector, avg, count }) => (
+          <button key={sector}
+            onClick={() => setActiveSector(activeSector === sector ? null : sector)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all
+              ${activeSector === sector
+                ? 'ring-1 ring-white/30 scale-105'
+                : 'hover:scale-105'
+              }
+              ${avg > 0 ? 'bg-emerald-950/40 border-emerald-800/50' : avg < 0 ? 'bg-red-950/40 border-red-800/50' : 'bg-gray-900/40 border-gray-800/50'}`}>
+            <span className="text-gray-300 font-normal">{sector}</span>
+            <span className={avg > 0 ? 'text-emerald-400 font-bold' : avg < 0 ? 'text-red-400 font-bold' : 'text-gray-500'}>
+              {avg > 0 ? '+' : ''}{avg}%
+            </span>
+            <span className="text-gray-600">({count})</span>
+            <span className="text-gray-600 text-[10px]">{activeSector === sector ? '▲' : '▼'}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Drill-down panel */}
+      {activeSector && sectorStocks.length > 0 && (
+        <div className="mt-3 bg-gray-900/30 border border-gray-700/50 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-bold text-white">{activeSector} — {sectorStocks.length} stocks</p>
+            <button onClick={() => setActiveSector(null)} className="text-gray-600 hover:text-white text-xs">✕ close</button>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {sectorStocks.map(s => (
+              <button key={s.symbol}
+                onClick={() => { setSearchedSymbol(s.symbol); setSearchQuery(s.symbol) }}
+                className="flex items-center justify-between bg-gray-800/50 border border-gray-700/40 rounded-lg px-3 py-2 hover:bg-gray-800 transition-colors text-left">
+                <div>
+                  <p className="text-xs font-bold text-white">{s.symbol}</p>
+                  <p className="text-[10px] text-gray-500">{s.cmp ? `₹${s.cmp.toLocaleString()}` : '—'}</p>
+                </div>
+                <span className={`text-xs font-bold ${(s.price_chg_pct||0) > 0 ? 'text-emerald-400' : (s.price_chg_pct||0) < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                  {(s.price_chg_pct||0) > 0 ? '+' : ''}{s.price_chg_pct?.toFixed(2) ?? '0.00'}%
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})()}
 
         {/* Spotlight */}
         {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}

@@ -73,6 +73,7 @@ export default function CPRScanner() {
   const [typeFilter, setTypeFilter]       = useState<'all'|'index'|'stocks'>('all')
   const [confluenceType, setConfluenceType] = useState<'all'|'CONFIRMS'|'CONTRADICTS'>('all')
   const [signalFilter, setSignalFilter]   = useState<'all'|'LONG_BUILDUP'|'SHORT_BUILDUP'|'CALL_WRITING'|'PUT_WRITING'|'SHORT_COVERING'|'LONG_UNWINDING'>('all')
+  const [timeframe, setTimeframe] = useState<'daily'|'weekly'|'monthly'>('daily')
 
   // OI Map state
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
@@ -97,16 +98,20 @@ export default function CPRScanner() {
     setWallsLoading(null)
   }
 
-  const fetchData = useCallback(async () => {
+const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res  = await fetch(`${API}/cpr-scanner`)
+      const url = timeframe === 'daily'
+        ? `${API}/cpr-scanner`
+        : `${API}/cpr-scanner-timeframe?timeframe=${timeframe}`
+      const res  = await fetch(url)
       const json = await res.json()
       setData(json)
     } catch(e) { console.error(e) }
     setLoading(false)
-  }, [])
+  }, [timeframe])
 
+  useEffect(() => { fetchData() }, [timeframe])
   useEffect(() => {
     fetchData()
     intervalRef.current  = setInterval(() => { fetchData(); setCountdown(300) }, 5*60*1000)
@@ -138,8 +143,9 @@ export default function CPRScanner() {
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">📐 CPR Scanner</h1>
             <p className="text-gray-500 text-sm">
-              Daily Central Pivot Range · Frank Ochoa's Pivot Boss ·
-              Narrow CPR = compression = breakout brewing
+              {timeframe === 'daily' ? 'Daily Central Pivot Range · Frank Ochoa\'s Pivot Boss · Narrow CPR = compression = breakout brewing'
+               : timeframe === 'weekly' ? 'Weekly CPR · Based on previous week\'s H/L/C · Swing trader context'
+               : 'Monthly CPR · Based on previous month\'s H/L/C · Positional trader context'}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -152,6 +158,17 @@ export default function CPRScanner() {
             <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
               Next refresh in {Math.floor(countdown/60)}:{(countdown%60).toString().padStart(2,'0')}
+            </div>
+            {/* Timeframe toggle */}
+            <div className="flex items-center bg-gray-900 border border-gray-700 rounded-lg overflow-hidden">
+              {(['daily','weekly','monthly'] as const).map(tf => (
+                <button key={tf} onClick={() => setTimeframe(tf)}
+                  className={`px-3 py-2 text-xs font-bold transition-all capitalize ${
+                    timeframe === tf ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'
+                  }`}>
+                  {tf === 'daily' ? '1D' : tf === 'weekly' ? '1W' : '1M'}
+                </button>
+              ))}
             </div>
             <button onClick={fetchData} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">

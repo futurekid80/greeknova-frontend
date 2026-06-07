@@ -303,6 +303,18 @@ export default function PositionalRadar() {
   const [highVolOnly, setHighVolOnly]           = useState(false)
   const [typeFilter, setTypeFilter]             = useState<'all'|'index'|'stocks'>('all')
   const [writerView, setWriterView]             = useState(false)
+  const [sortCol, setSortCol] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function handleSort(col: string) {
+    if (sortCol === col) {
+      if (sortDir === 'desc') setSortDir('asc')
+      else { setSortCol(null); setSortDir('desc') }
+    } else {
+      setSortCol(col)
+      setSortDir('desc')
+    }
+  }
 
   // OI Map state
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
@@ -336,6 +348,14 @@ export default function PositionalRadar() {
   function handleConsec(c: number) { setMinConsec(c); fetchData(c) }
   useEffect(() => { fetchData(0) }, [])
 
+  const SORT_MAP: Record<string, (r: RadarResult) => number> = {
+    vol:      r => r.vol_chg_pct,
+    oi:       r => r.oi_chg_pct,
+    consec:   r => r.consec_days,
+    consisPC: r => r.consistency_pct,
+    price:    r => r.cmp_chg_pct,
+  }
+
   const results = (data?.results || [])
     .filter(r => typeFilter === 'all' || (typeFilter === 'index' ? r.is_index : !r.is_index))
     .filter(r => signalFilter === 'all' || r.signal === signalFilter)
@@ -345,6 +365,11 @@ export default function PositionalRadar() {
     .filter(r => !accelOnly || r.accelerating)
     .filter(r => !highVolOnly || r.vol_chg_pct > 20)
     .filter(r => !writerView || r.consistency_pct >= 50)
+    .sort((a, b) => {
+      if (!sortCol || !SORT_MAP[sortCol]) return 0
+      const fn = SORT_MAP[sortCol]
+      return sortDir === 'desc' ? fn(b) - fn(a) : fn(a) - fn(b)
+    })
 
   const s = data?.summary
 
@@ -549,9 +574,27 @@ export default function PositionalRadar() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-900/60 border-b border-gray-800">
-                  {tableHeaders.map((h, i) => (
-                    <th key={h} className={`text-xs font-semibold text-gray-500 px-3 py-3.5 ${i <= 3 ? 'text-left' : 'text-right'} ${i===0?'pl-5':''} ${i===tableHeaders.length-1?'pr-5 text-left':''}`}>{h}</th>
-                  ))}
+                  {tableHeaders.map((h, i) => {
+                    const colKey = h === 'Volume (vs 7d avg)' ? 'vol'
+                      : h === 'OI (Series)' ? 'oi'
+                      : h === 'Consec' ? 'consec'
+                      : h === 'Consistency' ? 'consisPC'
+                      : h === 'Price (Series)' ? 'price'
+                      : null
+                    const isActive = sortCol === colKey
+                    return (
+                      <th key={h}
+                        onClick={colKey ? () => handleSort(colKey) : undefined}
+                        className={`text-xs font-semibold px-3 py-3.5 ${i <= 3 ? 'text-left' : 'text-right'} ${i===0?'pl-5':''} ${i===tableHeaders.length-1?'pr-5 text-left':''} ${colKey ? 'cursor-pointer hover:text-white select-none' : ''} ${isActive ? 'text-amber-400' : 'text-gray-500'}`}>
+                        {h}
+                        {colKey && (
+                          <span className="ml-1 text-[10px]">
+                            {isActive ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+                          </span>
+                        )}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>

@@ -25,6 +25,31 @@ interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI
 interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
 interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean }
 
+// ── Sector Performance ────────────────────────────────────────────────────────
+const SECTOR_MAP: Record<string, string[]> = {
+  "Banking":      ["HDFCBANK","ICICIBANK","SBIN","AXISBANK","KOTAKBANK","INDUSINDBK","BANKBARODA","CANBK"],
+  "IT":           ["TCS","INFY","WIPRO","HCLTECH","TECHM"],
+  "Auto":         ["MARUTI","BAJAJ-AUTO","EICHERMOT","HEROMOTOCO","M&M"],
+  "Metals":       ["TATASTEEL","JSWSTEEL","HINDALCO","SAIL","VEDL"],
+  "Energy":       ["RELIANCE","ONGC","BPCL","GAIL","COALINDIA","TATAPOWER","POWERGRID","NTPC"],
+  "Finance/NBFC": ["BAJFINANCE","BAJAJFINSV","SHRIRAMFIN","CHOLAFIN","HDFCLIFE","SBILIFE","JIOFIN","PFC","RECLTD"],
+  "Pharma":       ["SUNPHARMA","CIPLA","DRREDDY","APOLLOHOSP"],
+  "Infra/Capital":["LT","HAL","BEL","ADANIPORTS","ADANIENT","DLF","INDIGO"],
+  "Consumer":     ["ITC","HINDUNILVR","NESTLEIND","BRITANNIA","TATACONSUM","TITAN","ASIANPAINT","HAVELLS"],
+  "Cement":       ["ULTRACEMCO","GRASIM"],
+  "Telecom":      ["BHARTIARTL"],
+  "Textile":      ["TRENT"],
+}
+
+function getSectorPerf(stocks: PulseStock[]) {
+  return Object.entries(SECTOR_MAP).map(([sector, symbols]) => {
+    const members = stocks.filter(s => symbols.includes(s.symbol) && s.price_chg_pct != null)
+    if (!members.length) return { sector, avg: 0, count: 0 }
+    const avg = members.reduce((sum, s) => sum + (s.price_chg_pct || 0), 0) / members.length
+    return { sector, avg: parseFloat(avg.toFixed(2)), count: members.length }
+  }).sort((a, b) => b.avg - a.avg)
+}
+
 function fmtOI(n: number) {
   const abs = Math.abs(n)
   if (abs >= 10000000) return `${(n/10000000).toFixed(2)}Cr`
@@ -937,6 +962,33 @@ export default function MarketPulse() {
             </div>
           </div>
         )}
+        
+        {/* Sector Performance */}
+        {feedStocks.length > 0 && (() => {
+          const sectorPerf = getSectorPerf(feedStocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol)))
+          const hasData = sectorPerf.some(s => s.avg !== 0)
+          return (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Sector Performance</h2>
+                <span className="text-xs text-gray-600">{hasData ? 'Avg % change of F&O stocks' : 'CPR-based ranking'}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {sectorPerf.map(({ sector, avg, count }) => (
+                  <div key={sector}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium
+                      ${avg > 0 ? 'bg-emerald-950/40 border-emerald-800/50' : avg < 0 ? 'bg-red-950/40 border-red-800/50' : 'bg-gray-900/40 border-gray-800/50'}`}>
+                    <span className="text-gray-300 font-normal">{sector}</span>
+                    <span className={avg > 0 ? 'text-emerald-400 font-bold' : avg < 0 ? 'text-red-400 font-bold' : 'text-gray-500'}>
+                      {avg > 0 ? '+' : ''}{avg}%
+                    </span>
+                    <span className="text-gray-600">({count})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Spotlight */}
         {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}

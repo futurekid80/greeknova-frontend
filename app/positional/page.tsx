@@ -202,6 +202,9 @@ function IgnitionScoreBar({ score, breakdown }: {
       <p className="text-[9px] text-gray-700 mt-0.5">
         {score === 5 ? 'All factors aligned — highest conviction' : score === 4 ? 'Strong signal — one factor pending' : 'Signal active — wait for confirmation'}
       </p>
+      <p className="text-[9px] text-gray-600 mt-1 leading-relaxed">
+        📅 3d+ consec · 📊 70%+ consistency · ⚖ CE/PE confirms · 📌 CPR confirms · 📈 Vol building
+      </p>
     </div>
   )
 }

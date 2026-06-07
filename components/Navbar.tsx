@@ -43,6 +43,7 @@ const NAV_GROUPS = [
       { href: '/positional',  label: '📈 Positional Radar' },
       { href: '/signals/intraday', label: '📋 Intraday Log' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
+      { href: '/signals/wall-migration', label: '🧱 Wall Migration' }
     ]
   },
 ]

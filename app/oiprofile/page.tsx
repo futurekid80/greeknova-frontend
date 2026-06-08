@@ -322,7 +322,7 @@ export default function OIProfile() {
                       )}
                     </div>
                     <div className="flex justify-end items-center h-5">
-                      <div className="flex justify-end w-full relative">
+                      <div className="flex justify-end w-full relative h-4">
                         {/* Yesterday watermark */}
                         {data?.has_prev_oi && row.prev_ce_oi > 0 && (
                           <div className="absolute right-0 top-0 bottom-0 bg-red-900/30 rounded-l-sm"
@@ -350,7 +350,7 @@ export default function OIProfile() {
                       </div>
                     </div>
                     <div className="flex items-center h-5">
-                      <div className="relative w-full flex">
+                      <div className="relative w-full flex h-4">
                         {/* Today's bar */}
                         <div className={`h-4 rounded-r-sm relative z-10 ${
                           row.is_pe_wall ? 'bg-emerald-400' : row.is_poc ? 'bg-purple-500' :

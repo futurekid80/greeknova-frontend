@@ -161,7 +161,7 @@ export default function WallMigrationPage() {
         <div className="flex items-start gap-3 bg-purple-950/20 border border-purple-800/30 rounded-xl p-4 mb-6">
           <Info size={14} className="text-purple-400 mt-0.5 flex-shrink-0"/>
           <p className="text-xs text-purple-300/80 leading-relaxed">
-            Wall Migration compares the current OI snapshot against one taken ~20 minutes ago to detect shifts in CE/PE walls.
+            Wall Migration compares the current OI snapshot against the market open snapshot to detect wall shifts across the full session to detect shifts in CE/PE walls.
             During market hours this is highly actionable. On weekends it shows Friday's last session data.
             This is an experimental feature — use alongside CPR and OI signals for confluence.
           </p>

@@ -565,7 +565,7 @@ export default function PositionalRadar() {
               📈 High OI
             </button>
           </>}
-          <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setHighOiOnly(false); setTypeFilter('all') }
+          <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setHighOiOnly(false); setTypeFilter('all') }}
             className="text-xs text-gray-600 hover:text-gray-400 transition-colors ml-1">Clear filters</button>
         </div>
 
@@ -808,7 +808,7 @@ export default function PositionalRadar() {
             <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-4 text-3xl">📈</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">No signals match</h3>
             <p className="text-sm text-gray-600 mb-3">{minConsec > 0 ? `No stocks had ${minConsec}+ consecutive days of this signal.` : 'Try changing the filters above.'}</p>
-            <button onClick={() => { handleConsec(0); { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setHighOiOnly(false); setTypeFilter('all') }
+            <button onClick={() => { handleConsec(0); setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setHighOiOnly(false); setTypeFilter('all'); }}
               className="text-xs text-emerald-400 hover:text-emerald-300">Reset all filters</button>
           </div>
         )}

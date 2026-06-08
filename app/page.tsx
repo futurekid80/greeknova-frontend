@@ -770,6 +770,7 @@ export default function MarketPulse() {
   const [searchQuery, setSearchQuery] = useState('')
   const [uoaSignals, setUoaSignals]   = useState<any[]>([])
   const [activeSector, setActiveSector] = useState<string|null>(null)
+  const [activeBreadth, setActiveBreadth] = useState<'bullish'|'bearish'|'neutral'|null>(null)
 
   useEffect(() => {
     async function checkAuth() {
@@ -1052,9 +1053,18 @@ export default function MarketPulse() {
                 <p className="text-xs text-gray-500">{breadth.total} F&O symbols</p>
               </div>
               <div className="flex items-center gap-4 text-xs">
-                <span className="text-emerald-400 font-bold">{breadth.bullish} Bullish</span>
-                <span className="text-amber-400 font-bold">{breadth.neutral} Neutral</span>
-                <span className="text-red-400 font-bold">{breadth.bearish} Bearish</span>
+                <button onClick={() => setActiveBreadth(activeBreadth === 'bullish' ? null : 'bullish')}
+                  className={`font-bold transition-all px-2 py-1 rounded-lg ${activeBreadth === 'bullish' ? 'bg-emerald-950 text-emerald-300 ring-1 ring-emerald-700' : 'text-emerald-400 hover:bg-emerald-950/40'}`}>
+                  {breadth.bullish} Bullish
+                </button>
+                <button onClick={() => setActiveBreadth(activeBreadth === 'neutral' ? null : 'neutral')}
+                  className={`font-bold transition-all px-2 py-1 rounded-lg ${activeBreadth === 'neutral' ? 'bg-amber-950 text-amber-300 ring-1 ring-amber-700' : 'text-amber-400 hover:bg-amber-950/40'}`}>
+                  {breadth.neutral} Neutral
+                </button>
+                <button onClick={() => setActiveBreadth(activeBreadth === 'bearish' ? null : 'bearish')}
+                  className={`font-bold transition-all px-2 py-1 rounded-lg ${activeBreadth === 'bearish' ? 'bg-red-950 text-red-300 ring-1 ring-red-700' : 'text-red-400 hover:bg-red-950/40'}`}>
+                  {breadth.bearish} Bearish
+                </button>
               </div>
             </div>
             <div className="h-2 rounded-full overflow-hidden flex">
@@ -1062,6 +1072,46 @@ export default function MarketPulse() {
               <div className="bg-amber-500/70 h-full transition-all" style={{width:`${Math.round(breadth.neutral/breadth.total*100)}%`}}/>
               <div className="bg-red-500 h-full transition-all" style={{width:`${Math.round(breadth.bearish/breadth.total*100)}%`}}/>
             </div>
+
+            {/* Drill-down panel */}
+            {activeBreadth && (() => {
+              const filtered = pulseStocks.filter(s => {
+                if (activeBreadth === 'bullish') return s.price_chg_pct > 0 && s.oi_chg_pct > 0
+                if (activeBreadth === 'bearish') return s.price_chg_pct < 0 && s.oi_chg_pct > 0
+                return !(s.price_chg_pct > 0 && s.oi_chg_pct > 0) && !(s.price_chg_pct < 0 && s.oi_chg_pct > 0)
+              }).sort((a, b) => Math.abs(b.oi_chg_pct || 0) - Math.abs(a.oi_chg_pct || 0))
+
+              const titleColor = activeBreadth === 'bullish' ? 'text-emerald-400' : activeBreadth === 'bearish' ? 'text-red-400' : 'text-amber-400'
+              const title = activeBreadth === 'bullish' ? '🐂 Bullish — Price ↑ + OI ↑ (Long Buildup)'
+                : activeBreadth === 'bearish' ? '🐻 Bearish — Price ↓ + OI ↑ (Short Buildup)'
+                : '⚖️ Neutral — Mixed or flat OI'
+
+              return (
+                <div className="mt-3 border-t border-gray-800/50 pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className={`text-xs font-bold ${titleColor}`}>{title} · {filtered.length} stocks</p>
+                    <button onClick={() => setActiveBreadth(null)} className="text-gray-600 hover:text-white text-xs">✕</button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto pr-1">
+                    {filtered.map(s => (
+                      <button key={s.symbol}
+                        onClick={() => { setSearchedSymbol(s.symbol); setSearchQuery(s.symbol) }}
+                        className="flex items-center justify-between bg-gray-800/50 border border-gray-700/40 rounded-lg px-3 py-2 hover:bg-gray-800 transition-colors text-left">
+                        <div>
+                          <p className="text-xs font-bold text-white">{s.symbol}</p>
+                          <p className="text-[10px] text-gray-500">
+                            OI {s.oi_chg_pct > 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}%
+                          </p>
+                        </div>
+                        <span className={`text-xs font-bold ${(s.price_chg_pct||0) > 0 ? 'text-emerald-400' : (s.price_chg_pct||0) < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                          {(s.price_chg_pct||0) > 0 ? '+' : ''}{s.price_chg_pct?.toFixed(2)}%
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 

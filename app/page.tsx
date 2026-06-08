@@ -820,8 +820,8 @@ export default function MarketPulse() {
       setLoading(false)
       let bull=0, bear=0, neut=0
       pulseItems.forEach((s: any) => {
-        if (s.price_chg_pct > 0 && s.oi_chg_pct > 0) bull++
-        else if (s.price_chg_pct < 0 && s.oi_chg_pct > 0) bear++
+        if (s.price_chg_pct > 0) bull++
+        else if (s.price_chg_pct < 0) bear++
         else neut++
       })
       setBreadth({ bullish:bull, bearish:bear, neutral:neut, total:pulseItems.length })
@@ -1076,15 +1076,15 @@ export default function MarketPulse() {
             {/* Drill-down panel */}
             {activeBreadth && (() => {
               const filtered = pulseStocks.filter(s => {
-                if (activeBreadth === 'bullish') return s.price_chg_pct > 0 && s.oi_chg_pct > 0
-                if (activeBreadth === 'bearish') return s.price_chg_pct < 0 && s.oi_chg_pct > 0
-                return !(s.price_chg_pct > 0 && s.oi_chg_pct > 0) && !(s.price_chg_pct < 0 && s.oi_chg_pct > 0)
-              }).sort((a, b) => Math.abs(b.oi_chg_pct || 0) - Math.abs(a.oi_chg_pct || 0))
+                if (activeBreadth === 'bullish') return s.price_chg_pct > 0
+                if (activeBreadth === 'bearish') return s.price_chg_pct < 0
+                return s.price_chg_pct === 0
+              }).sort((a, b) => Math.abs(b.price_chg_pct || 0) - Math.abs(a.price_chg_pct || 0))
 
               const titleColor = activeBreadth === 'bullish' ? 'text-emerald-400' : activeBreadth === 'bearish' ? 'text-red-400' : 'text-amber-400'
-              const title = activeBreadth === 'bullish' ? '🐂 Bullish — Price ↑ + OI ↑ (Long Buildup)'
-                : activeBreadth === 'bearish' ? '🐻 Bearish — Price ↓ + OI ↑ (Short Buildup)'
-                : '⚖️ Neutral — Mixed or flat OI'
+              const title = activeBreadth === 'bullish' ? '🐂 Advancing — Price up vs prev close'
+                : activeBreadth === 'bearish' ? '🐻 Declining — Price down vs prev close'
+                : '⚖️ Unchanged — flat vs prev close'
 
               return (
                 <div className="mt-3 border-t border-gray-800/50 pt-3">

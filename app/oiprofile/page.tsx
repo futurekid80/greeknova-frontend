@@ -49,6 +49,8 @@ interface ProfileRow {
   is_vacuum: boolean; is_poc: boolean
   is_ce_wall: boolean; is_pe_wall: boolean
   is_atm: boolean; in_value_area: boolean
+  prev_ce_oi: number; prev_pe_oi: number
+  ce_oi_delta: number; pe_oi_delta: number
 }
 
 interface WallPoint {
@@ -64,6 +66,7 @@ interface ProfileData {
   total_ce_oi: number; total_pe_oi: number; pcr: number
   profile: ProfileRow[]; wall_migration: WallPoint[]
   vacuum_count: number
+  has_prev_oi?: boolean
   error?: string
 }
 
@@ -312,11 +315,24 @@ export default function OIProfile() {
                     className={`grid grid-cols-[80px_1fr_80px_1fr_80px] gap-0 items-center px-4 py-1.5 hover:bg-gray-800/20 transition-colors ${rowBg} ${rowBorder}`}>
                     <div className="text-right pr-3">
                       <span className="text-xs font-mono text-red-400/80">{fmtOI(row.ce_oi)}</span>
+                      {data?.has_prev_oi && row.ce_oi_delta !== 0 && (
+                        <span className={`block text-[9px] font-bold ${row.ce_oi_delta > 0 ? 'text-red-300' : 'text-gray-600'}`}>
+                          {row.ce_oi_delta > 0 ? `+${fmtOI(row.ce_oi_delta)}` : fmtOI(row.ce_oi_delta)}
+                        </span>
+                      )}
                     </div>
                     <div className="flex justify-end items-center h-5">
-                      <div className="flex justify-end w-full">
-                        <div className={`h-4 rounded-l-sm transition-all ${row.is_ce_wall ? 'bg-red-400' : row.is_poc ? 'bg-purple-500' : 'bg-red-600/60'}`}
-                          style={{ width: `${(row as any).ce_bar_pct}%`, minWidth: row.ce_oi > 0 ? '2px' : '0' }}/>
+                      <div className="flex justify-end w-full relative">
+                        {/* Yesterday watermark */}
+                        {data?.has_prev_oi && row.prev_ce_oi > 0 && (
+                          <div className="absolute right-0 top-0 bottom-0 bg-red-900/30 rounded-l-sm"
+                            style={{ width: `${Math.round(row.prev_ce_oi / maxCombined * 100)}%` }}/>
+                        )}
+                        {/* Today's bar */}
+                        <div className={`h-4 rounded-l-sm relative z-10 ${
+                          row.is_ce_wall ? 'bg-red-400' : row.is_poc ? 'bg-purple-500' :
+                          row.ce_oi_delta > 0 ? 'bg-red-500' : 'bg-red-700/40'
+                        }`} style={{ width: `${(row as any).ce_bar_pct}%`, minWidth: row.ce_oi > 0 ? '2px' : '0' }}/>
                       </div>
                     </div>
                     <div className="text-center px-1">
@@ -334,11 +350,26 @@ export default function OIProfile() {
                       </div>
                     </div>
                     <div className="flex items-center h-5">
-                      <div className={`h-4 rounded-r-sm transition-all ${row.is_pe_wall ? 'bg-emerald-400' : row.is_poc ? 'bg-purple-500' : 'bg-emerald-600/60'}`}
-                        style={{ width: `${(row as any).pe_bar_pct}%`, minWidth: row.pe_oi > 0 ? '2px' : '0' }}/>
+                      <div className="relative w-full flex">
+                        {/* Today's bar */}
+                        <div className={`h-4 rounded-r-sm relative z-10 ${
+                          row.is_pe_wall ? 'bg-emerald-400' : row.is_poc ? 'bg-purple-500' :
+                          row.pe_oi_delta > 0 ? 'bg-emerald-500' : 'bg-emerald-700/40'
+                        }`} style={{ width: `${(row as any).pe_bar_pct}%`, minWidth: row.pe_oi > 0 ? '2px' : '0' }}/>
+                        {/* Yesterday watermark */}
+                        {data?.has_prev_oi && row.prev_pe_oi > 0 && (
+                          <div className="absolute left-0 top-0 bottom-0 bg-emerald-900/30 rounded-r-sm"
+                            style={{ width: `${Math.round(row.prev_pe_oi / maxCombined * 100)}%` }}/>
+                        )}
+                      </div>
                     </div>
                     <div className="text-left pl-3">
                       <span className="text-xs font-mono text-emerald-400/80">{fmtOI(row.pe_oi)}</span>
+                      {data?.has_prev_oi && row.pe_oi_delta !== 0 && (
+                        <span className={`block text-[9px] font-bold ${row.pe_oi_delta > 0 ? 'text-emerald-300' : 'text-gray-600'}`}>
+                          {row.pe_oi_delta > 0 ? `+${fmtOI(row.pe_oi_delta)}` : fmtOI(row.pe_oi_delta)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )

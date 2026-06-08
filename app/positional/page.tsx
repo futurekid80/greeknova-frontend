@@ -302,6 +302,7 @@ export default function PositionalRadar() {
   const [convictionFilter, setConvictionFilter] = useState('all')
   const [accelOnly, setAccelOnly]               = useState(false)
   const [highVolOnly, setHighVolOnly]           = useState(false)
+  const [highOiOnly, setHighOiOnly]             = useState(false)
   const [typeFilter, setTypeFilter]             = useState<'all'|'index'|'stocks'>('all')
   const [writerView, setWriterView]             = useState(false)
   const [sortCol, setSortCol] = useState<string | null>(null)
@@ -367,6 +368,7 @@ export default function PositionalRadar() {
     .filter(r => convictionFilter === 'all' || r.conviction_level === convictionFilter)
     .filter(r => !accelOnly || r.accelerating)
     .filter(r => !highVolOnly || r.vol_chg_pct > 20)
+    .filter(r => !highOiOnly || r.oi_chg_pct > 10)
     .filter(r => !writerView || r.consistency_pct >= 50)
     .sort((a, b) => {
       if (!sortCol || !SORT_MAP[sortCol]) return 0
@@ -558,8 +560,12 @@ export default function PositionalRadar() {
               className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${highVolOnly ? 'bg-purple-950 text-purple-400 border-purple-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               📊 High FUT Vol
             </button>
+            <button onClick={() => setHighOiOnly(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${highOiOnly ? 'bg-cyan-950 text-cyan-400 border-cyan-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+              📈 High OI
+            </button>
           </>}
-          <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setTypeFilter('all') }}
+          <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setHighOiOnly(false); setTypeFilter('all') }
             className="text-xs text-gray-600 hover:text-gray-400 transition-colors ml-1">Clear filters</button>
         </div>
 
@@ -802,7 +808,7 @@ export default function PositionalRadar() {
             <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-4 text-3xl">📈</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">No signals match</h3>
             <p className="text-sm text-gray-600 mb-3">{minConsec > 0 ? `No stocks had ${minConsec}+ consecutive days of this signal.` : 'Try changing the filters above.'}</p>
-            <button onClick={() => { handleConsec(0); setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false) }}
+            <button onClick={() => { handleConsec(0); { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setHighOiOnly(false); setTypeFilter('all') }
               className="text-xs text-emerald-400 hover:text-emerald-300">Reset all filters</button>
           </div>
         )}

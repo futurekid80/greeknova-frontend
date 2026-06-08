@@ -99,8 +99,6 @@ export default function OIProfile() {
   const fetchIdRef   = useRef(0)
   const isStock = STOCKS.includes(symbol)
 
-  const fetchIdRef = useRef(0)
-
   const fetchData = useCallback(async () => {
     const fetchId = ++fetchIdRef.current
     setLoading(true)

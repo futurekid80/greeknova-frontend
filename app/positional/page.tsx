@@ -432,12 +432,14 @@ export default function PositionalRadar() {
               <div><span className="text-gray-500 text-xs">Trading days captured</span><p className="text-amber-400 font-black">{displayData.total_trading_days} days</p></div>
               <div><span className="text-gray-500 text-xs">Monthly expiry</span><p className="text-cyan-400 font-bold">{displayData.expiry}</p></div>
             </div>
+            <div className="text-xs text-gray-600">Full series · NSE monthly F&O</div>
+          </div>
         )}
 
         {/* Expiry week warning */}
         {displayData && Math.ceil((new Date(displayData.expiry).getTime() - Date.now()) / 86400000) <= 2 && (
           <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl px-4 py-3 mb-5">
-            <p className="text-xs text-amber-400"><span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {data.expiry} expiry. Signals will rebuild from next Wednesday when a new series begins.</p>
+            <p className="text-xs text-amber-400"><span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {displayData?.expiry} expiry. Signals will rebuild from next Wednesday when a new series begins.</p>
           </div>
         )}
 

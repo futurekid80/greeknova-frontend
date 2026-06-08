@@ -121,8 +121,14 @@ export default function OIProfile() {
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
   }
 
-  useEffect(() => { setExpiry('') }, [symbol])
-  useEffect(() => { fetchData() }, [symbol, expiry])
+  useEffect(() => {
+    setExpiry('')
+    fetchData()
+  }, [symbol])
+
+  useEffect(() => {
+    if (expiry) fetchData()
+  }, [expiry])
 
   useEffect(() => {
     if (isMarketHours()) startAuto()

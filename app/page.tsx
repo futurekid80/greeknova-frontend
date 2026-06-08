@@ -762,8 +762,29 @@ export default function MarketPulse() {
   const [analyses, setAnalyses]       = useState<IndexAnalysis[]>([])
   const [cmps, setCmps]               = useState<Record<string,number>>({})
   const [cprData, setCprData]         = useState<CPRRow[]>([])
-  const [pulseStocks, setPulseStocks] = useState<PulseStock[]>([])
-  const [breadth, setBreadth]         = useState({ bullish:0, bearish:0, neutral:0, total:0 })
+  const [pulseStocks, setPulseStocks] = useState<PulseStock[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('gn_breadth_stocks')
+      const dateCached = sessionStorage.getItem('gn_breadth_cache')
+      if (cached && dateCached) {
+        const today = new Date().toISOString().slice(0, 10)
+        const meta = JSON.parse(dateCached)
+        if (meta.date === today) return JSON.parse(cached)
+      }
+    } catch {}
+    return []
+  })
+  const [breadth, setBreadth] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('gn_breadth_cache')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        const today = new Date().toISOString().slice(0, 10)
+        if (parsed.date === today) return { bullish: parsed.bullish, bearish: parsed.bearish, neutral: parsed.neutral, total: parsed.total }
+      }
+    } catch {}
+    return { bullish:0, bearish:0, neutral:0, total:0 }
+  })
   const [loading, setLoading]         = useState(true)
   const [lastUpdate, setLastUpdate]   = useState('')
   const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)
@@ -824,7 +845,16 @@ export default function MarketPulse() {
         else if (s.price_chg_pct < 0) bear++
         else neut++
       })
-      setBreadth({ bullish:bull, bearish:bear, neutral:neut, total:pulseItems.length })
+      const newBreadth = { bullish:bull, bearish:bear, neutral:neut, total:pulseItems.length }
+      setBreadth(newBreadth)
+      // Persist EOD breadth so it survives post-market page refreshes
+      if (pulseItems.length > 0) {
+        try {
+          const today = new Date().toISOString().slice(0, 10)
+          sessionStorage.setItem('gn_breadth_cache', JSON.stringify({ ...newBreadth, date: today }))
+          sessionStorage.setItem('gn_breadth_stocks', JSON.stringify(pulseItems))
+        } catch {}
+      }
       const { data: latest } = await supabase.from('oi_snapshots').select('timestamp').eq('symbol','NIFTY').eq('option_type','FUT')
         .gte('timestamp', new Date(Date.now()-2*24*60*60*1000).toISOString().slice(0,10)+'T00:00:00+00:00')
         .order('timestamp',{ascending:false}).limit(1)

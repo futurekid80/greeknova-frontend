@@ -293,6 +293,7 @@ function OIMapPanel({ symbol, wallsData }: { symbol: string; wallsData: any }) {
 
 export default function PositionalRadar() {
   const [data, setData]           = useState<RadarData | null>(null)
+  const [staleData, setStaleData] = useState<RadarData | null>(null)
   const [loading, setLoading]     = useState(true)
   const [minConsec, setMinConsec] = useState(0)
   const [signalFilter, setSignalFilter]         = useState('all')
@@ -341,6 +342,7 @@ export default function PositionalRadar() {
       const res  = await fetch(`${API}/positional-radar?min_consec=${c}`)
       const json = await res.json()
       setData(json)
+      if (json?.results?.length > 0) setStaleData(json)
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [minConsec])
@@ -356,7 +358,8 @@ export default function PositionalRadar() {
     price:    r => r.cmp_chg_pct,
   }
 
-  const results = (data?.results || [])
+  const displayData = (data?.results?.length === 0 && staleData) ? staleData : data
+  const results = (displayData?.results || [])
     .filter(r => typeFilter === 'all' || (typeFilter === 'index' ? r.is_index : !r.is_index))
     .filter(r => signalFilter === 'all' || r.signal === signalFilter)
     .filter(r => biasFilter === 'all' || r.bias === biasFilter)
@@ -371,7 +374,7 @@ export default function PositionalRadar() {
       return sortDir === 'desc' ? fn(b) - fn(a) : fn(a) - fn(b)
     })
 
-  const s = data?.summary
+  const s = displayData?.summary
 
   const tableHeaders = writerView
     ? ['Symbol', 'OI Structure', 'Direction Held', 'Consec', 'OI (Series)', 'CE / PE Split', 'Price (Series)', '✍️ Writer\'s Take']
@@ -422,19 +425,17 @@ export default function PositionalRadar() {
         )}
 
         {/* Series info */}
-        {data && (
+        {displayData && (
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-5 py-3 mb-5 flex items-center justify-between">
             <div className="flex items-center gap-6 text-sm">
-              <div><span className="text-gray-500 text-xs">Series</span><p className="text-white font-bold">{data.series_start} → {data.expiry}</p></div>
-              <div><span className="text-gray-500 text-xs">Trading days captured</span><p className="text-amber-400 font-black">{data.total_trading_days} days</p></div>
-              <div><span className="text-gray-500 text-xs">Monthly expiry</span><p className="text-cyan-400 font-bold">{data.expiry}</p></div>
+              <div><span className="text-gray-500 text-xs">Series</span><p className="text-white font-bold">{displayData.series_start} → {displayData.expiry}</p></div>
+              <div><span className="text-gray-500 text-xs">Trading days captured</span><p className="text-amber-400 font-black">{displayData.total_trading_days} days</p></div>
+              <div><span className="text-gray-500 text-xs">Monthly expiry</span><p className="text-cyan-400 font-bold">{displayData.expiry}</p></div>
             </div>
-            <div className="text-xs text-gray-600">Full series · NSE monthly F&O</div>
-          </div>
         )}
 
         {/* Expiry week warning */}
-        {data && Math.ceil((new Date(data.expiry).getTime() - Date.now()) / 86400000) <= 2 && (
+        {displayData && Math.ceil((new Date(displayData.expiry).getTime() - Date.now()) / 86400000) <= 2 && (
           <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl px-4 py-3 mb-5">
             <p className="text-xs text-amber-400"><span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {data.expiry} expiry. Signals will rebuild from next Wednesday when a new series begins.</p>
           </div>

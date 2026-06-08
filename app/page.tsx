@@ -1130,7 +1130,7 @@ export default function MarketPulse() {
                         <div>
                           <p className="text-xs font-bold text-white">{s.symbol}</p>
                           <p className="text-[10px] text-gray-500">
-                            OI {s.oi_chg_pct > 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}%
+                            {s.signal === 'LONG_BUILDUP' ? '🐂' : s.signal === 'SHORT_COVERING' ? '🔄' : s.signal === 'SHORT_BUILDUP' ? '🐻' : s.signal === 'LONG_UNWINDING' ? '⚠️' : '—'} OI {s.oi_chg_pct > 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}%
                           </p>
                         </div>
                         <span className={`text-xs font-bold ${(s.price_chg_pct||0) > 0 ? 'text-emerald-400' : (s.price_chg_pct||0) < 0 ? 'text-red-400' : 'text-gray-500'}`}>

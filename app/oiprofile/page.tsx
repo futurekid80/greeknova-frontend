@@ -96,19 +96,26 @@ export default function OIProfile() {
   const [countdown, setCountdown] = useState(300)
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
+  const fetchIdRef   = useRef(0)
   const isStock = STOCKS.includes(symbol)
 
+  const fetchIdRef = useRef(0)
+
   const fetchData = useCallback(async () => {
+    const fetchId = ++fetchIdRef.current
     setLoading(true)
     try {
       const params = new URLSearchParams()
       if (expiry) params.set('expiry', expiry)
       const res  = await fetch(`${API}/oi-profile/${symbol}?${params}`)
       const json = await res.json()
-      setData(json)
-      if (!expiry && json.expiry) setExpiry(json.expiry)
+      // Only update state if this is still the latest fetch
+      if (fetchId === fetchIdRef.current) {
+        setData(json)
+        if (!expiry && json.expiry) setExpiry(json.expiry)
+      }
     } catch(e) { console.error(e) }
-    setLoading(false)
+    if (fetchId === fetchIdRef.current) setLoading(false)
   }, [symbol, expiry])
 
   function startAuto() {

@@ -97,8 +97,6 @@ export default function OIProfile() {
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const fetchIdRef   = useRef(0)
-  const fetchDataRef = useRef(fetchData)
-  useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
   const isStock = STOCKS.includes(symbol)
 
   const fetchData = useCallback(async () => {
@@ -117,6 +115,8 @@ export default function OIProfile() {
     } catch(e) { console.error(e) }
     if (fetchId === fetchIdRef.current) setLoading(false)
   }, [symbol, expiry])
+  const fetchDataRef = useRef<typeof fetchData>(() => {})
+  useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
 
   function startAuto() {
     setAutoEnabled(true); setCountdown(300)

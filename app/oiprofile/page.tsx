@@ -115,7 +115,7 @@ export default function OIProfile() {
     } catch(e) { console.error(e) }
     if (fetchId === fetchIdRef.current) setLoading(false)
   }, [symbol, expiry])
-  const fetchDataRef = useRef<typeof fetchData>(() => {})
+  const fetchDataRef = useRef<typeof fetchData>(async () => {})
   useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
 
   function startAuto() {

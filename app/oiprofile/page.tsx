@@ -118,9 +118,6 @@ export default function OIProfile() {
     if (fetchId === fetchIdRef.current) setLoading(false)
   }, [symbol, expiry])
 
-  const fetchDataRef = useRef(fetchData)
-  useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
-
   function startAuto() {
     setAutoEnabled(true); setCountdown(300)
     if (intervalRef.current)  clearInterval(intervalRef.current)

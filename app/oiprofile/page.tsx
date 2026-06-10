@@ -109,8 +109,8 @@ export default function OIProfile() {
       if (expiry) params.set('expiry', expiry)
       const res  = await fetch(`${API}/oi-profile/${symbol}?${params}`)
       const json = await res.json()
-      // Only update state if this is still the latest fetch
-      if (fetchId === fetchIdRef.current) {
+      // Only update state if this is still the latest fetch AND symbol matches
+      if (fetchId === fetchIdRef.current && json.symbol === symbol) {
         setData(json)
         if (!expiry && json.expiry) setExpiry(json.expiry)
       }

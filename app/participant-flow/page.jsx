@@ -414,7 +414,7 @@ export default function ParticipantFlow() {
 
         {/* Footer */}
         <div style={{ marginTop: 24, color: COLORS.muted, fontSize: 11, textAlign: "center" }}>
-          Source: NSE F&O Participant-wise OI · Updated daily at 6:30 PM IST · Informational only · Not investment advice
+          Source: NSE F&O Participant-wise OI · Updated daily by 7:30 PM IST · Informational only · Not investment advice
         </div>
       </div>
     </div>

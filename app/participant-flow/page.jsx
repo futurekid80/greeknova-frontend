@@ -243,8 +243,8 @@ export default function ParticipantFlow() {
               {/* Interpretation bar */}
               {(() => {
                 const trend = divTrend;
-                const latest_div = sorted[sorted.length - 1]?.divergence;
-                const prev_div = sorted[sorted.length - 2]?.divergence;
+                const latest_div = sorted[sorted.length - 1]?.fii_client_divergence;
+                const prev_div = sorted[sorted.length - 2]?.fii_client_divergence;
                 const pctChange = prev_div ? ((latest_div - prev_div) / prev_div * 100).toFixed(1) : 0;
                 const fiiLongPct = sorted[sorted.length - 1]?.fii_long_pct;
 
@@ -310,8 +310,8 @@ export default function ParticipantFlow() {
               </div>
               {/* Long % interpretation */}
               {(() => {
-                const currentPct = sorted[sorted.length - 1]?.fii_long_pct;
-                const prevPct = sorted[sorted.length - 2]?.fii_long_pct;
+                const currentPct = sorted[sorted.length - 1]?.fii_fut_idx_long_pct;
+                const prevPct = sorted[sorted.length - 2]?.fii_fut_idx_long_pct;
                 const trend = currentPct - prevPct;
                 let signal, color, bg, text;
                 if (currentPct < 12) {

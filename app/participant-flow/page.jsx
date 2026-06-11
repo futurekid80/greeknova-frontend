@@ -252,24 +252,48 @@ export default function ParticipantFlow() {
                 {(() => {
                   const trend = divTrend;
                   const fiiLongPct = sorted[sorted.length - 1]?.fii_fut_idx_long_pct;
+                  const gapSize = sorted[sorted.length - 1]?.fii_client_divergence || 1;
+                  const threshold = gapSize * 0.03; // 3% of current gap = meaningful move
+
+                  // Consecutive narrowing streak — count how many days in a row gap has been falling
+                  let narrowStreak = 0;
+                  for (let i = sorted.length - 1; i >= 1; i--) {
+                    const chg = sorted[i].fii_client_divergence - sorted[i - 1].fii_client_divergence;
+                    if (chg < 0) narrowStreak++;
+                    else break;
+                  }
+                  let wideStreak = 0;
+                  for (let i = sorted.length - 1; i >= 1; i--) {
+                    const chg = sorted[i].fii_client_divergence - sorted[i - 1].fii_client_divergence;
+                    if (chg > 0) wideStreak++;
+                    else break;
+                  }
+
                   let signal, signalColor, signalBg, interpretation, watchFor;
-                  if (trend > 5000) {
-                    signal = "⚠️ Bearish — Gap Widening";
+
+                  if (trend > threshold) {
+                    signal = `⚠️ Bearish — Gap Widening${wideStreak >= 2 ? ` · ${wideStreak} days in a row` : ""}`;
                     signalColor = COLORS.bearish;
                     signalBg = "#ef444411";
-                    interpretation = `FIIs are increasing their short position against retail. Gap grew by ${fmt(trend)} since last session.`;
+                    interpretation = `FIIs increasing shorts vs retail. Gap widened by ${fmt(trend)} (${((trend/gapSize)*100).toFixed(1)}% of total gap).`;
                     watchFor = "Watch for FII Long % to rise above 15% as first sign of short covering.";
-                  } else if (trend < -5000) {
-                    signal = "🟢 Bullish Signal — Gap Narrowing";
+                  } else if (trend < -threshold && narrowStreak >= 2) {
+                    signal = `🟢 Bullish Signal — Gap Narrowing ${narrowStreak} days in a row`;
                     signalColor = COLORS.bullish;
                     signalBg = "#22c55e11";
-                    interpretation = `FIIs are reducing shorts or retail is reducing longs. Gap narrowed by ${fmt(Math.abs(trend))}.`;
-                    watchFor = "If gap continues to narrow, a short-covering rally is likely. Monitor closely.";
+                    interpretation = `FIIs reducing shorts for ${narrowStreak} consecutive sessions. Gap narrowed ${fmt(Math.abs(trend))} today.`;
+                    watchFor = "Sustained narrowing = short-covering rally building. Monitor FII Long % for confirmation.";
+                  } else if (trend < -threshold) {
+                    signal = "🟡 Watch — Gap Narrowing (1 day)";
+                    signalColor = "#eab308";
+                    signalBg = "#eab30811";
+                    interpretation = `Gap narrowed by ${fmt(Math.abs(trend))} today but only 1 session. Not yet a confirmed signal.`;
+                    watchFor = `Need 2-3 consecutive narrowing days to confirm reversal. FII Long % at ${fiiLongPct}% — watch for rise above 15%.`;
                   } else {
                     signal = "⏸️ Neutral — Gap Stable";
                     signalColor = COLORS.neutral;
                     signalBg = "#6b728011";
-                    interpretation = "No significant change in FII vs retail positioning today.";
+                    interpretation = `Daily change of ${fmt(Math.abs(trend))} is within normal noise (< 3% of gap). No directional signal.`;
                     watchFor = fiiLongPct < 15
                       ? `FII Long % at ${fiiLongPct}% — still heavily short. Any rise above 15% = early reversal signal.`
                       : `FII Long % at ${fiiLongPct}% — watch for trend change.`;
@@ -296,7 +320,7 @@ export default function ParticipantFlow() {
                       type="monotone"
                       dataKey="divergence"
                       name="FII vs Retail Gap"
-                      stroke={divTrend > 5000 ? COLORS.bearish : divTrend < -5000 ? COLORS.bullish : COLORS.neutral}
+                      stroke={divTrend > (sorted[sorted.length-1]?.fii_client_divergence||1)*0.03 ? COLORS.bearish : divTrend < -(sorted[sorted.length-1]?.fii_client_divergence||1)*0.03 ? "#eab308" : COLORS.neutral}
                       strokeWidth={2.5}
                       dot={false}
                     />

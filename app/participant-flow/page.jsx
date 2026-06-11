@@ -235,23 +235,120 @@ export default function ParticipantFlow() {
 
             {/* FII–Client Divergence Trend */}
             <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "20px" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>FII–Client Divergence Trend</div>
-              <div style={{ color: COLORS.muted, fontSize: 12, marginBottom: 16 }}>Rising = gap widening between FII and retail positioning</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Are FIIs betting against retail?</div>
+              <div style={{ color: COLORS.muted, fontSize: 12, marginBottom: 12 }}>
+                📈 Rising line = Yes, gap is widening — bearish signal &nbsp;·&nbsp; 📉 Falling line = Gap closing — watch for a rally
+              </div>
+
+              {/* Interpretation bar */}
+              {(() => {
+                const trend = divTrend;
+                const latest_div = sorted[sorted.length - 1]?.divergence;
+                const prev_div = sorted[sorted.length - 2]?.divergence;
+                const pctChange = prev_div ? ((latest_div - prev_div) / prev_div * 100).toFixed(1) : 0;
+                const fiiLongPct = sorted[sorted.length - 1]?.fii_long_pct;
+
+                let signal, signalColor, signalBg, interpretation, watchFor;
+                if (trend > 50000) {
+                  signal = "⚠️ Bearish — Gap Widening";
+                  signalColor = COLORS.bearish;
+                  signalBg = "#ef444411";
+                  interpretation = `FIIs are increasing their short position against retail. Gap grew by ${fmt(trend)} since last session.`;
+                  watchFor = "Watch for FII Long % to rise above 15% as first sign of short covering.";
+                } else if (trend < -50000) {
+                  signal = "🟢 Bullish Signal — Gap Narrowing";
+                  signalColor = COLORS.bullish;
+                  signalBg = "#22c55e11";
+                  interpretation = `FIIs are reducing shorts or retail is reducing longs. Gap narrowed by ${fmt(Math.abs(trend))}.`;
+                  watchFor = "If gap continues to narrow, a short-covering rally is likely. Monitor closely.";
+                } else {
+                  signal = "⏸️ Neutral — Gap Stable";
+                  signalColor = COLORS.neutral;
+                  signalBg = "#6b728011";
+                  interpretation = "No significant change in FII vs retail positioning today.";
+                  watchFor = fiiLongPct < 15
+                    ? `FII Long % at ${fiiLongPct}% — still heavily short. Any rise above 15% = early reversal signal.`
+                    : `FII Long % at ${fiiLongPct}% — watch for trend change.`;
+                }
+
+                return (
+                  <div style={{
+                    background: signalBg, border: `1px solid ${signalColor}33`,
+                    borderRadius: 8, padding: "12px 14px", marginBottom: 16
+                  }}>
+                    <div style={{ color: signalColor, fontWeight: 700, fontSize: 12, marginBottom: 4 }}>{signal}</div>
+                    <div style={{ color: COLORS.text, fontSize: 12, marginBottom: 4 }}>{interpretation}</div>
+                    <div style={{ color: COLORS.muted, fontSize: 11 }}>👀 {watchFor}</div>
+                  </div>
+                );
+              })()}
+
               <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" vertical={false} />
                   <XAxis dataKey="date" tick={{ fill: COLORS.muted, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: COLORS.muted, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="divergence" name="Divergence" stroke={COLORS.fii} strokeWidth={2} dot={false} />
+                  {chartData.map((entry, i) => null)}
+                  <Line
+                    type="monotone"
+                    dataKey="divergence"
+                    name="FII vs Retail Gap"
+                    stroke={divTrend > 50000 ? COLORS.bearish : divTrend < -50000 ? COLORS.bullish : COLORS.neutral}
+                    strokeWidth={2.5}
+                    dot={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
             {/* FII Long % */}
             <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "20px" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>FII Long % in Index Futures</div>
-              <div style={{ color: COLORS.muted, fontSize: 12, marginBottom: 16 }}>% of FII index futures positions that are long · Below 20% = heavily short</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>How much are FIIs long in index futures?</div>
+              <div style={{ color: COLORS.muted, fontSize: 12, marginBottom: 12 }}>
+                Below 20% = FIIs are heavily short · Rising towards 30%+ = they're covering shorts = bullish for market
+              </div>
+              {/* Long % interpretation */}
+              {(() => {
+                const currentPct = sorted[sorted.length - 1]?.fii_long_pct;
+                const prevPct = sorted[sorted.length - 2]?.fii_long_pct;
+                const trend = currentPct - prevPct;
+                let signal, color, bg, text;
+                if (currentPct < 12) {
+                  signal = "🔴 Extremely Bearish";
+                  color = COLORS.bearish;
+                  bg = "#ef444411";
+                  text = `FIIs are only ${currentPct}% long — 9 out of 10 FII index futures positions are SHORT. Sustained bearish institutional stance.`;
+                } else if (currentPct < 20) {
+                  signal = "🟠 Bearish";
+                  color = "#f97316";
+                  bg = "#f9731611";
+                  text = `FIIs at ${currentPct}% long — still heavily positioned short on index futures.`;
+                } else if (currentPct < 35) {
+                  signal = "🟡 Neutral";
+                  color = "#eab308";
+                  bg = "#eab30811";
+                  text = `FIIs at ${currentPct}% long — balanced positioning, no strong directional bias.`;
+                } else {
+                  signal = "🟢 Bullish";
+                  color = COLORS.bullish;
+                  bg = "#22c55e11";
+                  text = `FIIs at ${currentPct}% long — significantly long on index futures. Bullish institutional stance.`;
+                }
+                const trendText = trend > 0
+                  ? `↑ Rising +${trend.toFixed(1)}% vs last session — FIIs reducing shorts`
+                  : trend < 0
+                  ? `↓ Falling ${trend.toFixed(1)}% vs last session — FIIs adding more shorts`
+                  : "Unchanged vs last session";
+
+                return (
+                  <div style={{ background: bg, border: `1px solid ${color}33`, borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+                    <div style={{ color, fontWeight: 700, fontSize: 12, marginBottom: 4 }}>{signal} · {trendText}</div>
+                    <div style={{ color: COLORS.text, fontSize: 12 }}>{text}</div>
+                  </div>
+                );
+              })()}
+              <div style={{ color: COLORS.muted, fontSize: 12, marginBottom: 16 }}></div>
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" vertical={false} />
@@ -414,7 +511,7 @@ export default function ParticipantFlow() {
 
         {/* Footer */}
         <div style={{ marginTop: 24, color: COLORS.muted, fontSize: 11, textAlign: "center" }}>
-          Source: NSE F&O Participant-wise OI · Updated daily by 7:30 PM IST · Informational only · Not investment advice
+          Source: NSE F&O Participant-wise OI · Updated daily at 7:30 PM IST · Informational only · Not investment advice
         </div>
       </div>
     </div>

@@ -246,16 +246,16 @@ export default function ParticipantFlow() {
                 const latest_div = sorted[sorted.length - 1]?.fii_client_divergence;
                 const prev_div = sorted[sorted.length - 2]?.fii_client_divergence;
                 const pctChange = prev_div ? ((latest_div - prev_div) / prev_div * 100).toFixed(1) : 0;
-                const fiiLongPct = sorted[sorted.length - 1]?.fii_long_pct;
+                const fiiLongPct = sorted[sorted.length - 1]?.fii_fut_idx_long_pct;
 
                 let signal, signalColor, signalBg, interpretation, watchFor;
-                if (trend > 50000) {
+                if (trend > 5000) {
                   signal = "⚠️ Bearish — Gap Widening";
                   signalColor = COLORS.bearish;
                   signalBg = "#ef444411";
                   interpretation = `FIIs are increasing their short position against retail. Gap grew by ${fmt(trend)} since last session.`;
                   watchFor = "Watch for FII Long % to rise above 15% as first sign of short covering.";
-                } else if (trend < -50000) {
+                } else if (trend < -5000) {
                   signal = "🟢 Bullish Signal — Gap Narrowing";
                   signalColor = COLORS.bullish;
                   signalBg = "#22c55e11";
@@ -294,7 +294,7 @@ export default function ParticipantFlow() {
                     type="monotone"
                     dataKey="divergence"
                     name="FII vs Retail Gap"
-                    stroke={divTrend > 50000 ? COLORS.bearish : divTrend < -50000 ? COLORS.bullish : COLORS.neutral}
+                    stroke={divTrend > 5000 ? COLORS.bearish : divTrend < -5000 ? COLORS.bullish : COLORS.neutral}
                     strokeWidth={2.5}
                     dot={false}
                   />

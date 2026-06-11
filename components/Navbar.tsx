@@ -12,6 +12,7 @@ const NAV_GROUPS = [
       { href: '/',           label: '📡 Market Pulse' },
       { href: '/watchlist',  label: 'Watchlist' },
       { href: '/journal',    label: '📓 Journal' },
+      { href: '/participant-flow', label: '🏦 Participant Flow' }
     ]
   },
   {

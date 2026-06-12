@@ -26,6 +26,7 @@ interface Signal {
   vol_now: number
   vol_open: number
   vol_chg_pct: number
+  vol_ratio: number
   vol_surge: boolean
   atm_bias?: string | null
   atm_bias_label?: string | null
@@ -439,9 +440,10 @@ export default function IntradaySignalLog() {
                       {/* Volume */}
                       <td className="px-4 py-3 text-center">
                         <p className={`text-sm font-bold ${sig.vol_surge ? 'text-amber-400' : 'text-gray-300'}`}>
-                          {sig.vol_chg_pct > 0 ? '+' : ''}{sig.vol_chg_pct}%
+                          {sig.vol_ratio > 0 ? `${sig.vol_ratio}x` : `${sig.vol_chg_pct > 0 ? '+' : ''}${sig.vol_chg_pct}%`}
                           {sig.vol_surge && <span className="ml-1 text-[10px]">⚡</span>}
                         </p>
+                        <p className="text-[10px] text-gray-600">{fmt(sig.vol_now)} · {sig.vol_ratio}x prev day pace</p>
                         <p className="text-[10px] text-gray-600">{fmt(sig.vol_now)} vs open {fmt(sig.vol_open)}</p>
                         {sig.vol_rank_label && (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border mt-0.5 inline-block ${
@@ -600,8 +602,8 @@ export default function IntradaySignalLog() {
           <p className="text-xs text-gray-600 leading-relaxed">
             <span className="text-gray-400 font-semibold">How to read: </span>
             FUT OI Chg = futures open interest change from day open · Price Chg = change from today's 9:15 AM open (not yesterday's close) ·
-            Volume = today's volume vs opening volume ·
-            <span className="text-amber-400"> ⚡ Surge</span> = volume {'>'} 50% above open ·
+            Volume = today's pace vs 5-day avg daily volume ·
+            <span className="text-amber-400"> ⚡ Surge</span> = volume running at 1.5x+ prev day pace ·
             <span className="text-emerald-400"> ✅ Confirms</span> = near-ATM options activity aligns with FUT signal (within 2 strikes of CMP) ·
             <span className="text-amber-400"> ⚠️ Contradicts</span> = options signal opposes FUT direction — treat with caution ·
             <span className="text-gray-300"> HIGH CONV</span> = FUT + near-ATM options confirmed ·

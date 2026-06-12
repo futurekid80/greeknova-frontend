@@ -165,7 +165,7 @@ function ATMBiasTag({ sig }: { sig: Signal }) {
 
 export default function IntradaySignalLog() {
   const [data, setData]           = useState<LogData | null>(null)
-  const [watchData, setWatchData] = useState<any[]>([])
+  const [watchExpanded, setWatchExpanded] = useState(true)
   // FIX 3: stale data ref — show last known data while reloading
   const [staleData, setStaleData] = useState<LogData | null>(null)
   const [loading, setLoading]     = useState(true)
@@ -284,14 +284,15 @@ export default function IntradaySignalLog() {
         {/* Watch Today Section */}
         {watchData.length > 0 && (
           <div className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3 cursor-pointer" onClick={() => setWatchExpanded(e => !e)}>
               <h2 className="text-sm font-bold text-white">👁️ Watch Today</h2>
               <span className="text-xs text-gray-500">Positional Radar stocks with aligned intraday activity</span>
               <span className="text-xs bg-amber-950 text-amber-400 border border-amber-800/50 rounded px-2 py-0.5 font-bold ml-auto">
                 {watchData.length} aligned
               </span>
+              <span className="text-xs text-gray-500">{watchExpanded ? '▲' : '▼'}</span>
             </div>
-            <div className="grid grid-cols-1 gap-2">
+            {watchExpanded && <div className="grid grid-cols-1 gap-2">
               {watchData.map((w, i) => (
                 <div key={w.symbol} className={`flex items-center gap-4 px-4 py-3 rounded-xl border ${
                   w.ignition
@@ -365,7 +366,7 @@ export default function IntradaySignalLog() {
                   </div>
                 </div>
               ))}
-            </div>
+           </div>}
           </div>
         )}
 

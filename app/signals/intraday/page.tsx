@@ -712,7 +712,63 @@ export default function IntradaySignalLog() {
                     {/* OI Buildup expandable panel */}
                     {expandedSymbol === sig.symbol && activePanel[sig.symbol] === 'buildup' && (
                       <tr key={`${sig.symbol}-buildup`}>
-                        ... (rest of the buildup panel code)
+                        <td colSpan={9} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
+                          <div>
+                            <div className="flex items-center gap-3 mb-3">
+                              <p className="text-sm font-bold text-white">📈 {sig.symbol} OI Buildup History</p>
+                              <span className="text-xs text-gray-500">Daily FUT OI change vs Price — positional conviction over time</span>
+                            </div>
+                            {!buildupData[sig.symbol] ? (
+                              <div className="text-xs text-gray-500">Loading...</div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <div className="flex gap-1 items-end min-w-max pb-2">
+                                  {buildupData[sig.symbol]?.data?.map((d: any, i: number) => {
+                                    const color = d.signal === 'LONG_BUILDUP' ? '#22c55e' :
+                                                  d.signal === 'SHORT_BUILDUP' ? '#ef4444' :
+                                                  d.signal === 'SHORT_COVERING' ? '#06b6d4' :
+                                                  d.signal === 'LONG_UNWINDING' ? '#f97316' : '#4b5563'
+                                    const height = Math.min(Math.abs(d.oi_chg_pct) * 3, 80)
+                                    const date = d.date.slice(5)
+                                    return (
+                                      <div key={i} className="flex flex-col items-center gap-1" style={{ minWidth: 44 }}>
+                                        <div className="text-[9px] font-mono" style={{ color }}>
+                                          {d.oi_chg_pct > 0 ? '+' : ''}{d.oi_chg_pct}%
+                                        </div>
+                                        <div
+                                          style={{
+                                            width: 32, height: Math.max(height, 4),
+                                            background: color, borderRadius: 3, opacity: 0.85
+                                          }}
+                                          title={`${d.label} | OI: ${d.oi_chg_pct > 0 ? '+' : ''}${d.oi_chg_pct}% | Price: ${d.price_chg_pct > 0 ? '+' : ''}${d.price_chg_pct}%`}
+                                        />
+                                        <div className="text-[9px] text-gray-500">{date}</div>
+                                        <div className={`text-[9px] font-bold ${d.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                          {d.price_chg_pct > 0 ? '+' : ''}{d.price_chg_pct}%
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                                <div className="flex gap-3 mt-2 flex-wrap">
+                                  {[
+                                    { color: '#22c55e', label: '🐂 Long Buildup' },
+                                    { color: '#ef4444', label: '🐻 Short Buildup' },
+                                    { color: '#06b6d4', label: '🔄 Short Covering' },
+                                    { color: '#f97316', label: '⚠️ Long Unwinding' },
+                                    { color: '#4b5563', label: '— Neutral' },
+                                  ].map(({ color, label }) => (
+                                    <div key={label} className="flex items-center gap-1">
+                                      <div style={{ width: 10, height: 10, background: color, borderRadius: 2 }} />
+                                      <span className="text-[10px] text-gray-500">{label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[10px] text-gray-700 mt-1">Bar height = OI change magnitude · Color = signal type · Price % shown below each bar</p>
+                              </div>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     )}
                     </React.Fragment>

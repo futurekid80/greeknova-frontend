@@ -178,6 +178,8 @@ export default function IntradaySignalLog() {
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
   const [buildupData, setBuildupData] = useState<Record<string, any>>({})
   const [activePanel, setActivePanel] = useState<Record<string, string>>({})
+  const [wallsData, setWallsData]       = useState<Record<string, any>>({})
+  const [wallsLoading, setWallsLoading] = useState<string | null>(null)
   const router = useRouter()
 
   const fetchWalls = async (symbol: string) => {

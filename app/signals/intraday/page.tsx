@@ -165,6 +165,7 @@ function ATMBiasTag({ sig }: { sig: Signal }) {
 
 export default function IntradaySignalLog() {
   const [data, setData]           = useState<LogData | null>(null)
+  const [watchData, setWatchData] = useState<any[]>([])
   // FIX 3: stale data ref — show last known data while reloading
   const [staleData, setStaleData] = useState<LogData | null>(null)
   const [loading, setLoading]     = useState(true)
@@ -197,10 +198,14 @@ export default function IntradaySignalLog() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res  = await fetch(`${API}/signal-log`)
+      const [res, watchRes] = await Promise.all([
+        fetch(`${API}/signal-log`),
+        fetch(`${API}/watch-today`)
+      ])
       const json = await res.json()
+      const watchJson = await watchRes.json()
       setData(json)
-      // FIX 3: only update stale if we got real signals
+      setWatchData(watchJson?.watch_today || [])
       if (json?.signals?.length > 0) setStaleData(json)
     } catch(e) { console.error(e) }
     setLoading(false)
@@ -275,6 +280,94 @@ export default function IntradaySignalLog() {
             </button>
           </div>
         </div>
+
+        {/* Watch Today Section */}
+        {watchData.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-sm font-bold text-white">👁️ Watch Today</h2>
+              <span className="text-xs text-gray-500">Positional Radar stocks with aligned intraday activity</span>
+              <span className="text-xs bg-amber-950 text-amber-400 border border-amber-800/50 rounded px-2 py-0.5 font-bold ml-auto">
+                {watchData.length} aligned
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {watchData.map((w, i) => (
+                <div key={w.symbol} className={`flex items-center gap-4 px-4 py-3 rounded-xl border ${
+                  w.ignition
+                    ? 'bg-emerald-950/20 border-emerald-700/50'
+                    : w.positional_bias === 'BULLISH'
+                    ? 'bg-emerald-950/10 border-emerald-800/30'
+                    : 'bg-red-950/10 border-red-800/30'
+                }`}>
+                  {/* Symbol + conviction */}
+                  <div className="min-w-[120px]">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black text-white">{w.symbol}</span>
+                      <span className="text-xs">{w.conviction_emoji}</span>
+                      {w.ignition && <span className="text-[10px] px-1 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800/50 rounded font-bold">IGNITION</span>}
+                    </div>
+                    <p className="text-[10px] text-gray-500">₹{w.cmp?.toLocaleString()}</p>
+                  </div>
+
+                  {/* Positional context */}
+                  <div className="min-w-[130px]">
+                    <p className="text-[10px] text-gray-500 font-semibold mb-0.5">POSITIONAL</p>
+                    <p className={`text-xs font-bold ${w.positional_bias === 'BULLISH' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {w.positional_signal === 'LONG_BUILDUP' ? '🐂' : '🐻'} {w.conviction_label}
+                    </p>
+                    <p className="text-[10px] text-gray-600">{w.consistency_pct}% consistency</p>
+                  </div>
+
+                  {/* Intraday confirmation */}
+                  <div className="min-w-[130px]">
+                    <p className="text-[10px] text-gray-500 font-semibold mb-0.5">TODAY</p>
+                    <p className={`text-xs font-bold ${w.intraday_bias === 'BULLISH' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {w.intraday_label}
+                    </p>
+                    <p className="text-[10px] text-gray-600">
+                      OI {w.intraday_oi_chg_pct > 0 ? '+' : ''}{w.intraday_oi_chg_pct}% · Price {w.intraday_price_chg_pct > 0 ? '+' : ''}{w.intraday_price_chg_pct}%
+                    </p>
+                  </div>
+
+                  {/* CPR */}
+                  <div className="min-w-[100px]">
+                    <p className="text-[10px] text-gray-500 font-semibold mb-0.5">CPR</p>
+                    <p className={`text-xs font-bold ${
+                      w.intraday_cpr_position === 'Above CPR' ? 'text-emerald-400' :
+                      w.intraday_cpr_position === 'Below CPR' ? 'text-red-400' : 'text-amber-400'
+                    }`}>{w.intraday_cpr_position || '—'}</p>
+                  </div>
+
+                  {/* Persistence */}
+                  <div className="min-w-[80px]">
+                    <p className="text-[10px] text-gray-500 font-semibold mb-0.5">PERSISTENCE</p>
+                    <p className="text-xs font-bold text-amber-400">{w.intraday_persistence_pct}%</p>
+                  </div>
+
+                  {/* Walls */}
+                  {w.ce_wall && w.pe_wall && (
+                    <div>
+                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">WALLS</p>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-red-400">CE ₹{w.ce_wall.toLocaleString()}</span>
+                        <span className="text-[10px] text-gray-600">·</span>
+                        <span className="text-[10px] font-bold text-emerald-400">PE ₹{w.pe_wall.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Aligned badge */}
+                  <div className="ml-auto">
+                    <span className="text-[10px] font-bold px-2 py-1 rounded border bg-amber-950/40 text-amber-400 border-amber-800/50">
+                      ⚡ Aligned
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* EOD Snapshot Banner */}
         {displayData?.is_eod_snapshot && (

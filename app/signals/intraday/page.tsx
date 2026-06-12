@@ -176,12 +176,13 @@ export default function IntradaySignalLog() {
   const [confirmedOnly, setConfirmedOnly] = useState(false)
   const [countdown, setCountdown]     = useState(300)
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
-  const [wallsData, setWallsData]     = useState<Record<string, any>>({})
-  const [wallsLoading, setWallsLoading] = useState<string | null>(null)
+  const [buildupData, setBuildupData] = useState<Record<string, any>>({})
+  const [activePanel, setActivePanel] = useState<Record<string, string>>({})
   const router = useRouter()
 
   const fetchWalls = async (symbol: string) => {
-    if (expandedSymbol === symbol) { setExpandedSymbol(null); return }
+    if (expandedSymbol === symbol && activePanel[symbol] === 'walls') { setExpandedSymbol(null); return }
+    setActivePanel(prev => ({ ...prev, [symbol]: 'walls' }))
     if (wallsData[symbol]) { setExpandedSymbol(symbol); return }
     setWallsLoading(symbol)
     try {
@@ -189,6 +190,20 @@ export default function IntradaySignalLog() {
       const json = await res.json()
       setWallsData(prev => ({ ...prev, [symbol]: json }))
       setExpandedSymbol(symbol)
+    } catch(e) { console.error(e) }
+    setWallsLoading(null)
+  }
+
+  const fetchBuildup = async (symbol: string) => {
+    if (expandedSymbol === symbol && activePanel[symbol] === 'buildup') { setExpandedSymbol(null); return }
+    setActivePanel(prev => ({ ...prev, [symbol]: 'buildup' }))
+    setExpandedSymbol(symbol)
+    if (buildupData[symbol]) return
+    setWallsLoading(symbol)
+    try {
+      const res = await fetch(`${API}/oi-buildup/${symbol}`)
+      const json = await res.json()
+      setBuildupData(prev => ({ ...prev, [symbol]: json }))
     } catch(e) { console.error(e) }
     setWallsLoading(null)
   }
@@ -568,15 +583,26 @@ export default function IntradaySignalLog() {
                           </div>
                         )}
                         {/* FIX 1: only ONE OI Map button */}
-                        <button
-                          onClick={() => fetchWalls(sig.symbol)}
-                          className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                            expandedSymbol === sig.symbol
-                              ? 'bg-cyan-950 text-cyan-300 border-cyan-700'
-                              : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
-                          }`}>
-                          {wallsLoading === sig.symbol ? '⏳' : expandedSymbol === sig.symbol ? '▲ Close' : '📊 OI Map'}
-                        </button>
+                        <div className="flex gap-1 mt-1.5">
+                          <button
+                            onClick={() => fetchWalls(sig.symbol)}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                              expandedSymbol === sig.symbol && activePanel[sig.symbol] === 'walls'
+                                ? 'bg-cyan-950 text-cyan-300 border-cyan-700'
+                                : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
+                            }`}>
+                            {wallsLoading === sig.symbol && activePanel[sig.symbol] === 'walls' ? '⏳' : '📊 OI Map'}
+                          </button>
+                          <button
+                            onClick={() => fetchBuildup(sig.symbol)}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                              expandedSymbol === sig.symbol && activePanel[sig.symbol] === 'buildup'
+                                ? 'bg-amber-950 text-amber-300 border-amber-700'
+                                : 'bg-gray-900/40 text-amber-400 border-amber-800/40 hover:border-amber-600'
+                            }`}>
+                            {wallsLoading === sig.symbol && activePanel[sig.symbol] === 'buildup' ? '⏳' : '📈 OI Buildup'}
+                          </button>
+                        </div>
                         <ATMBiasTag sig={sig} />
                       </td>
 
@@ -678,6 +704,13 @@ export default function IntradaySignalLog() {
                             <p className="text-[10px] text-gray-700 mt-2">Strikes within 15% of CMP · CE Wall = resistance · PE Wall = support · Informational only</p>
                           </div>
                         </td>
+                      </tr>
+                    )}
+
+                    {/* OI Buildup expandable panel */}
+                    {expandedSymbol === sig.symbol && activePanel[sig.symbol] === 'buildup' && (
+                      <tr key={`${sig.symbol}-buildup`}>
+                        ... (rest of the buildup panel code)
                       </tr>
                     )}
                     </React.Fragment>

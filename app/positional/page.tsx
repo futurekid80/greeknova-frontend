@@ -318,13 +318,16 @@ export default function PositionalRadar() {
     }
   }
 
-  // OI Map state
+ // OI Map + Buildup state
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
+  const [activePanel, setActivePanel] = useState<Record<string, string>>({})
   const [wallsData, setWallsData] = useState<Record<string, any>>({})
+  const [buildupData, setBuildupData] = useState<Record<string, any>>({})
   const [wallsLoading, setWallsLoading] = useState<string | null>(null)
 
   const fetchWalls = async (symbol: string) => {
-    if (expandedSymbol === symbol) { setExpandedSymbol(null); return }
+    if (expandedSymbol === symbol && activePanel[symbol] === 'walls') { setExpandedSymbol(null); return }
+    setActivePanel(prev => ({ ...prev, [symbol]: 'walls' }))
     if (wallsData[symbol]) { setExpandedSymbol(symbol); return }
     setWallsLoading(symbol)
     try {
@@ -332,6 +335,20 @@ export default function PositionalRadar() {
       const json = await res.json()
       setWallsData(prev => ({ ...prev, [symbol]: json }))
       setExpandedSymbol(symbol)
+    } catch(e) { console.error(e) }
+    setWallsLoading(null)
+  }
+
+  const fetchBuildup = async (symbol: string) => {
+    if (expandedSymbol === symbol && activePanel[symbol] === 'buildup') { setExpandedSymbol(null); return }
+    setActivePanel(prev => ({ ...prev, [symbol]: 'buildup' }))
+    setExpandedSymbol(symbol)
+    if (buildupData[symbol]) return
+    setWallsLoading(symbol)
+    try {
+      const res = await fetch(`${API}/oi-buildup/${symbol}`)
+      const json = await res.json()
+      setBuildupData(prev => ({ ...prev, [symbol]: json }))
     } catch(e) { console.error(e) }
     setWallsLoading(null)
   }
@@ -712,14 +729,23 @@ export default function PositionalRadar() {
                                 <p className="text-[10px] text-gray-600 mt-0.5">Range: ₹{r.trade_range} · {r.trade_range_pct}% · {r.range_label}</p>
                               </div>
                             )}
-                            {/* OI Map button in Writer's View */}
-                            <button
-                              onClick={() => fetchWalls(r.symbol)}
-                              className={`mt-2 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                                expandedSymbol === r.symbol ? 'bg-cyan-950 text-cyan-300 border-cyan-700' : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
-                              }`}>
-                              {wallsLoading === r.symbol ? '⏳' : expandedSymbol === r.symbol ? '▲ Close' : '📊 OI Map'}
-                            </button>
+                            {/* OI Map + Buildup buttons in Writer's View */}
+                            <div className="flex gap-1 mt-2">
+                              <button
+                                onClick={() => fetchWalls(r.symbol)}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                                  expandedSymbol === r.symbol && activePanel[r.symbol] === 'walls' ? 'bg-cyan-950 text-cyan-300 border-cyan-700' : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
+                                }`}>
+                                {wallsLoading === r.symbol && activePanel[r.symbol] === 'walls' ? '⏳' : '📊 OI Map'}
+                              </button>
+                              <button
+                                onClick={() => fetchBuildup(r.symbol)}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                                  expandedSymbol === r.symbol && activePanel[r.symbol] === 'buildup' ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-gray-900/40 text-amber-400 border-amber-800/40 hover:border-amber-600'
+                                }`}>
+                                {wallsLoading === r.symbol && activePanel[r.symbol] === 'buildup' ? '⏳' : '📈 OI Buildup'}
+                              </button>
+                            </div>
                             <p className="text-[10px] text-gray-700 mt-1">Verify OI wall before use</p>
                           </div>
                         </td>
@@ -737,14 +763,23 @@ export default function PositionalRadar() {
                               {r.range_label && <span className="text-[10px] text-gray-600">{r.trade_range_pct}%</span>}
                             </div>
                           )}
-                          {/* OI Map button in Trader View */}
-                          <button
-                            onClick={() => fetchWalls(r.symbol)}
-                            className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                              expandedSymbol === r.symbol ? 'bg-cyan-950 text-cyan-300 border-cyan-700' : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
-                            }`}>
-                            {wallsLoading === r.symbol ? '⏳' : expandedSymbol === r.symbol ? '▲ Close' : '📊 OI Map'}
-                          </button>
+                          {/* OI Map + Buildup buttons in Trader View */}
+                          <div className="flex gap-1 mt-1.5">
+                            <button
+                              onClick={() => fetchWalls(r.symbol)}
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                                expandedSymbol === r.symbol && activePanel[r.symbol] === 'walls' ? 'bg-cyan-950 text-cyan-300 border-cyan-700' : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
+                              }`}>
+                              {wallsLoading === r.symbol && activePanel[r.symbol] === 'walls' ? '⏳' : '📊 OI Map'}
+                            </button>
+                            <button
+                              onClick={() => fetchBuildup(r.symbol)}
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                                expandedSymbol === r.symbol && activePanel[r.symbol] === 'buildup' ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-gray-900/40 text-amber-400 border-amber-800/40 hover:border-amber-600'
+                              }`}>
+                              {wallsLoading === r.symbol && activePanel[r.symbol] === 'buildup' ? '⏳' : '📈 OI Buildup'}
+                            </button>
+                          </div>
                         </td>
 
                         {/* Consistency */}
@@ -794,8 +829,66 @@ export default function PositionalRadar() {
                     </tr>
 
                     {/* OI Map expandable panel */}
-                    {expandedSymbol === r.symbol && wallsData[r.symbol] && (
+                    {expandedSymbol === r.symbol && activePanel[r.symbol] === 'walls' && wallsData[r.symbol] && (
                       <OIMapPanel symbol={r.symbol} wallsData={wallsData[r.symbol]} />
+                    )}
+
+                    {/* OI Buildup expandable panel */}
+                    {expandedSymbol === r.symbol && activePanel[r.symbol] === 'buildup' && (
+                      <tr>
+                        <td colSpan={10} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
+                          <div>
+                            <div className="flex items-center gap-3 mb-3">
+                              <p className="text-sm font-bold text-white">📈 {r.symbol} OI Buildup History</p>
+                              <span className="text-xs text-gray-500">Daily FUT OI change vs Price — positional conviction over time</span>
+                            </div>
+                            {!buildupData[r.symbol] ? (
+                              <div className="text-xs text-gray-500">Loading...</div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <div className="flex gap-1 items-end min-w-max pb-2">
+                                  {buildupData[r.symbol]?.data?.map((d: any, idx: number) => {
+                                    const color = d.signal === 'LONG_BUILDUP' ? '#22c55e' :
+                                                  d.signal === 'SHORT_BUILDUP' ? '#ef4444' :
+                                                  d.signal === 'SHORT_COVERING' ? '#06b6d4' :
+                                                  d.signal === 'LONG_UNWINDING' ? '#f97316' : '#4b5563'
+                                    const height = Math.min(Math.abs(d.oi_chg_pct) * 3, 80)
+                                    const date = d.date.slice(5)
+                                    return (
+                                      <div key={idx} className="flex flex-col items-center gap-1" style={{ minWidth: 44 }}>
+                                        <div className="text-[9px] font-mono" style={{ color }}>
+                                          {d.oi_chg_pct > 0 ? '+' : ''}{d.oi_chg_pct}%
+                                        </div>
+                                        <div style={{ width: 32, height: Math.max(height, 4), background: color, borderRadius: 3, opacity: 0.85 }}
+                                          title={`${d.label} | OI: ${d.oi_chg_pct}% | Price: ${d.price_chg_pct}%`}/>
+                                        <div className="text-[9px] text-gray-500">{date}</div>
+                                        <div className={`text-[9px] font-bold ${d.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                          {d.price_chg_pct > 0 ? '+' : ''}{d.price_chg_pct}%
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                                <div className="flex gap-3 mt-2 flex-wrap">
+                                  {[
+                                    { color: '#22c55e', label: '🐂 Long Buildup' },
+                                    { color: '#ef4444', label: '🐻 Short Buildup' },
+                                    { color: '#06b6d4', label: '🔄 Short Covering' },
+                                    { color: '#f97316', label: '⚠️ Long Unwinding' },
+                                    { color: '#4b5563', label: '— Neutral' },
+                                  ].map(({ color, label }) => (
+                                    <div key={label} className="flex items-center gap-1">
+                                      <div style={{ width: 10, height: 10, background: color, borderRadius: 2 }}/>
+                                      <span className="text-[10px] text-gray-500">{label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[10px] text-gray-700 mt-1">Bar height = OI change magnitude · Color = signal type · Price % shown below</p>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     )}
                     </React.Fragment>
                   )

@@ -293,6 +293,8 @@ function OIMapPanel({ symbol, wallsData }: { symbol: string; wallsData: any }) {
 
 export default function PositionalRadar() {
   const [data, setData]           = useState<RadarData | null>(null)
+  const [volAlerts, setVolAlerts] = useState<any[]>([])
+  const [volExpanded, setVolExpanded] = useState(true)
   const [staleData, setStaleData] = useState<RadarData | null>(null)
   const [loading, setLoading]     = useState(true)
   const [minConsec, setMinConsec] = useState(0)
@@ -357,9 +359,14 @@ export default function PositionalRadar() {
     setLoading(true)
     const c = consec ?? minConsec
     try {
-      const res  = await fetch(`${API}/positional-radar?min_consec=${c}`)
+      const [res, volRes] = await Promise.all([
+        fetch(`${API}/positional-radar?min_consec=${c}`),
+        fetch(`${API}/positional-volume-alert`)
+      ])
       const json = await res.json()
+      const volJson = await volRes.json()
       setData(json)
+      setVolAlerts(volJson?.alerts || [])
       if (json?.results?.length > 0) setStaleData(json)
     } catch(e) { console.error(e) }
     setLoading(false)
@@ -459,6 +466,94 @@ export default function PositionalRadar() {
         {displayData && Math.ceil((new Date(displayData.expiry).getTime() - Date.now()) / 86400000) <= 2 && (
           <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl px-4 py-3 mb-5">
             <p className="text-xs text-amber-400"><span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {displayData?.expiry} expiry. Signals will rebuild from next Wednesday when a new series begins.</p>
+          </div>
+        )}
+
+        {/* Positional Volume Alert */}
+        {volAlerts.length > 0 && (
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-3 cursor-pointer"
+              onClick={() => setVolExpanded(e => !e)}>
+              <h2 className="text-sm font-bold text-white">📊 Positional Volume Alert</h2>
+              <span className="text-xs text-gray-500">Stocks with 10D/20D volume breakout + OI confirmation</span>
+              <span className="text-xs bg-purple-950 text-purple-400 border border-purple-800/50 rounded px-2 py-0.5 font-bold ml-auto">
+                {volAlerts.length} stocks
+              </span>
+              <span className="text-xs text-gray-500">{volExpanded ? '▲' : '▼'}</span>
+            </div>
+            {volExpanded && (
+              <div className="grid grid-cols-1 gap-2">
+                {volAlerts.map((a, i) => (
+                  <div key={a.symbol} className={`flex items-center gap-4 px-4 py-3 rounded-xl border ${
+                    a.tier_color === 'RED' ? 'bg-red-950/20 border-red-800/30' :
+                    a.tier_color === 'ORANGE' ? 'bg-orange-950/20 border-orange-800/30' :
+                    a.tier_color === 'AMBER' ? 'bg-amber-950/10 border-amber-800/20' :
+                    'bg-gray-900/20 border-gray-800/30'
+                  }`}>
+                    {/* Symbol */}
+                    <div className="min-w-[120px]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-white">{a.symbol}</span>
+                        <span className="text-xs font-bold px-1.5 py-0.5 rounded border
+                          bg-purple-950 text-purple-400 border-purple-800/50">
+                          {a.tier}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500">₹{a.close_price?.toLocaleString()}</p>
+                    </div>
+
+                    {/* Volume */}
+                    <div className="min-w-[140px]">
+                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">VOLUME</p>
+                      <p className="text-sm font-bold text-purple-400">{a.best_ratio}x pace</p>
+                      <p className="text-[10px] text-gray-600">
+                        10D: {a.ratio_10d}x
+                        {a.ratio_20d > 0 ? ` · 20D: ${a.ratio_20d}x` : ''}
+                      </p>
+                    </div>
+
+                    {/* OI */}
+                    <div className="min-w-[100px]">
+                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">OI CHG</p>
+                      <p className={`text-sm font-bold ${a.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {a.oi_chg_pct > 0 ? '+' : ''}{a.oi_chg_pct}%
+                      </p>
+                    </div>
+
+                    {/* Radar context */}
+                    {a.in_radar && (
+                      <div className="min-w-[160px]">
+                        <p className="text-[10px] text-gray-500 font-semibold mb-0.5">POSITIONAL RADAR</p>
+                        <p className={`text-xs font-bold ${a.radar_bias === 'BULLISH' ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {a.radar_signal === 'LONG_BUILDUP' ? '🐂' : '🐻'} {a.radar_conviction}
+                        </p>
+                        <p className="text-[10px] text-gray-600">{a.radar_consistency}% consistency</p>
+                      </div>
+                    )}
+
+                    {/* Not in radar */}
+                    {!a.in_radar && (
+                      <div className="min-w-[160px]">
+                        <p className="text-[10px] text-gray-600">Not in Positional Radar</p>
+                      </div>
+                    )}
+
+                    {/* Badge */}
+                    <div className="ml-auto">
+                      {a.in_radar ? (
+                        <span className="text-[10px] font-bold px-2 py-1 rounded border bg-emerald-950/40 text-emerald-400 border-emerald-800/50">
+                          ✅ Radar + Vol
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-1 rounded border bg-gray-900/40 text-gray-500 border-gray-700/50">
+                          Vol only
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

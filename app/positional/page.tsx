@@ -514,10 +514,11 @@ export default function PositionalRadar() {
 
                     {/* OI */}
                     <div className="min-w-[100px]">
-                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">OI CHG</p>
+                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">SERIES OI CHG</p>
                       <p className={`text-sm font-bold ${a.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {a.oi_chg_pct > 0 ? '+' : ''}{a.oi_chg_pct}%
                       </p>
+                      <p className="text-[10px] text-gray-600">since series start</p>
                     </div>
 
                     {/* Radar context */}

@@ -295,6 +295,8 @@ export default function PositionalRadar() {
   const [data, setData]           = useState<RadarData | null>(null)
   const [volAlerts, setVolAlerts] = useState<any[]>([])
   const [volExpanded, setVolExpanded] = useState(true)
+  const [stealthData, setStealthData] = useState<any>(null)
+  const [stealthExpanded, setStealthExpanded] = useState(true)
   const [staleData, setStaleData] = useState<RadarData | null>(null)
   const [loading, setLoading]     = useState(true)
   const [minConsec, setMinConsec] = useState(0)
@@ -359,14 +361,17 @@ export default function PositionalRadar() {
     setLoading(true)
     const c = consec ?? minConsec
     try {
-      const [res, volRes] = await Promise.all([
+      const [res, volRes, stealthRes] = await Promise.all([
         fetch(`${API}/positional-radar?min_consec=${c}`),
-        fetch(`${API}/positional-volume-alert`)
+        fetch(`${API}/positional-volume-alert`),
+        fetch(`${API}/stealth-buildup`)
       ])
       const json = await res.json()
       const volJson = await volRes.json()
+      const stealthJson = await stealthRes.json()
       setData(json)
       setVolAlerts(volJson?.alerts || [])
+      setStealthData(stealthJson)
       if (json?.results?.length > 0) setStaleData(json)
     } catch(e) { console.error(e) }
     setLoading(false)
@@ -468,6 +473,120 @@ export default function PositionalRadar() {
             <p className="text-xs text-amber-400"><span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {displayData?.expiry} expiry. Signals will rebuild from next Wednesday when a new series begins.</p>
           </div>
         )}
+        {/* Stealth Buildup */}
+        {stealthData?.results?.length > 0 && (
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-3 cursor-pointer"
+              onClick={() => setStealthExpanded(e => !e)}>
+              <h2 className="text-sm font-bold text-white">🥷 Stealth Buildup</h2>
+              <span className="text-xs text-gray-500">Institutional accumulation disguised as weakness · FUT OI spike + small price candle</span>
+              <div className="flex items-center gap-1.5 ml-auto">
+                {stealthData.elite > 0 && <span className="text-xs bg-yellow-950 text-yellow-400 border border-yellow-800/50 rounded px-2 py-0.5 font-bold">🥇 {stealthData.elite} Elite</span>}
+                {stealthData.strong > 0 && <span className="text-xs bg-gray-800 text-gray-300 border border-gray-700/50 rounded px-2 py-0.5 font-bold">🥈 {stealthData.strong} Strong</span>}
+                {stealthData.watch > 0 && <span className="text-xs bg-amber-950/40 text-amber-600 border border-amber-900/50 rounded px-2 py-0.5 font-bold">🥉 {stealthData.watch} Watch</span>}
+              </div>
+              <span className="text-xs text-gray-500">{stealthExpanded ? '▲' : '▼'}</span>
+            </div>
+            {stealthExpanded && (
+              <div className="grid grid-cols-1 gap-2">
+                {stealthData.results.map((s: any) => (
+                  <div key={s.symbol} className={`flex items-center gap-4 px-4 py-3 rounded-xl border ${
+                    s.tier === 'ELITE' ? 'bg-yellow-950/20 border-yellow-800/30' :
+                    s.tier === 'STRONG' ? 'bg-gray-900/30 border-gray-700/40' :
+                    'bg-gray-900/20 border-gray-800/20'
+                  }`}>
+                    {/* Symbol + Tier */}
+                    <div className="min-w-[140px]">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-black text-white">{s.symbol}</span>
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
+                          s.tier === 'ELITE' ? 'bg-yellow-950 text-yellow-400 border-yellow-800/50' :
+                          s.tier === 'STRONG' ? 'bg-gray-800 text-gray-300 border-gray-600/50' :
+                          'bg-amber-950/40 text-amber-600 border-amber-900/50'
+                        }`}>{s.tier_label}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-500">₹{s.cmp?.toLocaleString()} · Rank #{s.rank} of {s.total_days}d</p>
+                    </div>
+
+                    {/* FUT OI */}
+                    <div className="min-w-[100px]">
+                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">FUT OI CHG</p>
+                      <p className="text-sm font-bold text-emerald-400">+{s.fut_oi_chg_pct}%</p>
+                      <p className="text-[10px] text-gray-600">highest {s.rank === 1 ? 'of series' : `#${s.rank} of series`}</p>
+                    </div>
+
+                    {/* Price */}
+                    <div className="min-w-[90px]">
+                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">PRICE</p>
+                      <p className={`text-sm font-bold ${Math.abs(s.price_chg_pct) <= 0.5 ? 'text-amber-400' : 'text-gray-300'}`}>
+                        {s.price_chg_pct > 0 ? '+' : ''}{s.price_chg_pct}%
+                      </p>
+                      <p className="text-[10px] text-gray-600">small candle ✓</p>
+                    </div>
+
+                    {/* Net Delta */}
+                    <div className="min-w-[130px]">
+                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">NET DELTA (ATM±5)</p>
+                      {s.net_delta_L !== null ? (<>
+                        <p className={`text-sm font-bold ${s.net_delta_bullish ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {s.net_delta_bullish ? '+' : ''}{s.net_delta_L}L
+                        </p>
+                        <p className="text-[10px] text-gray-600">
+                          PE {s.pe_oi_L}L · CE {s.ce_oi_L}L
+                        </p>
+                      </>) : <p className="text-[10px] text-gray-600">—</p>}
+                    </div>
+
+                    {/* OI History sparkline */}
+                    <div className="min-w-[120px]">
+                      <p className="text-[10px] text-gray-500 font-semibold mb-1">OI HISTORY</p>
+                      <div className="flex items-end gap-0.5">
+                        {s.oi_history.map((v: number, i: number) => {
+                          const isLast = i === s.oi_history.length - 1
+                          const maxH = Math.max(...s.oi_history)
+                          const h = Math.max(Math.round((v / maxH) * 24), 2)
+                          return (
+                            <div key={i} style={{ width: 6, height: h }}
+                              className={`rounded-sm ${isLast ? 'bg-yellow-400' : 'bg-gray-600'}`}
+                              title={`${v}%`}/>
+                          )
+                        })}
+                      </div>
+                      <p className="text-[10px] text-yellow-400 mt-0.5">today spike ↑</p>
+                    </div>
+
+                    {/* Badge */}
+                    <div className="ml-auto text-right">
+                      {s.tier === 'ELITE' && (
+                        <div className="bg-yellow-950/40 border border-yellow-800/40 rounded-lg px-3 py-1.5">
+                          <p className="text-[10px] font-bold text-yellow-400">🥇 ELITE SIGNAL</p>
+                          <p className="text-[10px] text-gray-500">OI + Price + Net Delta ✓</p>
+                        </div>
+                      )}
+                      {s.tier === 'STRONG' && (
+                        <div className="bg-gray-900/40 border border-gray-700/40 rounded-lg px-3 py-1.5">
+                          <p className="text-[10px] font-bold text-gray-300">🥈 STRONG</p>
+                          <p className="text-[10px] text-gray-600">OI + Price ✓</p>
+                        </div>
+                      )}
+                      {s.tier === 'WATCH' && (
+                        <div className="bg-amber-950/20 border border-amber-900/30 rounded-lg px-3 py-1.5">
+                          <p className="text-[10px] font-bold text-amber-600">🥉 WATCH</p>
+                          <p className="text-[10px] text-gray-600">Monitor closely</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[10px] text-gray-700 mt-1">
+                  Stealth Buildup = FUT OI in top {'{'}rank{'}'} of last 15 days + price movement ≤1% · Elite requires Net Delta positive (PE{'>'CE} in ATM±5) · Informational only
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Positional Volume Alert */}
 
         {/* Positional Volume Alert */}
         {volAlerts.length > 0 && (

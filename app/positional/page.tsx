@@ -1179,7 +1179,7 @@ export default function PositionalRadar() {
                                         <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }}/>
                                       </div>
                                       <p className="text-[10px] text-gray-500 mb-0.5">{label.what}</p>
-                                      <p className="text-[10px] text-gray-600">{pct >= 60 ? label.high : label.low}</p>
+                                      <p className="text-[10px] text-gray-600">{v.score >= (v.max * 0.7) ? label.high : label.low}</p>
                                       <p className="text-[10px] font-semibold text-gray-400 mt-1">{v.note}</p>
                                     </div>
                                   )

@@ -579,7 +579,7 @@ export default function PositionalRadar() {
                   </div>
                 ))}
                 <p className="text-[10px] text-gray-700 mt-1">
-                  Stealth Buildup = FUT OI in top {'{'}rank{'}'} of last 15 days + price movement ≤1% · Elite requires Net Delta positive (PE{'>'CE} in ATM±5) · Informational only
+                  Stealth Buildup = FUT OI in top 3 of last 15 days + price movement ≤1% · Elite requires Net Delta positive (PE &gt; CE in ATM±5) · Informational only
                 </p>
               </div>
             )}

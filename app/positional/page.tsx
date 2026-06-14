@@ -1159,18 +1159,39 @@ export default function PositionalRadar() {
 
                               {/* Score breakdown */}
                               <div className="grid grid-cols-4 gap-3 mb-4">
-                                {Object.entries(writerData[r.symbol].breakdown || {}).map(([key, v]: [string, any]) => (
-                                  <div key={key} className="bg-gray-900/40 border border-gray-800/40 rounded-lg px-3 py-2">
-                                    <div className="flex items-center justify-between mb-1">
-                                      <span className="text-[10px] text-gray-500 font-semibold uppercase">{key.replace(/_/g, ' ')}</span>
-                                      <span className="text-[10px] font-black text-white">{v.score}/{v.max}</span>
+                                {Object.entries(writerData[r.symbol].breakdown || {}).map(([key, v]: [string, any]) => {
+                                  const pct = (v.score / v.max) * 100
+                                  const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-500'
+                                  const label = key === 'concentration'
+                                    ? { title: '📍 OI Concentration', what: 'OI near ATM vs far OTM', high: 'Writers active near ATM', low: 'Buyers active far OTM' }
+                                    : key === 'pcr_stability'
+                                    ? { title: '⚖️ PCR Balance', what: 'Put/Call ratio balance', high: 'Balanced — writers on both sides', low: 'Skewed — one side dominant' }
+                                    : key === 'fut_alignment'
+                                    ? { title: '🔗 FUT Alignment', what: 'FUT + Options moving together', high: 'Coordinated institutional positioning', low: 'FUT and options diverging' }
+                                    : { title: '📅 OI Consistency', what: 'Same signal % of series days', high: 'Consistent directional positioning', low: 'Mixed signals across days' }
+                                  return (
+                                    <div key={key} className="bg-gray-900/40 border border-gray-800/40 rounded-lg px-3 py-2">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-[10px] text-gray-400 font-bold">{label.title}</span>
+                                        <span className={`text-[10px] font-black ${pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{v.score}/{v.max}</span>
+                                      </div>
+                                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mb-1.5">
+                                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }}/>
+                                      </div>
+                                      <p className="text-[10px] text-gray-500 mb-0.5">{label.what}</p>
+                                      <p className="text-[10px] text-gray-600">{pct >= 60 ? label.high : label.low}</p>
+                                      <p className="text-[10px] font-semibold text-gray-400 mt-1">{v.note}</p>
                                     </div>
-                                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mb-1">
-                                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(v.score/v.max)*100}%` }}/>
-                                    </div>
-                                    <p className="text-[10px] text-gray-600">{v.note}</p>
-                                  </div>
-                                ))}
+                                  )
+                                })}
+                              </div>
+                              <div className="bg-gray-900/30 border border-gray-800/30 rounded-lg px-3 py-2 mb-3">
+                                <p className="text-[10px] text-gray-500 font-semibold mb-1">📖 How to read this score</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div><span className="text-[10px] text-emerald-400 font-bold">70-100 · Writer Dominated</span><p className="text-[10px] text-gray-600">Institutional writers observably active — high conviction positioning observed</p></div>
+                                  <div><span className="text-[10px] text-amber-400 font-bold">45-70 · Mixed Activity</span><p className="text-[10px] text-gray-600">Both writers and buyers active — positioning unclear</p></div>
+                                  <div><span className="text-[10px] text-red-400 font-bold">0-45 · Buyer Dominated</span><p className="text-[10px] text-gray-600">Speculative/event-driven activity observed — options being bought</p></div>
+                                </div>
                               </div>
 
                               {/* ATM data */}
@@ -1191,7 +1212,7 @@ export default function PositionalRadar() {
                                   <span className="text-[10px] font-bold text-white">{writerData[r.symbol].atm_data?.pcr}</span>
                                 </div>
                               </div>
-                              <p className="text-[10px] text-gray-700 mt-2">Writer score based on OI concentration near ATM, PCR balance, FUT alignment, and signal consistency · Informational only</p>
+                              <p className="text-[10px] text-gray-700 mt-2">⚠️ All observations are informational only · Not investment advice · GreekNova is not SEBI-registered · Consult a SEBI-registered advisor before trading</p>
                             </div>
                           )}
                         </td>

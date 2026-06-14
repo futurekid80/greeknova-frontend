@@ -327,6 +327,7 @@ export default function PositionalRadar() {
   const [activePanel, setActivePanel] = useState<Record<string, string>>({})
   const [wallsData, setWallsData] = useState<Record<string, any>>({})
   const [buildupData, setBuildupData] = useState<Record<string, any>>({})
+  const [writerData, setWriterData] = useState<Record<string, any>>({})
   const [wallsLoading, setWallsLoading] = useState<string | null>(null)
 
   const fetchWalls = async (symbol: string) => {
@@ -353,6 +354,20 @@ export default function PositionalRadar() {
       const res = await fetch(`${API}/oi-buildup/${symbol}`)
       const json = await res.json()
       setBuildupData(prev => ({ ...prev, [symbol]: json }))
+    } catch(e) { console.error(e) }
+    setWallsLoading(null)
+  }
+
+  const fetchWriter = async (symbol: string) => {
+    if (expandedSymbol === symbol && activePanel[symbol] === 'writer') { setExpandedSymbol(null); return }
+    setActivePanel(prev => ({ ...prev, [symbol]: 'writer' }))
+    setExpandedSymbol(symbol)
+    if (writerData[symbol]) return
+    setWallsLoading(symbol)
+    try {
+      const res = await fetch(`${API}/writer-buyer-score/${symbol}`)
+      const json = await res.json()
+      setWriterData(prev => ({ ...prev, [symbol]: json }))
     } catch(e) { console.error(e) }
     setWallsLoading(null)
   }
@@ -979,7 +994,7 @@ export default function PositionalRadar() {
                             </div>
                           )}
                           {/* OI Map + Buildup buttons in Trader View */}
-                          <div className="flex gap-1 mt-1.5">
+                          <div className="flex gap-1 mt-1.5 flex-wrap">
                             <button
                               onClick={() => fetchWalls(r.symbol)}
                               className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
@@ -993,6 +1008,13 @@ export default function PositionalRadar() {
                                 expandedSymbol === r.symbol && activePanel[r.symbol] === 'buildup' ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-gray-900/40 text-amber-400 border-amber-800/40 hover:border-amber-600'
                               }`}>
                               {wallsLoading === r.symbol && activePanel[r.symbol] === 'buildup' ? '⏳' : '📈 OI Buildup'}
+                            </button>
+                            <button
+                              onClick={() => fetchWriter(r.symbol)}
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                                expandedSymbol === r.symbol && activePanel[r.symbol] === 'writer' ? 'bg-purple-950 text-purple-300 border-purple-700' : 'bg-gray-900/40 text-purple-400 border-purple-800/40 hover:border-purple-600'
+                              }`}>
+                              {wallsLoading === r.symbol && activePanel[r.symbol] === 'writer' ? '⏳' : '✍️ W/B Score'}
                             </button>
                           </div>
                         </td>
@@ -1102,6 +1124,76 @@ export default function PositionalRadar() {
                               </div>
                             )}
                           </div>
+                        </td>
+                      </tr>
+                    )}
+                      {/* Writer vs Buyer Score panel */}
+                    {expandedSymbol === r.symbol && activePanel[r.symbol] === 'writer' && (
+                      <tr>
+                        <td colSpan={10} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
+                          {!writerData[r.symbol] ? (
+                            <div className="text-xs text-gray-500">Loading...</div>
+                          ) : (
+                            <div>
+                              <div className="flex items-center gap-4 mb-4 flex-wrap">
+                                <div>
+                                  <p className="text-sm font-bold text-white mb-0.5">✍️ {r.symbol} Writer vs Buyer Score</p>
+                                  <p className="text-xs text-gray-500">Based on OI concentration, PCR stability, FUT alignment, consistency</p>
+                                </div>
+                                <div className={`px-4 py-2 rounded-xl border ${
+                                  writerData[r.symbol].verdict_color === 'EMERALD' ? 'bg-emerald-950/40 border-emerald-800/40' :
+                                  writerData[r.symbol].verdict_color === 'AMBER' ? 'bg-amber-950/40 border-amber-800/40' :
+                                  'bg-red-950/40 border-red-800/40'
+                                }`}>
+                                  <p className={`text-lg font-black ${
+                                    writerData[r.symbol].verdict_color === 'EMERALD' ? 'text-emerald-400' :
+                                    writerData[r.symbol].verdict_color === 'AMBER' ? 'text-amber-400' : 'text-red-400'
+                                  }`}>{writerData[r.symbol].score}/100</p>
+                                  <p className={`text-xs font-bold ${
+                                    writerData[r.symbol].verdict_color === 'EMERALD' ? 'text-emerald-400' :
+                                    writerData[r.symbol].verdict_color === 'AMBER' ? 'text-amber-400' : 'text-red-400'
+                                  }`}>{writerData[r.symbol].verdict_label}</p>
+                                </div>
+                                <p className="text-xs text-gray-400 max-w-xs">{writerData[r.symbol].verdict_note}</p>
+                              </div>
+
+                              {/* Score breakdown */}
+                              <div className="grid grid-cols-4 gap-3 mb-4">
+                                {Object.entries(writerData[r.symbol].breakdown || {}).map(([key, v]: [string, any]) => (
+                                  <div key={key} className="bg-gray-900/40 border border-gray-800/40 rounded-lg px-3 py-2">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[10px] text-gray-500 font-semibold uppercase">{key.replace(/_/g, ' ')}</span>
+                                      <span className="text-[10px] font-black text-white">{v.score}/{v.max}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mb-1">
+                                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(v.score/v.max)*100}%` }}/>
+                                    </div>
+                                    <p className="text-[10px] text-gray-600">{v.note}</p>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* ATM data */}
+                              <div className="flex items-center gap-4 flex-wrap">
+                                <div className="flex items-center gap-2 bg-gray-900/40 border border-gray-700 rounded-lg px-3 py-1.5">
+                                  <span className="text-[10px] text-gray-500">ATM Strike</span>
+                                  <span className="text-[10px] font-bold text-amber-400">₹{writerData[r.symbol].atm_data?.atm_strike?.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-2 bg-gray-900/40 border border-gray-700 rounded-lg px-3 py-1.5">
+                                  <span className="text-[10px] text-gray-500">ATM±3 CE</span>
+                                  <span className="text-[10px] font-bold text-red-400">{writerData[r.symbol].atm_data?.atm3_ce_L}L</span>
+                                  <span className="text-[10px] text-gray-600">·</span>
+                                  <span className="text-[10px] text-gray-500">PE</span>
+                                  <span className="text-[10px] font-bold text-emerald-400">{writerData[r.symbol].atm_data?.atm3_pe_L}L</span>
+                                </div>
+                                <div className="flex items-center gap-2 bg-gray-900/40 border border-gray-700 rounded-lg px-3 py-1.5">
+                                  <span className="text-[10px] text-gray-500">PCR</span>
+                                  <span className="text-[10px] font-bold text-white">{writerData[r.symbol].atm_data?.pcr}</span>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-gray-700 mt-2">Writer score based on OI concentration near ATM, PCR balance, FUT alignment, and signal consistency · Informational only</p>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}

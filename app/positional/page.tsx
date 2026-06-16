@@ -294,9 +294,9 @@ function OIMapPanel({ symbol, wallsData }: { symbol: string; wallsData: any }) {
 export default function PositionalRadar() {
   const [data, setData]           = useState<RadarData | null>(null)
   const [volAlerts, setVolAlerts] = useState<any[]>([])
-  const [volExpanded, setVolExpanded] = useState(true)
+  const [volExpanded, setVolExpanded] = useState(false)
   const [stealthData, setStealthData] = useState<any>(null)
-  const [stealthExpanded, setStealthExpanded] = useState(true)
+  const [stealthExpanded, setStealthExpanded] = useState(false)
   const [staleData, setStaleData] = useState<RadarData | null>(null)
   const [loading, setLoading]     = useState(true)
   const [minConsec, setMinConsec] = useState(0)

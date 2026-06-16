@@ -166,7 +166,7 @@ function ATMBiasTag({ sig }: { sig: Signal }) {
 export default function IntradaySignalLog() {
   const [data, setData]           = useState<LogData | null>(null)
   const [watchData, setWatchData] = useState<any[]>([])
-  const [watchExpanded, setWatchExpanded] = useState(true)
+  const [watchExpanded, setWatchExpanded] = useState(false)
   // FIX 3: stale data ref — show last known data while reloading
   const [staleData, setStaleData] = useState<LogData | null>(null)
   const [loading, setLoading]     = useState(true)

@@ -303,21 +303,33 @@ Return this exact JSON structure:
         }),
       })
       const data = await res.json()
+      // Parse JSON response
       try {
-        // Strip markdown fences if present
-        let raw = data.content || ''
+        let raw = data.content || data.error || ''
+        if (data.error) {
+          setInsights(`{"error": "API error: ${data.error}"}`)
+          setLoadingInsights(false)
+          return
+        }
+        // Strip markdown fences
         raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
-        // Extract outermost JSON object
-        const match = raw.match(/\{[\s\S]*\}/)
-        const cleaned = match ? match[0] : raw
+        // Find outermost JSON object — greedy match from first { to last }
+        const start = raw.indexOf('{')
+        const end = raw.lastIndexOf('}')
+        const cleaned = start !== -1 && end !== -1 ? raw.slice(start, end + 1) : raw
         const parsed = JSON.parse(cleaned)
         setInsights(JSON.stringify(parsed))
-      } catch {
-        // If all parsing fails show error card instead of raw JSON
-        setInsights('{"error": "Could not parse position review. Please try again."}')
+      } catch (e) {
+        // Show raw response for debugging
+        const raw = data.content || ''
+        if (raw.length > 0) {
+          setInsights(`{"error": "Parse failed — raw: ${raw.slice(0, 200).replace(/"/g, '\\"')}"}`)
+        } else {
+          setInsights('{"error": "Could not parse position review. Please try again."}')
+        }
       }
     } catch {
-      setInsights('{"error": "Failed to load insights. Please try again."}')
+      setInsights('{"error": "Failed to load position review. Please try again."}')
     }
     setLoadingInsights(false)
   }
@@ -331,7 +343,7 @@ Return this exact JSON structure:
 
     // Fetch current market context for each open position
     const positionReviews = await Promise.all(
-      openTrades.slice(0, 5).map(async (t) => {
+      openTrades.slice(0, 3).map(async (t) => {
         try {
           const res  = await fetch(`${API}/iv-analysis/${t.symbol}`)
           const json = await res.json()

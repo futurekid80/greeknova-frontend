@@ -188,7 +188,7 @@ export default function TradingJournal() {
 
   // Save new trade
   async function saveTrade() {
-    if (!form.symbol || !form.strike || !form.entry_price || !userId) return
+    if (!form.symbol || (form.option_type !== 'FUT' && !form.strike) || !form.entry_price || !userId) return
     setSaving(true)
 
     const context = await fetchContext(form.symbol)
@@ -794,8 +794,11 @@ Return this exact JSON structure:
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-sm font-black text-white">{trade.symbol}</span>
-                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${trade.option_type==='CE' ? 'bg-red-950/50 text-red-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
-                            {trade.strike} {trade.option_type}
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                            trade.option_type==='CE' ? 'bg-red-950/50 text-red-400' 
+                            : trade.option_type==='FUT' ? 'bg-blue-950/50 text-blue-400'
+                            : 'bg-emerald-950/50 text-emerald-400'}`}>
+                            {trade.option_type === 'FUT' ? 'FUT' : `${trade.strike} ${trade.option_type}`}
                           </span>
                           <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${trade.action==='BUY' ? 'bg-emerald-950/50 text-emerald-400' : 'bg-red-950/50 text-red-400'}`}>
                             {trade.action}
@@ -960,18 +963,20 @@ Return this exact JSON structure:
 
               {/* Strike + Entry Price */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Strike</label>
-                  <input type="number" value={form.strike}
-                    onChange={e => setForm(f => ({...f, strike: e.target.value}))}
-                    placeholder="e.g. 23700"
-                    className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
-                </div>
-                <div>
+                {form.option_type !== 'FUT' && (
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Strike</label>
+                    <input type="number" value={form.strike}
+                      onChange={e => setForm(f => ({...f, strike: e.target.value}))}
+                      placeholder="e.g. 23700"
+                      className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
+                  </div>
+                )}
+                <div className={form.option_type === 'FUT' ? 'col-span-2' : ''}>
                   <label className="text-xs text-gray-500 mb-1 block">Entry Price (₹)</label>
                   <input type="number" value={form.entry_price}
                     onChange={e => setForm(f => ({...f, entry_price: e.target.value}))}
-                    placeholder="e.g. 45"
+                    placeholder={form.option_type === 'FUT' ? 'e.g. 24050' : 'e.g. 45'}
                     className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"/>
                 </div>
               </div>

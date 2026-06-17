@@ -931,10 +931,12 @@ Return this exact JSON structure:
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Option Type</label>
                   <div className="flex gap-2">
-                    {['CE','PE'].map(t => (
-                      <button key={t} onClick={() => setForm(f => ({...f, option_type: t}))}
+                    {['CE','PE','FUT'].map(t => (
+                      <button key={t} onClick={() => setForm(f => ({...f, option_type: t, strike: t === 'FUT' ? '0' : f.strike}))}
                         className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-all ${form.option_type===t
-                          ? t==='CE' ? 'bg-red-950/60 text-red-400 border-red-800' : 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
+                          ? t==='CE' ? 'bg-red-950/60 text-red-400 border-red-800'
+                          : t==='PE' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
+                          : 'bg-blue-950/60 text-blue-400 border-blue-800'
                           : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
                         {t}
                       </button>

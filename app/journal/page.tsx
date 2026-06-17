@@ -188,7 +188,8 @@ export default function TradingJournal() {
 
   // Save new trade
   async function saveTrade() {
-    if (!form.symbol || (form.option_type !== 'FUT' && !form.strike) || !form.entry_price || !userId) return
+    const strikeValid = form.option_type === 'FUT' || (form.strike && parseFloat(form.strike) > 0)
+    if (!form.symbol || !strikeValid || !form.entry_price || !userId) return
     setSaving(true)
 
     const context = await fetchContext(form.symbol)
@@ -198,7 +199,7 @@ export default function TradingJournal() {
       user_email:  userEmail,
       symbol:      form.symbol,
       option_type: form.option_type,
-      strike:      parseFloat(form.strike),
+      strike:      form.option_type === 'FUT' ? 0 : parseFloat(form.strike),
       action:      form.action,
       entry_price: parseFloat(form.entry_price),
       quantity:    parseInt(form.quantity),

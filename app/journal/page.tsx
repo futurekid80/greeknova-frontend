@@ -412,12 +412,14 @@ Return this exact JSON structure:
       const data = await res.json()
       // Parse JSON response
       try {
-        const parsed = JSON.parse(data.content)
+        let raw = data.content || ''
+        raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+        const match = raw.match(/\{[\s\S]*\}/)
+        const cleaned = match ? match[0] : raw
+        const parsed = JSON.parse(cleaned)
         setInsights(JSON.stringify(parsed))
       } catch {
-        // Fallback: try to extract JSON from response
-        const match = data.content?.match(/\{[\s\S]*\}/)
-        setInsights(match ? match[0] : data.content || 'Could not generate review')
+        setInsights('{"error": "Could not parse position review. Please try again."}')
       }
     } catch {
       setInsights('{"error": "Failed to load position review. Please try again."}')

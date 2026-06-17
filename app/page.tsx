@@ -18,6 +18,7 @@ const ALL_SYMBOLS = [
   'INDUSINDBK','JIOFIN','M&M','NESTLEIND','SBILIFE','SHRIRAMFIN','TRENT','ADANIPORTS',
   'BANKBARODA','BEL','CANBK','CHOLAFIN','DLF','GAIL','HAVELLS','HAL','INDIGO','PFC',
   'RECLTD','SAIL','TATAPOWER','VEDL',
+  'DIXON','NYKAA','PAYTM','PERSISTENT',
 ]
 
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
@@ -389,9 +390,19 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
     return () => clearInterval(t)
   }, [])
 
-  const display = (data?.signals?.length === 0 && stale) ? stale : data
+  const isMarketOpen = (() => {
+    const now = new Date()
+    const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+    const day = ist.getDay()
+    if (day === 0 || day === 6) return false
+    const mins = ist.getHours() * 60 + ist.getMinutes()
+    return mins >= 555 && mins <= 930
+  })()
+
+  const display = (data?.signals?.length === 0 && stale && !isMarketOpen) ? stale : data
   const signals = display?.signals || []
   const isEOD   = display?.is_eod_snapshot
+  const noSignalsYet = isMarketOpen && signals.length === 0 && !loading
 
   if (loading && !stale) return (
     <div className="bg-gray-900/20 border border-gray-800 rounded-2xl p-5 mb-6 animate-pulse">
@@ -400,7 +411,7 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
     </div>
   )
 
-  if (!signals.length) return null
+  if (!signals.length && !noSignalsYet) return null
 
   return (
     <div className="bg-gray-900/20 border border-gray-800 rounded-2xl p-5 mb-6">
@@ -413,12 +424,26 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
                 🌙 EOD Snapshot
               </span>
             )}
+            {isMarketOpen && !isEOD && !noSignalsYet && (
+              <span className="text-[10px] px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded-full">
+                🟢 Live
+              </span>
+            )}
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Volume {'>'} 1.5× 5-day avg + OI building · {display?.total || 0} qualifying today
+            Volume {'>'} 1.5× 5-day avg + OI building · {noSignalsYet ? 'scanning...' : `${display?.total || 0} qualifying today`}
           </p>
         </div>
       </div>
+
+      {noSignalsYet && (
+        <div className="flex items-center justify-center py-8 text-center">
+          <div>
+            <p className="text-gray-500 text-sm font-medium">🔍 No qualifying stocks yet today</p>
+            <p className="text-gray-700 text-xs mt-1">Watching for volume {'>'} 1.5× avg + OI change {'>'} 2%</p>
+          </div>
+        </div>
+      )}
 
       {/* Column headers */}
       <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">

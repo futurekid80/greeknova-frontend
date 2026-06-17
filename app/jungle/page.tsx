@@ -64,6 +64,9 @@ export default function OptionsJungle() {
   const [oiThreshold, setOiThreshold]   = useState<number|null>(5)
   const [volThreshold, setVolThreshold] = useState<number|null>(20)
   const [dirFilter, setDirFilter]       = useState<'all'|'BUILD'|'UNWIND'>('all')
+  const [interpFilter, setInterpFilter] = useState<string>('all')
+  const [sortBy, setSortBy]             = useState<string>('oi_pct')
+  const [sortDir, setSortDir]           = useState<1|-1>(-1)
   const [volSigFilter, setVolSigFilter] = useState<'all'|'FRESH_BUILD'|'UNWINDING'|'CHURN'>('all')
   const [typeFilter, setTypeFilter]     = useState<'all'|'CE'|'PE'>('all')
   const [stockSearch, setStockSearch]   = useState('')
@@ -112,6 +115,8 @@ export default function OptionsJungle() {
   function handleDateChange(d: string) { setDate(d); dateRef.current = d; fetchData() }
   function handleOIPreset(v: number | null) { setOiThreshold(v); oiRef.current = v; fetchData() }
   function handleVolPreset(v: number | null) { setVolThreshold(v); volRef.current = v; fetchData() }
+  function sortToggle(col: string) { if (sortBy === col) setSortDir(d => d === -1 ? 1 : -1); else { setSortBy(col); setSortDir(-1) } }
+  function SortIcon({ col }: { col: string }) { return sortBy === col ? <span className="ml-1">{sortDir === -1 ? '↓' : '↑'}</span> : <span className="ml-1 opacity-20">↕</span> }
 
   function startAuto() {
     setAutoEnabled(true); setCountdown(300)
@@ -140,7 +145,13 @@ export default function OptionsJungle() {
     .filter(s => oiThreshold === null || Math.abs(s.oi_pct) >= oiThreshold)
     .filter(s => !searchTerm || s.symbol.includes(searchTerm))
     .filter(s => dirFilter === 'all' || s.direction === dirFilter)
+    .filter(s => interpFilter === 'all' || s.interpretation === interpFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
+    .sort((a, b) => {
+      const av = sortBy === 'oi_pct' ? Math.abs(a.oi_pct) : sortBy === 'ltp_chg_pct' ? Math.abs(a.ltp_chg_pct) : sortBy === 'volume' ? a.volume : a.last_price
+      const bv = sortBy === 'oi_pct' ? Math.abs(b.oi_pct) : sortBy === 'ltp_chg_pct' ? Math.abs(b.ltp_chg_pct) : sortBy === 'volume' ? b.volume : b.last_price
+      return (bv - av) * sortDir
+    })
 
   const volFiltered = (data?.vol_spikes || [])
     .filter(s => volThreshold === null || s.vol_pct >= volThreshold)
@@ -472,6 +483,21 @@ export default function OptionsJungle() {
                   <span className="ml-1 opacity-60">{f==='all'?oiFiltered.length:f==='BUILD'?oiBuilds:oiUnwinds}</span>
                 </button>
               ))}
+              <div className="w-px h-5 bg-gray-800 mx-1"/>
+              {([
+                ['all','◈ All'],
+                ['CALL_WRITING','✍️ Call Writing'],
+                ['PUT_WRITING','✍️ Put Writing'],
+                ['LONG_BUILDUP','🐂 Long Buildup'],
+                ['SHORT_BUILDUP','🐻 Short Buildup'],
+                ['SHORT_COVERING','🔄 Short Covering'],
+                ['LONG_UNWINDING','⚠️ Long Unwinding'],
+              ] as const).map(([f, label]) => (
+                <button key={f} onClick={() => setInterpFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${interpFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
+                  {label}
+                </button>
+              ))}
             </>
           ) : (
             <>
@@ -505,9 +531,17 @@ export default function OptionsJungle() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-900/60 border-b border-gray-800">
-                    {['Symbol','Strike','Type','Signal','OI Δ%','LTP Δ%','Old OI','New OI','Volume','LTP'].map((h,i)=>(
-                      <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=3?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5':''}`}>{h}</th>
-                    ))}
+                    {['Symbol','Strike','Type','Signal','OI Δ%','LTP Δ%','Old OI','New OI','Volume','LTP'].map((h,i)=>{
+                      const colMap: Record<string,string> = {'OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Volume':'volume','LTP':'last_price'}
+                      const col = colMap[h]
+                      return col ? (
+                        <th key={h} onClick={() => sortToggle(col)} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 text-right cursor-pointer hover:text-white transition-colors select-none ${i===9?'pr-5':''}`}>
+                          {h}<SortIcon col={col}/>
+                        </th>
+                      ) : (
+                        <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=3?'text-left':'text-right'} ${i===0?'pl-5':''}`}>{h}</th>
+                      )
+                    })}
                   </tr>
                 </thead>
                 <tbody>

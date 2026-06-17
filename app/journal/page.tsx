@@ -304,11 +304,17 @@ Return this exact JSON structure:
       })
       const data = await res.json()
       try {
-        const parsed = JSON.parse(data.content)
+        // Strip markdown fences if present
+        let raw = data.content || ''
+        raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+        // Extract outermost JSON object
+        const match = raw.match(/\{[\s\S]*\}/)
+        const cleaned = match ? match[0] : raw
+        const parsed = JSON.parse(cleaned)
         setInsights(JSON.stringify(parsed))
       } catch {
-        const match = data.content?.match(/\{[\s\S]*\}/)
-        setInsights(match ? match[0] : data.content || 'Could not generate insights')
+        // If all parsing fails show error card instead of raw JSON
+        setInsights('{"error": "Could not parse position review. Please try again."}')
       }
     } catch {
       setInsights('{"error": "Failed to load insights. Please try again."}')

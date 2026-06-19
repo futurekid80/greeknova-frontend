@@ -543,7 +543,7 @@ export default function OptionsJungle() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-900/60 border-b border-gray-800">
-                    {['Symbol','Strike','Type','Signal','OI Δ%','LTP Δ%','Old OI','New OI','Vol Δ%','% Away','LTP'].map((h,i)=>{
+                    {['Symbol','Strike','Type','Signal','Since','Seen','OI Δ%','LTP Δ%','Old OI','New OI','Vol Δ%','% Away','LTP'].map((h,i)=>{
                       const colMap: Record<string,string> = {'OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Vol Δ%':'volume','% Away':'otm_pct','LTP':'last_price'}
                       const col = colMap[h]
                       return col ? (
@@ -579,6 +579,14 @@ export default function OptionsJungle() {
                           <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
                             {m.icon} {m.label}
                           </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <p className="text-xs text-gray-400">{(s as any).first_seen || '—'}</p>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <span className={`text-xs font-bold ${(s as any).snapshot_count >= 5 ? 'text-emerald-400' : (s as any).snapshot_count >= 3 ? 'text-amber-400' : 'text-gray-500'}`}>
+                            {(s as any).snapshot_count ? `${(s as any).snapshot_count}×` : '—'}
+                          </span>
                         </td>
                         <td className={`px-4 py-3.5 text-right text-sm font-black ${s.oi_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           <span className="flex items-center justify-end gap-1"><Zap size={11}/>{s.oi_pct > 0 ? '+' : ''}{s.oi_pct}%</span>

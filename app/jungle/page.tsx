@@ -115,8 +115,15 @@ export default function OptionsJungle() {
   function handleDateChange(d: string) { setDate(d); dateRef.current = d; fetchData() }
   function handleOIPreset(v: number | null) { setOiThreshold(v); oiRef.current = v; fetchData() }
   function handleVolPreset(v: number | null) { setVolThreshold(v); volRef.current = v; fetchData() }
+  const [volSortBy, setVolSortBy] = useState<string>('vol_pct')
+  const [volSortDir, setVolSortDir] = useState<1|-1>(-1)
   function sortToggle(col: string) { if (sortBy === col) setSortDir(d => d === -1 ? 1 : -1); else { setSortBy(col); setSortDir(-1) } }
-  function SortIcon({ col }: { col: string }) { return sortBy === col ? <span className="ml-1">{sortDir === -1 ? '↓' : '↑'}</span> : <span className="ml-1 opacity-20">↕</span> }
+  function volSortToggle(col: string) { if (volSortBy === col) setVolSortDir(d => d === -1 ? 1 : -1); else { setVolSortBy(col); setVolSortDir(-1) } }
+  function SortIcon({ col, isVol = false }: { col: string; isVol?: boolean }) {
+    const active = isVol ? volSortBy === col : sortBy === col
+    const dir = isVol ? volSortDir : sortDir
+    return active ? <span className="ml-1">{dir === -1 ? '↓' : '↑'}</span> : <span className="ml-1 opacity-20">↕</span>
+  }
 
   function startAuto() {
     setAutoEnabled(true); setCountdown(300)
@@ -158,6 +165,11 @@ export default function OptionsJungle() {
     .filter(s => !searchTerm || s.symbol.includes(searchTerm))
     .filter(s => volSigFilter === 'all' || s.vol_signal === volSigFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
+    .sort((a, b) => {
+      const av = volSortBy === 'vol_pct' ? a.vol_pct : volSortBy === 'oi_pct' ? Math.abs(a.oi_pct) : volSortBy === 'ltp_chg_pct' ? Math.abs(a.ltp_chg_pct) : volSortBy === 'new_volume' ? a.new_volume : volSortBy === 'otm_pct' ? a.otm_pct : a.last_price
+      const bv = volSortBy === 'vol_pct' ? b.vol_pct : volSortBy === 'oi_pct' ? Math.abs(b.oi_pct) : volSortBy === 'ltp_chg_pct' ? Math.abs(b.ltp_chg_pct) : volSortBy === 'new_volume' ? b.new_volume : volSortBy === 'otm_pct' ? b.otm_pct : b.last_price
+      return (bv - av) * volSortDir
+    })
 
   // ── Two-way detection for OI spikes ──────────────────────────────────────
   const oiSymbolSides: Record<string, Set<string>> = {}
@@ -531,11 +543,11 @@ export default function OptionsJungle() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-900/60 border-b border-gray-800">
-                    {['Symbol','Strike','Type','Signal','OI Δ%','LTP Δ%','Old OI','New OI','Volume','LTP'].map((h,i)=>{
-                      const colMap: Record<string,string> = {'OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Volume':'volume','LTP':'last_price'}
+                    {['Symbol','Strike','Type','Signal','OI Δ%','LTP Δ%','Old OI','New OI','Vol Δ%','% Away','LTP'].map((h,i)=>{
+                      const colMap: Record<string,string> = {'OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Vol Δ%':'volume','% Away':'otm_pct','LTP':'last_price'}
                       const col = colMap[h]
                       return col ? (
-                        <th key={h} onClick={() => sortToggle(col)} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 text-right cursor-pointer hover:text-white transition-colors select-none ${i===9?'pr-5':''}`}>
+                        <th key={h} onClick={() => sortToggle(col)} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 text-right cursor-pointer hover:text-white transition-colors select-none ${i===10?'pr-5':''}`}>
                           {h}<SortIcon col={col}/>
                         </th>
                       ) : (
@@ -576,7 +588,16 @@ export default function OptionsJungle() {
                         </td>
                         <td className="px-4 py-3.5 text-right text-sm text-gray-500">{fmtOI(s.old_oi)}</td>
                         <td className="px-4 py-3.5 text-right text-sm text-gray-300">{fmtOI(s.new_oi)}</td>
-                        <td className="px-4 py-3.5 text-right text-sm text-gray-400">{fmtOI(s.volume)}</td>
+                        <td className="px-4 py-3.5 text-right text-sm text-amber-400">
+                          {s.old_oi > 0 ? `${s.vol_change > 0 ? '+' : ''}${Math.round(s.vol_change / s.old_oi * 100)}%` : '—'}
+                        </td>
+                        <td className="px-4 py-3.5 text-right text-sm">
+                          {s.otm_pct > 0 ? (
+                            <span className={s.otm_pct <= 2 ? 'text-emerald-400 font-bold' : s.otm_pct <= 5 ? 'text-amber-400' : 'text-gray-500'}>
+                              {s.otm_pct}%
+                            </span>
+                          ) : <span className="text-blue-400 font-bold">ITM</span>}
+                        </td>
                         <td className="px-5 py-3.5 text-right text-sm font-bold text-amber-400">₹{s.last_price}</td>
                       </tr>
                     )
@@ -597,9 +618,17 @@ export default function OptionsJungle() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-900/60 border-b border-gray-800">
-                    {['Symbol','Strike','Type','Vol Signal','Vol Δ%','OI Δ%','LTP Δ%','Old Vol','New Vol','LTP'].map((h,i)=>(
-                      <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=3?'text-left':'text-right'} ${i===0?'pl-5':''} ${i===9?'pr-5':''}`}>{h}</th>
-                    ))}
+                    {['Symbol','Strike','Type','Vol Signal','Vol Δ%','OI Δ%','LTP Δ%','New Vol','% Away','LTP'].map((h,i)=>{
+                      const colMap: Record<string,string> = {'Vol Δ%':'vol_pct','OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','New Vol':'new_volume','% Away':'otm_pct','LTP':'last_price'}
+                      const col = colMap[h]
+                      return col ? (
+                        <th key={h} onClick={() => volSortToggle(col)} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 text-right cursor-pointer hover:text-white transition-colors select-none ${i===9?'pr-5':''}`}>
+                          {h}<SortIcon col={col} isVol={true}/>
+                        </th>
+                      ) : (
+                        <th key={h} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 ${i<=3?'text-left':'text-right'} ${i===0?'pl-5':''}`}>{h}</th>
+                      )
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -633,8 +662,14 @@ export default function OptionsJungle() {
                         <td className={`px-4 py-3.5 text-right text-sm font-semibold ${s.ltp_chg_pct > 0 ? 'text-emerald-400' : s.ltp_chg_pct < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                           {s.ltp_chg_pct > 0 ? '+' : ''}{s.ltp_chg_pct}%
                         </td>
-                        <td className="px-4 py-3.5 text-right text-sm text-gray-500">{fmtOI(s.old_volume)}</td>
                         <td className="px-4 py-3.5 text-right text-sm text-gray-300">{fmtOI(s.new_volume)}</td>
+                        <td className="px-4 py-3.5 text-right text-sm">
+                          {s.otm_pct > 0 ? (
+                            <span className={s.otm_pct <= 2 ? 'text-emerald-400 font-bold' : s.otm_pct <= 5 ? 'text-amber-400' : 'text-gray-500'}>
+                              {s.otm_pct}%
+                            </span>
+                          ) : <span className="text-blue-400 font-bold">ITM</span>}
+                        </td>
                         <td className="px-5 py-3.5 text-right text-sm font-bold text-amber-400">₹{s.last_price}</td>
                       </tr>
                     )

@@ -166,9 +166,14 @@ export default function OptionsJungle() {
     .filter(s => volSigFilter === 'all' || s.vol_signal === volSigFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
     .sort((a, b) => {
-      const av = volSortBy === 'vol_pct' ? a.vol_pct : volSortBy === 'oi_pct' ? Math.abs(a.oi_pct) : volSortBy === 'ltp_chg_pct' ? Math.abs(a.ltp_chg_pct) : volSortBy === 'new_volume' ? a.new_volume : volSortBy === 'otm_pct' ? a.otm_pct : a.last_price
-      const bv = volSortBy === 'vol_pct' ? b.vol_pct : volSortBy === 'oi_pct' ? Math.abs(b.oi_pct) : volSortBy === 'ltp_chg_pct' ? Math.abs(b.ltp_chg_pct) : volSortBy === 'new_volume' ? b.new_volume : volSortBy === 'otm_pct' ? b.otm_pct : b.last_price
-      return (bv - av) * volSortDir
+      if (sortBy === 'symbol' || sortBy === 'option_type' || sortBy === 'interpretation' || sortBy === 'first_seen') {
+        const av = String((a as any)[sortBy] || '')
+        const bv = String((b as any)[sortBy] || '')
+        return av.localeCompare(bv) * sortDir
+      }
+      const av = sortBy === 'oi_pct' ? Math.abs(a.oi_pct) : sortBy === 'ltp_chg_pct' ? Math.abs(a.ltp_chg_pct) : sortBy === 'volume' ? a.volume : sortBy === 'otm_pct' ? a.otm_pct : sortBy === 'strike' ? a.strike : sortBy === 'snapshot_count' ? ((a as any).snapshot_count || 0) : a.last_price
+      const bv = sortBy === 'oi_pct' ? Math.abs(b.oi_pct) : sortBy === 'ltp_chg_pct' ? Math.abs(b.ltp_chg_pct) : sortBy === 'volume' ? b.volume : sortBy === 'otm_pct' ? b.otm_pct : sortBy === 'strike' ? b.strike : sortBy === 'snapshot_count' ? ((b as any).snapshot_count || 0) : b.last_price
+      return (bv - av) * sortDir
     })
 
   // ── Two-way detection for OI spikes ──────────────────────────────────────
@@ -544,10 +549,10 @@ export default function OptionsJungle() {
                 <thead>
                   <tr className="bg-gray-900/60 border-b border-gray-800">
                     {['Symbol','Strike','Type','Signal','Since','Seen','OI Δ%','LTP Δ%','Old OI','New OI','Vol Δ%','% Away','LTP'].map((h,i)=>{
-                      const colMap: Record<string,string> = {'OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Vol Δ%':'volume','% Away':'otm_pct','LTP':'last_price'}
+                      const colMap: Record<string,string> = {'Symbol':'symbol','Strike':'strike','Type':'option_type','Signal':'interpretation','Since':'first_seen','Seen':'snapshot_count','OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Vol Δ%':'volume','% Away':'otm_pct','LTP':'last_price'}
                       const col = colMap[h]
                       return col ? (
-                        <th key={h} onClick={() => sortToggle(col)} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 text-right cursor-pointer hover:text-white transition-colors select-none ${i===10?'pr-5':''}`}>
+                        <th key={h} onClick={() => sortToggle(col)} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 cursor-pointer hover:text-white transition-colors select-none ${i<=3?'text-left':i===5?'text-center':'text-right'} ${i===0?'pl-5':''} ${i===12?'pr-5':''}`}>
                           {h}<SortIcon col={col}/>
                         </th>
                       ) : (

@@ -308,9 +308,10 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
                 <div className="text-left">
                   <p className="text-xs font-bold text-white">{s.symbol}</p>
                   <p className="text-[10px] text-gray-500">{s.strike} PE · {s.score}/5</p>
+                  <p className="text-[10px] text-amber-500">Vol +{s.vol_chg_30min?.toFixed(0)}%</p>
                 </div>
                 <span className={`text-[10px] font-bold ${s.otm_distance_pct != null ? s.otm_distance_pct <= 2 ? 'text-emerald-400' : s.otm_distance_pct <= 5 ? 'text-amber-400' : 'text-red-400' : 'text-gray-500'}`}>
-                  {s.otm_distance_pct != null ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}%` : '—'}
+                  {s.otm_distance_pct != null ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}% away` : '—'}
                 </span>
               </button>
             ))}
@@ -326,9 +327,10 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
                 <div className="text-left">
                   <p className="text-xs font-bold text-white">{s.symbol}</p>
                   <p className="text-[10px] text-gray-500">{s.strike} CE · {s.score}/5</p>
+                  <p className="text-[10px] text-amber-500">Vol +{s.vol_chg_30min?.toFixed(0)}%</p>
                 </div>
                 <span className={`text-[10px] font-bold ${s.otm_distance_pct != null ? s.otm_distance_pct <= 2 ? 'text-emerald-400' : s.otm_distance_pct <= 5 ? 'text-amber-400' : 'text-red-400' : 'text-gray-500'}`}>
-                  {s.otm_distance_pct != null ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}%` : '—'}
+                  {s.otm_distance_pct != null ? `${s.otm_distance_pct <= 2 ? '✅' : s.otm_distance_pct <= 5 ? '⚠️' : '🔴'} ${s.otm_distance_pct}% away` : '—'}
                 </span>
               </button>
             ))}

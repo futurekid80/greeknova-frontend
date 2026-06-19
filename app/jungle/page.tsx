@@ -171,9 +171,16 @@ export default function OptionsJungle() {
         const bv = String((b as any)[sortBy] || '')
         return av.localeCompare(bv) * sortDir
       }
-      const av = sortBy === 'oi_pct' ? Math.abs(a.oi_pct) : sortBy === 'ltp_chg_pct' ? Math.abs(a.ltp_chg_pct) : sortBy === 'volume' ? a.volume : sortBy === 'otm_pct' ? a.otm_pct : sortBy === 'strike' ? a.strike : sortBy === 'snapshot_count' ? ((a as any).snapshot_count || 0) : a.last_price
-      const bv = sortBy === 'oi_pct' ? Math.abs(b.oi_pct) : sortBy === 'ltp_chg_pct' ? Math.abs(b.ltp_chg_pct) : sortBy === 'volume' ? b.volume : sortBy === 'otm_pct' ? b.otm_pct : sortBy === 'strike' ? b.strike : sortBy === 'snapshot_count' ? ((b as any).snapshot_count || 0) : b.last_price
-      return (bv - av) * sortDir
+      const getVal = (s: any) => {
+        if (sortBy === 'oi_pct') return Math.abs(s.oi_pct)
+        if (sortBy === 'ltp_chg_pct') return Math.abs(s.ltp_chg_pct)
+        if (sortBy === 'volume') return s.volume
+        if (sortBy === 'otm_pct') return s.otm_pct
+        if (sortBy === 'strike') return Number(s.strike)
+        if (sortBy === 'snapshot_count') return Number(s.snapshot_count || 0)
+        return s.last_price
+      }
+      return (getVal(b) - getVal(a)) * sortDir
     })
 
   // ── Two-way detection for OI spikes ──────────────────────────────────────

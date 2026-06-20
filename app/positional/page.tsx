@@ -538,7 +538,7 @@ export default function PositionalIntelligence() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
   const [signalFilter, setSignalFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP'>('all')
-  const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days' | 'signal'>('consistency')
+  const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days' | 'signal' | 'latest'>('consistency')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -561,8 +561,15 @@ export default function PositionalIntelligence() {
     .filter(s => signalFilter === 'all' || s.signal === signalFilter)
     .sort((a, b) => {
       if (sortBy === 'signal') {
-        // Long first, then Short — then by consistency within each group
         if (a.signal !== b.signal) return a.signal === 'LONG_BUILDUP' ? -1 : 1
+        return b.consistency_pct - a.consistency_pct
+      }
+      if (sortBy === 'latest') {
+        // Long Buildup latest first, then Short Buildup, then Neutral
+        const order: Record<string, number> = { LONG_BUILDUP: 0, SHORT_BUILDUP: 1, SHORT_COVERING: 2, LONG_UNWINDING: 3, NEUTRAL: 4 }
+        const oa = order[a.latest_signal] ?? 5
+        const ob = order[b.latest_signal] ?? 5
+        if (oa !== ob) return oa - ob
         return b.consistency_pct - a.consistency_pct
       }
       if (sortBy === 'consistency') return b.consistency_pct - a.consistency_pct
@@ -762,7 +769,14 @@ export default function PositionalIntelligence() {
                         Series OI {sortBy === 'series_oi' ? '↓' : ''}
                       </span>
                     </th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Latest</th>
+                    <th
+                      className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => setSortBy('latest')}
+                    >
+                      <span className={sortBy === 'latest' ? 'text-amber-400' : 'text-gray-300'}>
+                        Latest {sortBy === 'latest' ? '↓' : ''}
+                      </span>
+                    </th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">CPR</th>
                   </tr>
                 </thead>

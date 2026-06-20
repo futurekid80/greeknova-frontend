@@ -5,6 +5,20 @@ import Navbar from '@/components/Navbar'
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://greeknova-backend-production.up.railway.app'
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+interface SignalHistoryRow {
+  date: string
+  signal: string
+  fut_oi_chg: number
+  price_chg: number
+  close_price: number
+}
+
+interface SignalHistoryData {
+  symbol: string
+  history: SignalHistoryRow[]
+  total: number
+}
 interface PIStock {
   symbol: string
   cmp: number
@@ -138,7 +152,7 @@ function SignalBadge({ signal }: { signal: string }) {
 }
 
 // ── Active Conviction Card ────────────────────────────────────────────────────
-function ConvictionCard({ s, rank }: { s: PIStock; rank: number }) {
+function ConvictionCard({ s, rank, onSymbolClick }: { s: PIStock; rank: number; onSymbolClick: (sym: string) => void }) {
   const sig = signalLabel(s.signal)
   const isLong = s.signal === 'LONG_BUILDUP'
   const borderColor = isLong ? 'border-emerald-700/60' : 'border-red-700/60'
@@ -151,7 +165,12 @@ function ConvictionCard({ s, rank }: { s: PIStock; rank: number }) {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-400 font-mono">#{rank}</span>
-            <span className="text-lg font-bold text-white">{s.symbol}</span>
+            <button
+              onClick={() => onSymbolClick(s.symbol)}
+              className="text-lg font-bold text-white hover:text-emerald-400 transition-colors underline-offset-2 hover:underline"
+            >
+              {s.symbol}
+            </button>
           </div>
           <p className="text-sm text-gray-300 mt-0.5">₹{fmtCmp(s.cmp)}</p>
         </div>
@@ -206,7 +225,7 @@ function ConvictionCard({ s, rank }: { s: PIStock; rank: number }) {
 }
 
 // ── Series Buildup Row ────────────────────────────────────────────────────────
-function SeriesRow({ s, i }: { s: PIStock; i: number }) {
+function SeriesRow({ s, i, onSymbolClick }: { s: PIStock; i: number; onSymbolClick: (sym: string) => void }) {
   const sig = signalLabel(s.signal)
   const latestSig = signalLabel(s.latest_signal)
   const isLong = s.signal === 'LONG_BUILDUP'
@@ -217,7 +236,12 @@ function SeriesRow({ s, i }: { s: PIStock; i: number }) {
     <tr className={`border-b border-gray-800/60 hover:bg-gray-900/40 transition-colors ${i % 2 === 0 ? '' : 'bg-gray-900/10'}`}>
       {/* Symbol */}
       <td className="px-4 py-3">
-        <p className="font-bold text-white text-sm">{s.symbol}</p>
+        <button
+          onClick={() => onSymbolClick(s.symbol)}
+          className="font-bold text-white text-sm hover:text-emerald-400 transition-colors hover:underline underline-offset-2 text-left"
+        >
+          {s.symbol}
+        </button>
         <p className="text-xs text-gray-400">₹{fmtCmp(s.cmp)}</p>
       </td>
 
@@ -251,14 +275,7 @@ function SeriesRow({ s, i }: { s: PIStock; i: number }) {
       {/* Latest signal */}
       <td className="px-4 py-3 text-right">
         <SignalBadge signal={s.latest_signal} />
-        {((s.signal === 'LONG_BUILDUP' && s.latest_signal === 'SHORT_BUILDUP') ||
-          (s.signal === 'SHORT_BUILDUP' && s.latest_signal === 'LONG_BUILDUP')) && (
-          <p className="text-[10px] text-amber-400 font-semibold mt-0.5">⚠️ Reversal signal</p>
-        )}
-        {s.latest_signal === 'NEUTRAL' && (
-          <p className="text-[10px] text-gray-500 mt-0.5">trend pausing</p>
-        )}
-        <p className={`text-xs mt-0.5 ${s.latest_price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+        <p className={`text-xs mt-1 ${s.latest_price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
           {fmt(s.latest_price_chg, 2)}
         </p>
       </td>
@@ -367,6 +384,173 @@ function FilterBtn({ label, active, onClick }: { label: string; active: boolean;
     >
       {label}
     </button>
+  )
+}
+
+// ── Signal History Popup ──────────────────────────────────────────────────────
+function SignalHistoryPopup({ symbol, onClose }: { symbol: string; onClose: () => void }) {
+  const [data, setData] = useState<SignalHistoryData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`${API}/stock-signal-history/${symbol}?days=20`)
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [symbol])
+
+  const signalConfig: Record<string, { label: string; color: string; dot: string; bar: string }> = {
+    LONG_BUILDUP:   { label: 'Long Buildup',   color: 'text-emerald-400', dot: 'bg-emerald-500', bar: 'bg-emerald-500' },
+    SHORT_BUILDUP:  { label: 'Short Buildup',  color: 'text-red-400',     dot: 'bg-red-500',     bar: 'bg-red-500'     },
+    SHORT_COVERING: { label: 'Short Covering', color: 'text-sky-400',     dot: 'bg-sky-500',     bar: 'bg-sky-500'     },
+    LONG_UNWINDING: { label: 'Long Unwinding', color: 'text-orange-400',  dot: 'bg-orange-500',  bar: 'bg-orange-500'  },
+    NEUTRAL:        { label: 'Neutral',         color: 'text-gray-500',    dot: 'bg-gray-700',    bar: 'bg-gray-700'    },
+  }
+
+  function fmt(n: number) { return n >= 0 ? `+${n.toFixed(2)}%` : `${n.toFixed(2)}%` }
+  function fmtDate(d: string) {
+    const dt = new Date(d)
+    return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+  }
+
+  // Detect streak — find consecutive run from most recent day
+  const history = data?.history || []
+  let streakSignal = history[0]?.signal
+  let streakCount = 0
+  for (const row of history) {
+    if (row.signal === streakSignal && row.signal !== 'NEUTRAL') streakCount++
+    else break
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative w-full max-w-lg bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-white font-black text-lg">{symbol}</h3>
+              {streakCount >= 2 && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                  streakSignal === 'LONG_BUILDUP'
+                    ? 'bg-emerald-950/60 border border-emerald-800/50 text-emerald-400'
+                    : 'bg-red-950/60 border border-red-800/50 text-red-400'
+                }`}>
+                  🔥 {streakCount}d streak
+                </span>
+              )}
+            </div>
+            <p className="text-gray-400 text-xs mt-0.5">FUT Signal History — last {data?.total || '—'} trading days</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none">✕</button>
+        </div>
+
+        {/* Visual signal strip */}
+        {!loading && history.length > 0 && (
+          <div className="px-5 pt-4 pb-2">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Signal timeline (oldest → newest)</p>
+            <div className="flex gap-1 items-end h-8">
+              {[...history].reverse().map((row, i) => {
+                const cfg = signalConfig[row.signal] || signalConfig.NEUTRAL
+                return (
+                  <div key={i} title={`${row.date}: ${cfg.label}`}
+                    className={`flex-1 rounded-sm ${cfg.bar} opacity-90`}
+                    style={{ height: row.signal === 'NEUTRAL' ? '30%' : '100%' }}
+                  />
+                )
+              })}
+            </div>
+            <div className="flex justify-between mt-1">
+              <span className="text-[9px] text-gray-600">{fmtDate(history[history.length - 1]?.date)}</span>
+              <span className="text-[9px] text-gray-600">{fmtDate(history[0]?.date)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="overflow-y-auto max-h-96">
+          {loading ? (
+            <div className="py-10 text-center">
+              <p className="text-gray-500 text-sm animate-pulse">Loading signal history...</p>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="text-gray-500 text-sm">No history available</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead className="sticky top-0 bg-gray-950">
+                <tr className="border-b border-gray-800">
+                  <th className="text-left px-5 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Date</th>
+                  <th className="text-left px-3 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Signal</th>
+                  <th className="text-right px-3 py-2 text-[10px] text-gray-500 uppercase tracking-wide">FUT OI Chg</th>
+                  <th className="text-right px-3 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Price Chg</th>
+                  <th className="text-right px-5 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Close</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((row, i) => {
+                  const cfg = signalConfig[row.signal] || signalConfig.NEUTRAL
+                  const isFirst = i === 0
+                  return (
+                    <tr key={row.date}
+                      className={`border-b border-gray-800/40 ${isFirst ? 'bg-gray-900/40' : 'hover:bg-gray-900/20'} transition-colors`}>
+                      <td className="px-5 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                          <span className={`text-xs font-mono ${isFirst ? 'text-white font-bold' : 'text-gray-300'}`}>
+                            {fmtDate(row.date)}
+                          </span>
+                          {isFirst && <span className="text-[9px] text-gray-500">latest</span>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className={`text-xs font-mono font-semibold ${row.fut_oi_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {fmt(row.fut_oi_chg)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className={`text-xs font-mono font-semibold ${row.price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {fmt(row.price_chg)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-2.5 text-right">
+                        <span className="text-xs text-gray-300 font-mono">
+                          ₹{row.close_price >= 1000
+                            ? row.close_price.toLocaleString('en-IN', { maximumFractionDigits: 0 })
+                            : row.close_price.toFixed(2)}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-[10px] text-gray-600">
+            {Object.entries(signalConfig).filter(([k]) => k !== 'NEUTRAL').map(([, cfg]) => (
+              <span key={cfg.label} className="flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                <span>{cfg.label}</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-700">Not investment advice</p>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -547,6 +731,7 @@ export default function PositionalIntelligence() {
   const [error, setError]     = useState<string | null>(null)
   const [signalFilter, setSignalFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP'>('all')
   const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days' | 'signal' | 'latest'>('consistency')
+  const [historySymbol, setHistorySymbol] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -568,18 +753,6 @@ export default function PositionalIntelligence() {
   const seriesFiltered = (data?.series_buildup || [])
     .filter(s => signalFilter === 'all' || s.signal === signalFilter)
     .sort((a, b) => {
-      if (sortBy === 'signal') {
-        if (a.signal !== b.signal) return a.signal === 'LONG_BUILDUP' ? -1 : 1
-        return b.consistency_pct - a.consistency_pct
-      }
-      if (sortBy === 'latest') {
-        // Long Buildup latest first, then Short Buildup, then Neutral
-        const order: Record<string, number> = { LONG_BUILDUP: 0, SHORT_BUILDUP: 1, SHORT_COVERING: 2, LONG_UNWINDING: 3, NEUTRAL: 4 }
-        const oa = order[a.latest_signal] ?? 5
-        const ob = order[b.latest_signal] ?? 5
-        if (oa !== ob) return oa - ob
-        return b.consistency_pct - a.consistency_pct
-      }
       if (sortBy === 'consistency') return b.consistency_pct - a.consistency_pct
       if (sortBy === 'series_oi')   return b.series_oi_pct - a.series_oi_pct
       return (b.signal === 'LONG_BUILDUP' ? b.lb_days : b.sb_days) - (a.signal === 'LONG_BUILDUP' ? a.lb_days : a.sb_days)
@@ -624,6 +797,15 @@ export default function PositionalIntelligence() {
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar active="/positional" />
+
+      {/* Signal History Popup */}
+      {historySymbol && (
+        <SignalHistoryPopup
+          symbol={historySymbol}
+          onClose={() => setHistorySymbol(null)}
+        />
+      )}
+
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-8">
 
         {/* ── Page Header ─────────────────────────────────────────────────── */}
@@ -680,7 +862,7 @@ export default function PositionalIntelligence() {
             emoji="🔥"
             title="Active Conviction"
             count={data.active_conviction.length}
-            subtitle="2+ consecutive FUT signal days — institutional positioning in play"
+            subtitle="2+ consecutive FUT signal days — click any symbol for signal history"
             color="bg-orange-900/50 text-orange-300"
           />
           {data.active_conviction.length === 0 ? (
@@ -688,7 +870,7 @@ export default function PositionalIntelligence() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {data.active_conviction.map((s, i) => (
-                <ConvictionCard key={s.symbol} s={s} rank={i + 1} />
+                <ConvictionCard key={s.symbol} s={s} rank={i + 1} onSymbolClick={setHistorySymbol} />
               ))}
             </div>
           )}
@@ -743,7 +925,10 @@ export default function PositionalIntelligence() {
             <FilterBtn label="All" active={signalFilter === 'all'} onClick={() => setSignalFilter('all')} />
             <FilterBtn label="🟢 Long Buildup" active={signalFilter === 'LONG_BUILDUP'} onClick={() => setSignalFilter('LONG_BUILDUP')} />
             <FilterBtn label="🔴 Short Buildup" active={signalFilter === 'SHORT_BUILDUP'} onClick={() => setSignalFilter('SHORT_BUILDUP')} />
-            <span className="ml-4 text-xs text-gray-400 italic">↕ Click column headers to sort</span>
+            <span className="ml-4 text-xs text-gray-500">Sort:</span>
+            <FilterBtn label="Consistency" active={sortBy === 'consistency'} onClick={() => setSortBy('consistency')} />
+            <FilterBtn label="Series OI" active={sortBy === 'series_oi'} onClick={() => setSortBy('series_oi')} />
+            <FilterBtn label="Signal Days" active={sortBy === 'lb_days'} onClick={() => setSortBy('lb_days')} />
           </div>
 
           {seriesFiltered.length === 0 ? (
@@ -754,44 +939,16 @@ export default function PositionalIntelligence() {
                 <thead>
                   <tr className="bg-gray-900/80 border-b border-gray-700">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Symbol</th>
-                    <th
-                      className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-white transition-colors"
-                      onClick={() => setSortBy('signal')}
-                    >
-                      <span className={sortBy === 'signal' ? 'text-amber-400' : 'text-gray-300'}>
-                        Series Signal {sortBy === 'signal' ? '↕' : ''}
-                      </span>
-                    </th>
-                    <th
-                      className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-white transition-colors"
-                      onClick={() => setSortBy('consistency')}
-                    >
-                      <span className={sortBy === 'consistency' ? 'text-amber-400' : 'text-gray-300'}>
-                        Consistency {sortBy === 'consistency' ? '↓' : ''}
-                      </span>
-                    </th>
-                    <th
-                      className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-white transition-colors"
-                      onClick={() => setSortBy('series_oi')}
-                    >
-                      <span className={sortBy === 'series_oi' ? 'text-amber-400' : 'text-gray-300'}>
-                        Series OI {sortBy === 'series_oi' ? '↓' : ''}
-                      </span>
-                    </th>
-                    <th
-                      className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-white transition-colors"
-                      onClick={() => setSortBy('latest')}
-                    >
-                      <span className={sortBy === 'latest' ? 'text-amber-400' : 'text-gray-300'}>
-                        Latest {sortBy === 'latest' ? '↓' : ''}
-                      </span>
-                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Series Signal</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Consistency</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Series OI</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Latest</th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">CPR</th>
                   </tr>
                 </thead>
                 <tbody>
                   {seriesFiltered.map((s, i) => (
-                    <SeriesRow key={s.symbol} s={s} i={i} />
+                    <SeriesRow key={s.symbol} s={s} i={i} onSymbolClick={setHistorySymbol} />
                   ))}
                 </tbody>
               </table>

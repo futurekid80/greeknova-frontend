@@ -1,1246 +1,594 @@
 'use client'
-import Navbar from '@/components/Navbar'
-import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw } from 'lucide-react'
-import React from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://greeknova-backend-production.up.railway.app'
 
-interface RadarResult {
-  symbol: string; is_index: boolean
-  signal: string; bias: string
-  consistency_pct: number; consistency_label: string
-  match_days: number; total_days: number
-  consec_days: number
-  accelerating: boolean; oi_first_half_chg: number; oi_second_half_chg: number
-  triple_confirm: boolean; vol_consec: number
-  oi_chg_pct: number; vol_chg_pct: number; vol_series_chg: number; vol_avg_7d: number; cmp_chg_pct: number
-  oi_series: number[]; vol_series: number[]; cmp_series: number[]
-  date_labels: string[]; cmp: number; series_days: number
-  conviction_level: string; conviction_label: string; conviction_emoji: string; conviction_color: string; conviction_rank: number
-  ignition: boolean; fut_signal_today: string | null
-  ce_oi_chg_pct?: number; pe_oi_chg_pct?: number
-  ce_pct_of_total?: number; pe_pct_of_total?: number
-  pcr_series?: number; composition?: string; composition_interp?: string; composition_short?: string
-  bias_confirmed?: boolean; dominant?: string
-  ce_wall?: number; pe_wall?: number
-  ce_wall_oi_L?: number; pe_wall_oi_L?: number
-  trade_range?: number; trade_range_pct?: number; range_label?: string
-  has_uoa?: boolean
-  ignition_score?: number
-  ignition_score_breakdown?: {
-    consec_3plus: boolean
-    high_consistency: boolean
-    bias_confirmed: boolean
-    cpr_confirms: boolean
-    vol_building: boolean
-  }
+// ── Types ────────────────────────────────────────────────────────────────────
+interface PIStock {
+  symbol: string
+  cmp: number
+  latest_signal: string
+  latest_fut_oi_chg: number
+  latest_price_chg: number
+  cpr_position: string | null
+  cpr_width_label: string | null
+  cpr_width_emoji: string | null
+  cpr_trend: string | null
+  total_days: number
+  signal: string
+  consec_days?: number
+  consistency_pct: number
+  series_oi_pct: number
+  lb_days: number
+  sb_days: number
 }
 
-interface RadarData {
-  expiry: string; series_start: string
-  total_trading_days: number; min_consec: number
-  total: number
+interface StealthStock {
+  symbol: string
+  cmp: number
+  tier: string
+  today_oi_chg: number
+  price_chg: number
+  net_delta: number
+  rank: number
+}
+
+interface VolStock {
+  symbol: string
+  cmp: number
+  signal_type: string
+  volume_ratio: number
+  oi_chg_pct: number
+  price_context: string
+}
+
+interface PIData {
+  date: string
+  expiry: string
+  series_start: string
+  total_trading_days: number
+  active_conviction: PIStock[]
+  stealth_buildup: StealthStock[]
+  vol_breakout: VolStock[]
+  series_buildup: PIStock[]
   summary: {
-    long_buildup: number; short_buildup: number
-    short_covering: number; long_unwinding: number
-    high_consistency: number; triple_confirm: number; accelerating: number
-    conviction: number; ignition: number; building: number; radar: number
+    active_conviction: number
+    stealth_buildup: number
+    vol_breakout: number
+    series_buildup: number
+    long_bias: number
+    short_bias: number
   }
-  results: RadarResult[]
 }
 
-const SIGNAL_META: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
-  LONG_BUILDUP:   { color: 'text-emerald-400', bg: 'bg-emerald-950/30', border: 'border-emerald-800/40', icon: '🐂', label: 'Long Buildup' },
-  SHORT_BUILDUP:  { color: 'text-red-400',     bg: 'bg-red-950/30',     border: 'border-red-800/40',     icon: '🐻', label: 'Short Buildup' },
-  SHORT_COVERING: { color: 'text-cyan-400',    bg: 'bg-cyan-950/30',    border: 'border-cyan-800/40',    icon: '🔄', label: 'Short Covering' },
-  LONG_UNWINDING: { color: 'text-orange-400',  bg: 'bg-orange-950/30',  border: 'border-orange-800/40',  icon: '⚠️', label: 'Long Unwinding' },
-}
-
-const CONVICTION_META: Record<string, { bg: string; text: string; border: string }> = {
-  RADAR:      { bg: 'bg-blue-950',    text: 'text-blue-400',    border: 'border-blue-800/50' },
-  BUILDING:   { bg: 'bg-yellow-950',  text: 'text-yellow-400',  border: 'border-yellow-800/50' },
-  CONVICTION: { bg: 'bg-orange-950',  text: 'text-orange-400',  border: 'border-orange-800/50' },
-  IGNITION:   { bg: 'bg-emerald-950', text: 'text-emerald-400', border: 'border-emerald-800/50' },
-}
-
-function getRefStrike(cmp: number, side: 'CE' | 'PE'): number {
-  const pct = cmp > 5000 ? 0.03 : cmp > 1000 ? 0.04 : 0.05
-  const raw = side === 'CE' ? cmp * (1 + pct) : cmp * (1 - pct)
-  const interval = cmp > 20000 ? 100 : cmp > 5000 ? 50 : cmp > 1000 ? 20 : cmp > 500 ? 10 : 5
-  return Math.round(raw / interval) * interval
-}
-
-function getWriterTake(r: RadarResult): {
-  oiType: string; oiColor: string; oiBg: string; oiBorder: string
-  refStrike: number; refSide: 'CE' | 'PE'
-  safetyLabel: string; safetyColor: string
-  structureNote: string; cautionNote: string | null
-  opportunityLabel: string; opportunityColor: string; opportunityBg: string
-  conflictNote: string | null
-} {
-  const isCEWriter = r.signal === 'SHORT_BUILDUP' || r.signal === 'LONG_UNWINDING'
-  const isPEWriter = r.signal === 'LONG_BUILDUP' || r.signal === 'SHORT_COVERING'
-  const refSide: 'CE' | 'PE' = isCEWriter ? 'CE' : 'PE'
-  const refStrike = getRefStrike(r.cmp, refSide)
-  const oiType    = isCEWriter ? '✍️ CE OI Structure' : '✍️ PE OI Structure'
-  const oiColor   = isCEWriter ? 'text-red-400' : 'text-emerald-400'
-  const oiBg      = isCEWriter ? 'bg-red-950/20' : 'bg-emerald-950/20'
-  const oiBorder  = isCEWriter ? 'border-red-800/30' : 'border-emerald-800/30'
-  const safetyLabel = r.consistency_pct >= 70 ? 'HIGH' : r.consistency_pct >= 50 ? 'MEDIUM' : 'LOW'
-  const safetyColor = safetyLabel === 'HIGH' ? 'text-emerald-400' : safetyLabel === 'MEDIUM' ? 'text-amber-400' : 'text-red-400'
-
-  let opportunityLabel = '', opportunityColor = '', opportunityBg = ''
-  if (isCEWriter && r.composition === 'CALL_DOMINATED') {
-    opportunityLabel = '✅ CE writing context — call writers observably active'
-    opportunityColor = 'text-emerald-400'; opportunityBg = 'bg-emerald-950/20'
-  } else if (isCEWriter && r.composition === 'PUT_DOMINATED') {
-    opportunityLabel = '⚠️ Mixed — PE writers dominant despite bearish price'
-    opportunityColor = 'text-amber-400'; opportunityBg = 'bg-amber-950/20'
-  } else if (isPEWriter && r.composition === 'PUT_DOMINATED') {
-    opportunityLabel = '✅ PE writing context — put writers observably active'
-    opportunityColor = 'text-emerald-400'; opportunityBg = 'bg-emerald-950/20'
-  } else if (isPEWriter && r.composition === 'CALL_DOMINATED') {
-    opportunityLabel = '⚠️ Mixed — CE writers dominant despite bullish price'
-    opportunityColor = 'text-amber-400'; opportunityBg = 'bg-amber-950/20'
-  } else {
-    opportunityLabel = '⚪ Balanced OI — both sides active, monitor closely'
-    opportunityColor = 'text-gray-400'; opportunityBg = 'bg-gray-900/30'
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function signalLabel(sig: string) {
+  switch (sig) {
+    case 'LONG_BUILDUP':   return { label: 'Long Buildup',   color: 'text-emerald-400', bg: 'bg-emerald-950/50 border border-emerald-800/50' }
+    case 'SHORT_BUILDUP':  return { label: 'Short Buildup',  color: 'text-red-400',     bg: 'bg-red-950/50 border border-red-800/50' }
+    case 'SHORT_COVERING': return { label: 'Short Covering', color: 'text-sky-400',     bg: 'bg-sky-950/50 border border-sky-800/50' }
+    case 'LONG_UNWINDING': return { label: 'Long Unwinding', color: 'text-orange-400',  bg: 'bg-orange-950/50 border border-orange-800/50' }
+    default:               return { label: 'Neutral',         color: 'text-gray-400',    bg: 'bg-gray-800/50 border border-gray-700/50' }
   }
-
-  const conflictNote = (isCEWriter && r.composition === 'PUT_DOMINATED') ||
-                       (isPEWriter && r.composition === 'CALL_DOMINATED')
-    ? '⚠️ Composition contradicts price direction — avoid' : null
-
-  const compNote = r.composition === 'PUT_DOMINATED'
-    ? 'PE writers active · bullish institutional positioning'
-    : r.composition === 'CALL_DOMINATED'
-    ? 'CE writers active · bearish institutional positioning'
-    : 'Mixed OI · both sides positioning'
-
-  const cautionNote = r.signal === 'LONG_UNWINDING'
-    ? '⚠️ Long positions exiting — monitor OI direction'
-    : r.signal === 'SHORT_COVERING' ? '⚠️ Short covering — OI reducing' : null
-
-  return { oiType, oiColor, oiBg, oiBorder, refStrike, refSide, safetyLabel, safetyColor, structureNote: compNote, cautionNote, opportunityLabel, opportunityColor, opportunityBg, conflictNote }
 }
 
-function Sparkline({ data, color }: { data: number[]; color: string }) {
-  if (data.length < 2) return null
-  const min = Math.min(...data); const max = Math.max(...data)
-  const range = max - min || 1
-  const w = 80; const h = 28
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(' ')
-  return (
-    <svg width={w} height={h} className="overflow-visible">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
-      <circle cx={(data.length-1)/(data.length-1)*w} cy={h-((data[data.length-1]-min)/range)*h} r="2.5" fill={color}/>
-    </svg>
-  )
+function cprPositionColor(pos: string | null) {
+  if (!pos) return 'text-gray-400'
+  if (pos === 'Above CPR') return 'text-emerald-400'
+  if (pos === 'Below CPR') return 'text-red-400'
+  return 'text-amber-400'
 }
 
-function ConsistencyBar({ pct, label }: { pct: number; label: string }) {
-  const color = label === 'HIGH' ? 'bg-emerald-500' : label === 'MEDIUM' ? 'bg-amber-400' : 'bg-red-500'
-  const textColor = label === 'HIGH' ? 'text-emerald-400' : label === 'MEDIUM' ? 'text-amber-400' : 'text-red-400'
-  return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-1">
-        <span className={`text-xs font-black ${textColor}`}>{pct}%</span>
-        <span className={`text-[10px] font-bold ${textColor}`}>{label}</span>
-      </div>
-      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden w-full">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }}/>
-      </div>
-    </div>
-  )
+function cprTrendIcon(trend: string | null) {
+  if (trend === 'ASCENDING')  return '↑'
+  if (trend === 'DESCENDING') return '↓'
+  return '→'
 }
 
-function IgnitionScoreBar({ score, breakdown }: {
-  score: number
-  breakdown: {
-    consec_3plus: boolean
-    high_consistency: boolean
-    bias_confirmed: boolean
-    cpr_confirms: boolean
-    vol_building: boolean
-  }
+function cprTrendColor(trend: string | null) {
+  if (trend === 'ASCENDING')  return 'text-emerald-400'
+  if (trend === 'DESCENDING') return 'text-red-400'
+  return 'text-gray-400'
+}
+
+function fmt(n: number, dec = 2) {
+  return n >= 0 ? `+${n.toFixed(dec)}%` : `${n.toFixed(dec)}%`
+}
+
+function fmtCmp(n: number) {
+  return n >= 1000 ? n.toLocaleString('en-IN', { maximumFractionDigits: 1 }) : n.toFixed(2)
+}
+
+// ── Section Header ────────────────────────────────────────────────────────────
+function SectionHeader({ emoji, title, count, subtitle, color }: {
+  emoji: string; title: string; count: number; subtitle: string; color: string
 }) {
-  const labels = [
-    { key: 'consec_3plus',     icon: '📅', tip: '3+ consecutive days'        },
-    { key: 'high_consistency', icon: '📊', tip: 'HIGH consistency (70%+)'    },
-    { key: 'bias_confirmed',   icon: '⚖',  tip: 'CE/PE composition confirms' },
-    { key: 'cpr_confirms',     icon: '📌', tip: 'CPR position confirms'       },
-    { key: 'vol_building',     icon: '📈', tip: 'Volume building 2+ days'     },
-  ]
-  const scoreColor = score === 5 ? 'text-emerald-400' : score === 4 ? 'text-amber-400' : 'text-orange-400'
-  const barColor   = score === 5 ? 'bg-emerald-500'   : score === 4 ? 'bg-amber-400'   : 'bg-orange-400'
   return (
-    <div className="mt-1.5">
-      <div className="flex items-center gap-1.5 mb-1">
-        <span className={`text-[10px] font-black ${scoreColor}`}>Quality {score}/5</span>
-        <div className="flex gap-0.5">
-          {[1,2,3,4,5].map(i => (
-            <div key={i} className={`w-3 h-1.5 rounded-sm ${i <= score ? barColor : 'bg-gray-800'}`}/>
-          ))}
+    <div className="flex items-center gap-3 mb-4">
+      <span className="text-2xl">{emoji}</span>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold text-white">{title}</h2>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}`}>{count}</span>
         </div>
+        <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
       </div>
-      <div className="flex gap-1 flex-wrap">
-        {labels.map(({ key, icon, tip }) => {
-          const passed = breakdown[key as keyof typeof breakdown]
-          return (
-            <span key={key} title={tip}
-              className={`text-[9px] px-1 py-0.5 rounded border font-bold ${
-                passed
-                  ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40'
-                  : 'bg-gray-900/40 text-gray-600 border-gray-800/40 opacity-50'
-              }`}>
-              {icon}
-            </span>
-          )
-        })}
-      </div>
-      <p className="text-[9px] text-gray-700 mt-0.5">
-        {score === 5 ? 'All factors aligned — highest conviction' : score === 4 ? 'Strong signal — one factor pending' : 'Signal active — wait for confirmation'}
-      </p>
-      <p className="text-[9px] text-gray-600 mt-1 leading-relaxed">
-        📅 3d+ consec · 📊 70%+ consistency · ⚖ CE/PE confirms · 📌 CPR confirms · 📈 Vol building
-      </p>
     </div>
   )
 }
 
-function ConvictionBadge({ level, label, emoji }: { level: string; label: string; emoji: string }) {
-  const meta = CONVICTION_META[level] || CONVICTION_META['RADAR']
+// ── Empty State ───────────────────────────────────────────────────────────────
+function EmptyState({ message }: { message: string }) {
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 ${meta.bg} ${meta.text} border ${meta.border} rounded font-bold`}>
-      {emoji} {label}
+    <div className="border border-gray-800 rounded-xl py-8 text-center">
+      <p className="text-gray-400 text-sm">{message}</p>
+    </div>
+  )
+}
+
+// ── Signal Badge ──────────────────────────────────────────────────────────────
+function SignalBadge({ signal }: { signal: string }) {
+  const s = signalLabel(signal)
+  return (
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.bg} ${s.color}`}>
+      {s.label}
     </span>
   )
 }
 
-// ── OI Map Panel — identical to Intraday/CPR ──────────────────────────────────
-function OIMapPanel({ symbol, wallsData }: { symbol: string; wallsData: any }) {
-  const strikes = wallsData.strikes || []
-  const cmp = wallsData.cmp || 0
-  const interval = strikes.length > 1 ? Math.abs(strikes[0].strike - strikes[1].strike) : 50
-  const maxCeStrike = strikes.reduce((best: any, s: any) => s.ce_oi > (best?.ce_oi || 0) ? s : best, null)
-  const maxPeStrike = strikes.reduce((best: any, s: any) => s.pe_oi > (best?.pe_oi || 0) ? s : best, null)
+// ── Active Conviction Card ────────────────────────────────────────────────────
+function ConvictionCard({ s, rank }: { s: PIStock; rank: number }) {
+  const sig = signalLabel(s.signal)
+  const isLong = s.signal === 'LONG_BUILDUP'
+  const borderColor = isLong ? 'border-emerald-700/60' : 'border-red-700/60'
+  const accentBg   = isLong ? 'bg-emerald-950/30' : 'bg-red-950/30'
 
   return (
-    <tr>
-      <td colSpan={10} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
+    <div className={`rounded-xl border ${borderColor} ${accentBg} p-4`}>
+      {/* Top row */}
+      <div className="flex items-start justify-between mb-3">
         <div>
-          <div className="flex items-center gap-3 mb-2 flex-wrap">
-            <p className="text-sm font-bold text-white">📊 {symbol} OI Structure</p>
-            <span className="text-xs text-gray-500">CMP ₹{cmp?.toLocaleString()}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 font-mono">#{rank}</span>
+            <span className="text-lg font-bold text-white">{s.symbol}</span>
           </div>
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
-              <span className="text-[10px] text-gray-500 font-semibold">Intraday:</span>
-              <span className="text-[10px] font-bold text-red-400">📈 CE ₹{wallsData.intraday_ce_wall?.toLocaleString()}</span>
-              <span className="text-[10px] text-gray-600">·</span>
-              <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{wallsData.intraday_pe_wall?.toLocaleString()}</span>
-              <span className="text-[10px] text-gray-600">· {wallsData.intraday_range_pct}%</span>
-            </div>
-            {maxCeStrike && maxPeStrike && (
-              <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-700 rounded-lg px-2 py-1">
-                <span className="text-[10px] text-gray-500 font-semibold">Max OI:</span>
-                <span className="text-[10px] font-bold text-red-400">📈 CE ₹{maxCeStrike.strike?.toLocaleString()} · {(maxCeStrike.ce_oi/100000).toFixed(2)}L</span>
-                <span className="text-[10px] text-gray-600">·</span>
-                <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{maxPeStrike.strike?.toLocaleString()} · {(maxPeStrike.pe_oi/100000).toFixed(2)}L</span>
-              </div>
-            )}
-          </div>
-          <div className="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-semibold mb-1 px-1">
-            <span>Strike</span>
-            <span className="text-red-400">CE OI</span>
-            <span className="text-emerald-400">PE OI</span>
-            <span>Dominant</span>
-            <span>Note</span>
-          </div>
-          <div className="space-y-0.5 max-h-64 overflow-y-auto">
-            {strikes.map((s: any) => {
-              const isAtm = Math.abs(s.strike - cmp) <= interval / 2
-              const isCeWall = s.strike === wallsData.ce_wall
-              const isPeWall = s.strike === wallsData.pe_wall
-              const dominant = s.ce_oi > s.pe_oi ? 'CE' : s.pe_oi > s.ce_oi ? 'PE' : '='
-              return (
-                <div key={s.strike}
-                  className={`grid grid-cols-5 gap-2 text-[10px] py-1 px-1 rounded ${
-                    isCeWall ? 'bg-red-950/30 border border-red-800/20'
-                    : isPeWall ? 'bg-emerald-950/30 border border-emerald-800/20'
-                    : isAtm ? 'bg-amber-950/20 border border-amber-800/20' : ''
-                  }`}>
-                  <span className={`font-bold ${isAtm ? 'text-amber-400' : 'text-white'}`}>
-                    {s.strike.toLocaleString()} {isAtm ? '★' : ''}
-                  </span>
-                  <span className="text-red-400">{s.ce_oi > 0 ? `${(s.ce_oi/100000).toFixed(2)}L` : '—'}</span>
-                  <span className="text-emerald-400">{s.pe_oi > 0 ? `${(s.pe_oi/100000).toFixed(2)}L` : '—'}</span>
-                  <span className={dominant === 'CE' ? 'text-red-400' : dominant === 'PE' ? 'text-emerald-400' : 'text-gray-500'}>{dominant}</span>
-                  <span className="text-gray-500 font-bold">
-                    {isCeWall ? '🔴 CE Wall' : isPeWall ? '🟢 PE Wall' : isAtm ? '⭐ ATM' : ''}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          <p className="text-[10px] text-gray-700 mt-2">Strikes within 15% of CMP · CE Wall = resistance · PE Wall = support · Informational only</p>
+          <p className="text-sm text-gray-300 mt-0.5">₹{fmtCmp(s.cmp)}</p>
         </div>
+        <div className="text-right">
+          <SignalBadge signal={s.signal} />
+          <p className="text-xs text-gray-300 mt-1">
+            <span className="font-bold text-white">{s.consec_days}d</span> consecutive
+          </p>
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="bg-black/30 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide">FUT OI Chg</p>
+          <p className={`text-sm font-bold ${s.latest_fut_oi_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {fmt(s.latest_fut_oi_chg)}
+          </p>
+        </div>
+        <div className="bg-black/30 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide">Price Chg</p>
+          <p className={`text-sm font-bold ${s.latest_price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {fmt(s.latest_price_chg)}
+          </p>
+        </div>
+        <div className="bg-black/30 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide">Series OI</p>
+          <p className="text-sm font-bold text-amber-400">{s.series_oi_pct > 0 ? '+' : ''}{s.series_oi_pct}%</p>
+        </div>
+      </div>
+
+      {/* CPR + Consistency row */}
+      <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          {s.cpr_position && (
+            <span className={`${cprPositionColor(s.cpr_position)} font-semibold`}>
+              {s.cpr_width_emoji} {s.cpr_position}
+            </span>
+          )}
+          {s.cpr_trend && (
+            <span className={cprTrendColor(s.cpr_trend)}>
+              {cprTrendIcon(s.cpr_trend)} {s.cpr_trend.charAt(0) + s.cpr_trend.slice(1).toLowerCase()}
+            </span>
+          )}
+        </div>
+        <span className="text-gray-300">
+          <span className="text-white font-semibold">{s.consistency_pct}%</span> consistent
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── Series Buildup Row ────────────────────────────────────────────────────────
+function SeriesRow({ s, i }: { s: PIStock; i: number }) {
+  const sig = signalLabel(s.signal)
+  const latestSig = signalLabel(s.latest_signal)
+  const isLong = s.signal === 'LONG_BUILDUP'
+  const signalDays = isLong ? s.lb_days : s.sb_days
+  const consistencyWidth = Math.min(s.consistency_pct, 100)
+
+  return (
+    <tr className={`border-b border-gray-800/60 hover:bg-gray-900/40 transition-colors ${i % 2 === 0 ? '' : 'bg-gray-900/10'}`}>
+      {/* Symbol */}
+      <td className="px-4 py-3">
+        <p className="font-bold text-white text-sm">{s.symbol}</p>
+        <p className="text-xs text-gray-400">₹{fmtCmp(s.cmp)}</p>
+      </td>
+
+      {/* Series Signal */}
+      <td className="px-4 py-3">
+        <SignalBadge signal={s.signal} />
+        <p className="text-[10px] text-gray-400 mt-1">{signalDays}d of {s.total_days}</p>
+      </td>
+
+      {/* Consistency bar */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="w-20 bg-gray-800 rounded-full h-1.5">
+            <div
+              className={`h-1.5 rounded-full ${isLong ? 'bg-emerald-500' : 'bg-red-500'}`}
+              style={{ width: `${consistencyWidth}%` }}
+            />
+          </div>
+          <span className="text-white font-semibold text-xs">{s.consistency_pct}%</span>
+        </div>
+      </td>
+
+      {/* Series OI */}
+      <td className="px-4 py-3 text-right">
+        <p className={`text-sm font-bold ${s.series_oi_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          {s.series_oi_pct > 0 ? '+' : ''}{s.series_oi_pct}%
+        </p>
+        <p className="text-[10px] text-gray-400">series OI</p>
+      </td>
+
+      {/* Latest signal */}
+      <td className="px-4 py-3 text-right">
+        <SignalBadge signal={s.latest_signal} />
+        <p className={`text-xs mt-1 ${s.latest_price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          {fmt(s.latest_price_chg, 2)}
+        </p>
+      </td>
+
+      {/* CPR */}
+      <td className="px-4 py-3 text-right">
+        {s.cpr_position ? (
+          <>
+            <p className={`text-xs font-semibold ${cprPositionColor(s.cpr_position)}`}>
+              {s.cpr_width_emoji} {s.cpr_position}
+            </p>
+            <p className={`text-[10px] mt-0.5 ${cprTrendColor(s.cpr_trend)}`}>
+              {cprTrendIcon(s.cpr_trend)} {s.cpr_trend ? s.cpr_trend.charAt(0) + s.cpr_trend.slice(1).toLowerCase() : '—'}
+            </p>
+          </>
+        ) : (
+          <span className="text-gray-500 text-xs">—</span>
+        )}
       </td>
     </tr>
   )
 }
 
-export default function PositionalRadar() {
-  const [data, setData]           = useState<RadarData | null>(null)
-  const [volAlerts, setVolAlerts] = useState<any[]>([])
-  const [volExpanded, setVolExpanded] = useState(false)
-  const [stealthData, setStealthData] = useState<any>(null)
-  const [stealthExpanded, setStealthExpanded] = useState(false)
-  const [staleData, setStaleData] = useState<RadarData | null>(null)
-  const [loading, setLoading]     = useState(true)
-  const [minConsec, setMinConsec] = useState(0)
-  const [signalFilter, setSignalFilter]         = useState('all')
-  const [biasFilter, setBiasFilter]             = useState<'all'|'BULLISH'|'BEARISH'>('all')
-  const [consisFilter, setConsisFilter]         = useState('all')
-  const [convictionFilter, setConvictionFilter] = useState('all')
-  const [accelOnly, setAccelOnly]               = useState(false)
-  const [highVolOnly, setHighVolOnly]           = useState(false)
-  const [highOiOnly, setHighOiOnly]             = useState(false)
-  const [typeFilter, setTypeFilter]             = useState<'all'|'index'|'stocks'>('all')
-  const [writerView, setWriterView]             = useState(false)
-  const [sortCol, setSortCol] = useState<string | null>(null)
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-
-  function handleSort(col: string) {
-    if (sortCol === col) {
-      if (sortDir === 'desc') setSortDir('asc')
-      else { setSortCol(null); setSortDir('desc') }
-    } else {
-      setSortCol(col)
-      setSortDir('desc')
-    }
-  }
-
- // OI Map + Buildup state
-  const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null)
-  const [activePanel, setActivePanel] = useState<Record<string, string>>({})
-  const [wallsData, setWallsData] = useState<Record<string, any>>({})
-  const [buildupData, setBuildupData] = useState<Record<string, any>>({})
-  const [writerData, setWriterData] = useState<Record<string, any>>({})
-  const [wallsLoading, setWallsLoading] = useState<string | null>(null)
-
-  const fetchWalls = async (symbol: string) => {
-    if (expandedSymbol === symbol && activePanel[symbol] === 'walls') { setExpandedSymbol(null); return }
-    setActivePanel(prev => ({ ...prev, [symbol]: 'walls' }))
-    if (wallsData[symbol]) { setExpandedSymbol(symbol); return }
-    setWallsLoading(symbol)
-    try {
-      const res = await fetch(`${API}/oi-walls/${symbol}`)
-      const json = await res.json()
-      setWallsData(prev => ({ ...prev, [symbol]: json }))
-      setExpandedSymbol(symbol)
-    } catch(e) { console.error(e) }
-    setWallsLoading(null)
-  }
-
-  const fetchBuildup = async (symbol: string) => {
-    if (expandedSymbol === symbol && activePanel[symbol] === 'buildup') { setExpandedSymbol(null); return }
-    setActivePanel(prev => ({ ...prev, [symbol]: 'buildup' }))
-    setExpandedSymbol(symbol)
-    if (buildupData[symbol]) return
-    setWallsLoading(symbol)
-    try {
-      const res = await fetch(`${API}/oi-buildup/${symbol}`)
-      const json = await res.json()
-      setBuildupData(prev => ({ ...prev, [symbol]: json }))
-    } catch(e) { console.error(e) }
-    setWallsLoading(null)
-  }
-
-  const fetchWriter = async (symbol: string) => {
-    if (expandedSymbol === symbol && activePanel[symbol] === 'writer') { setExpandedSymbol(null); return }
-    setActivePanel(prev => ({ ...prev, [symbol]: 'writer' }))
-    setExpandedSymbol(symbol)
-    if (writerData[symbol]) return
-    setWallsLoading(symbol)
-    try {
-      const res = await fetch(`${API}/writer-buyer-score/${symbol}`)
-      const json = await res.json()
-      setWriterData(prev => ({ ...prev, [symbol]: json }))
-    } catch(e) { console.error(e) }
-    setWallsLoading(null)
-  }
-
-  const fetchData = useCallback(async (consec?: number) => {
-    setLoading(true)
-    const c = consec ?? minConsec
-    try {
-      const [res, volRes, stealthRes] = await Promise.all([
-        fetch(`${API}/positional-radar?min_consec=${c}`),
-        fetch(`${API}/positional-volume-alert`),
-        fetch(`${API}/stealth-buildup`)
-      ])
-      const json = await res.json()
-      const volJson = await volRes.json()
-      const stealthJson = await stealthRes.json()
-      setData(json)
-      setVolAlerts(volJson?.alerts || [])
-      setStealthData(stealthJson)
-      if (json?.results?.length > 0) setStaleData(json)
-    } catch(e) { console.error(e) }
-    setLoading(false)
-  }, [minConsec])
-
-  function handleConsec(c: number) { setMinConsec(c); fetchData(c) }
-  useEffect(() => { fetchData(0) }, [])
-
-  const SORT_MAP: Record<string, (r: RadarResult) => number> = {
-    vol:      r => r.vol_chg_pct,
-    oi:       r => r.oi_chg_pct,
-    consec:   r => r.consec_days,
-    consisPC: r => r.consistency_pct,
-    price:    r => r.cmp_chg_pct,
-  }
-
-  const displayData = (data?.results?.length === 0 && staleData) ? staleData : data
-  const results = (displayData?.results || [])
-    .filter(r => typeFilter === 'all' || (typeFilter === 'index' ? r.is_index : !r.is_index))
-    .filter(r => signalFilter === 'all' || r.signal === signalFilter)
-    .filter(r => biasFilter === 'all' || r.bias === biasFilter)
-    .filter(r => consisFilter === 'all' || r.consistency_label === consisFilter)
-    .filter(r => convictionFilter === 'all' || r.conviction_level === convictionFilter)
-    .filter(r => !accelOnly || r.accelerating)
-    .filter(r => !highVolOnly || r.vol_chg_pct > 20)
-    .filter(r => !highOiOnly || r.oi_chg_pct > 10)
-    .filter(r => !writerView || r.consistency_pct >= 50)
-    .sort((a, b) => {
-      if (!sortCol || !SORT_MAP[sortCol]) return 0
-      const fn = SORT_MAP[sortCol]
-      return sortDir === 'desc' ? fn(b) - fn(a) : fn(a) - fn(b)
-    })
-
-  const s = displayData?.summary
-
-  const tableHeaders = writerView
-    ? ['Symbol', 'OI Structure', 'Direction Held', 'Consec', 'OI (Series)', 'CE / PE Split', 'Price (Series)', '✍️ Writer\'s Take']
-    : ['Symbol', 'Signal', 'Consistency', 'Consec', 'OI (Series)', 'Volume (vs 7d avg)', 'Price (Series)', 'OI Trend', 'Price Trend', 'Deep Dive']
+// ── Stealth Card ──────────────────────────────────────────────────────────────
+function StealthCard({ s }: { s: StealthStock }) {
+  const tierColor = s.tier === 'ELITE' ? 'text-amber-400 border-amber-700/50 bg-amber-950/20'
+    : s.tier === 'STRONG' ? 'text-emerald-400 border-emerald-700/50 bg-emerald-950/20'
+    : 'text-sky-400 border-sky-700/50 bg-sky-950/20'
 
   return (
-    <div className="min-h-screen bg-[#07070e] text-white">
-      <Navbar active="/positional" />
-      <div className="max-w-7xl mx-auto px-6 py-8">
-
-        {/* Header */}
-        <div className="flex items-end justify-between mb-5">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight mb-1">
-              {writerView ? '✍️ Positional Radar — Writer\'s View' : '📈 Positional Radar'}
-            </h1>
-            <p className="text-gray-500 text-sm">
-              {writerView
-                ? 'Monthly expiry series · OI structure for option writers · Informational only'
-                : 'Monthly expiry series · Options OI buildup · FUT confirmation · Informational only'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setWriterView(v => !v)}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg border transition-all ${
-                writerView ? 'bg-purple-950/60 text-purple-300 border-purple-700/60' : 'bg-gray-900/40 text-gray-400 border-gray-700 hover:text-white'
-              }`}>
-              {writerView ? '📊 Trader View' : '✍️ Writer\'s View'}
-            </button>
-            <button onClick={() => fetchData()} disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
-            </button>
-          </div>
+    <div className={`rounded-xl border p-4 ${tierColor}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <p className="text-lg font-bold text-white">{s.symbol}</p>
+          <p className="text-sm text-gray-300">₹{fmtCmp(s.cmp)}</p>
         </div>
-
-        {/* Writer's View Info Banner */}
-        {writerView && (
-          <div className="bg-purple-950/20 border border-purple-800/40 rounded-xl px-5 py-4 mb-5">
-            <p className="text-xs text-purple-300 font-semibold mb-2">✍️ Writer's View — How to read this</p>
-            <div className="grid grid-cols-3 gap-4 text-xs text-gray-400">
-              <div><p className="text-purple-300 font-bold mb-1">OI Structure</p><p>CE OI Structure = call writers observably active. PE OI Structure = put writers observably active. Based on multi-day OI direction.</p></div>
-              <div><p className="text-purple-300 font-bold mb-1">Reference Strike</p><p>Computed at ~3-5% OTM from current price. For informational reference only — always verify against live OI walls and max pain before any decision.</p></div>
-              <div><p className="text-purple-300 font-bold mb-1">Direction Safety</p><p>HIGH = OI direction held 70%+ of series days. MEDIUM = 50-70%. Higher safety = more consistent OI positioning observed.</p></div>
-            </div>
-            <p className="text-[10px] text-gray-600 mt-3">All data is informational only. Not investment advice. GreekNova is not SEBI-registered. Always consult a SEBI-registered advisor before trading.</p>
-          </div>
-        )}
-
-        {/* Series info */}
-        {displayData && (
-          <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-5 py-3 mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-6 text-sm">
-              <div><span className="text-gray-500 text-xs">Series</span><p className="text-white font-bold">{displayData.series_start} → {displayData.expiry}</p></div>
-              <div><span className="text-gray-500 text-xs">Trading days captured</span><p className="text-amber-400 font-black">{displayData.total_trading_days} days</p></div>
-              <div><span className="text-gray-500 text-xs">Monthly expiry</span><p className="text-cyan-400 font-bold">{displayData.expiry}</p></div>
-            </div>
-            <div className="text-xs text-gray-600">Full series · NSE monthly F&O</div>
-          </div>
-        )}
-
-        {/* Expiry week warning */}
-        {displayData && Math.ceil((new Date(displayData.expiry).getTime() - Date.now()) / 86400000) <= 2 && (
-          <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl px-4 py-3 mb-5">
-            <p className="text-xs text-amber-400"><span className="font-bold">⚠️ Expiry week:</span> OI data may show distortion due to position rollover ahead of {displayData?.expiry} expiry. Signals will rebuild from next Wednesday when a new series begins.</p>
-          </div>
-        )}
-        {/* Stealth Buildup */}
-        {stealthData?.results?.length > 0 && (
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-3 cursor-pointer"
-              onClick={() => setStealthExpanded(e => !e)}>
-              <h2 className="text-sm font-bold text-white">🥷 Stealth Buildup</h2>
-              <span className="text-xs text-gray-500">Institutional accumulation disguised as weakness · FUT OI spike + small price candle</span>
-              <div className="flex items-center gap-1.5 ml-auto">
-                {stealthData.elite > 0 && <span className="text-xs bg-yellow-950 text-yellow-400 border border-yellow-800/50 rounded px-2 py-0.5 font-bold">🥇 {stealthData.elite} Elite</span>}
-                {stealthData.strong > 0 && <span className="text-xs bg-gray-800 text-gray-300 border border-gray-700/50 rounded px-2 py-0.5 font-bold">🥈 {stealthData.strong} Strong</span>}
-                {stealthData.watch > 0 && <span className="text-xs bg-amber-950/40 text-amber-600 border border-amber-900/50 rounded px-2 py-0.5 font-bold">🥉 {stealthData.watch} Watch</span>}
-              </div>
-              <span className="text-xs text-gray-500">{stealthExpanded ? '▲' : '▼'}</span>
-            </div>
-            {stealthExpanded && (
-              <div className="grid grid-cols-1 gap-2">
-                {stealthData.results.map((s: any) => (
-                  <div key={s.symbol} className={`flex items-center gap-4 px-4 py-3 rounded-xl border ${
-                    s.tier === 'ELITE' ? 'bg-yellow-950/20 border-yellow-800/30' :
-                    s.tier === 'STRONG' ? 'bg-gray-900/30 border-gray-700/40' :
-                    'bg-gray-900/20 border-gray-800/20'
-                  }`}>
-                    {/* Symbol + Tier */}
-                    <div className="min-w-[140px]">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-black text-white">{s.symbol}</span>
-                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${
-                          s.tier === 'ELITE' ? 'bg-yellow-950 text-yellow-400 border-yellow-800/50' :
-                          s.tier === 'STRONG' ? 'bg-gray-800 text-gray-300 border-gray-600/50' :
-                          'bg-amber-950/40 text-amber-600 border-amber-900/50'
-                        }`}>{s.tier_label}</span>
-                      </div>
-                      <p className="text-[10px] text-gray-500">₹{s.cmp?.toLocaleString()} · Rank #{s.rank} of {s.total_days}d</p>
-                    </div>
-
-                    {/* FUT OI */}
-                    <div className="min-w-[100px]">
-                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">FUT OI CHG</p>
-                      <p className="text-sm font-bold text-emerald-400">+{s.fut_oi_chg_pct}%</p>
-                      <p className="text-[10px] text-gray-600">highest {s.rank === 1 ? 'of series' : `#${s.rank} of series`}</p>
-                    </div>
-
-                    {/* Price */}
-                    <div className="min-w-[90px]">
-                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">PRICE</p>
-                      <p className={`text-sm font-bold ${Math.abs(s.price_chg_pct) <= 0.5 ? 'text-amber-400' : 'text-gray-300'}`}>
-                        {s.price_chg_pct > 0 ? '+' : ''}{s.price_chg_pct}%
-                      </p>
-                      <p className="text-[10px] text-gray-600">small candle ✓</p>
-                    </div>
-
-                    {/* Net Delta */}
-                    <div className="min-w-[130px]">
-                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">NET DELTA (ATM±5)</p>
-                      {s.net_delta_L !== null ? (<>
-                        <p className={`text-sm font-bold ${s.net_delta_bullish ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {s.net_delta_bullish ? '+' : ''}{s.net_delta_L}L
-                        </p>
-                        <p className="text-[10px] text-gray-600">
-                          PE {s.pe_oi_L}L · CE {s.ce_oi_L}L
-                        </p>
-                      </>) : <p className="text-[10px] text-gray-600">—</p>}
-                    </div>
-
-                    {/* OI History sparkline */}
-                    <div className="min-w-[120px]">
-                      <p className="text-[10px] text-gray-500 font-semibold mb-1">OI HISTORY</p>
-                      <div className="flex items-end gap-0.5">
-                        {s.oi_history.map((v: number, i: number) => {
-                          const isLast = i === s.oi_history.length - 1
-                          const maxH = Math.max(...s.oi_history)
-                          const h = Math.max(Math.round((v / maxH) * 24), 2)
-                          return (
-                            <div key={i} style={{ width: 6, height: h }}
-                              className={`rounded-sm ${isLast ? 'bg-yellow-400' : 'bg-gray-600'}`}
-                              title={`${v}%`}/>
-                          )
-                        })}
-                      </div>
-                      <p className="text-[10px] text-yellow-400 mt-0.5">today spike ↑</p>
-                    </div>
-
-                    {/* Badge */}
-                    <div className="ml-auto text-right">
-                      {s.tier === 'ELITE' && (
-                        <div className="bg-yellow-950/40 border border-yellow-800/40 rounded-lg px-3 py-1.5">
-                          <p className="text-[10px] font-bold text-yellow-400">🥇 ELITE SIGNAL</p>
-                          <p className="text-[10px] text-gray-500">OI + Price + Net Delta ✓</p>
-                        </div>
-                      )}
-                      {s.tier === 'STRONG' && (
-                        <div className="bg-gray-900/40 border border-gray-700/40 rounded-lg px-3 py-1.5">
-                          <p className="text-[10px] font-bold text-gray-300">🥈 STRONG</p>
-                          <p className="text-[10px] text-gray-600">OI + Price ✓</p>
-                        </div>
-                      )}
-                      {s.tier === 'WATCH' && (
-                        <div className="bg-amber-950/20 border border-amber-900/30 rounded-lg px-3 py-1.5">
-                          <p className="text-[10px] font-bold text-amber-600">🥉 WATCH</p>
-                          <p className="text-[10px] text-gray-600">Monitor closely</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <p className="text-[10px] text-gray-700 mt-1">
-                  Stealth Buildup = FUT OI in top 3 of last 15 days + price movement ≤1% · Elite requires Net Delta positive (PE &gt; CE in ATM±5) · Informational only
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Positional Volume Alert */}
-
-        {/* Positional Volume Alert */}
-        {volAlerts.length > 0 && (
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-3 cursor-pointer"
-              onClick={() => setVolExpanded(e => !e)}>
-              <h2 className="text-sm font-bold text-white">📊 Positional Volume Alert</h2>
-              <span className="text-xs text-gray-500">Stocks with 10D/20D volume breakout + OI confirmation</span>
-              <span className="text-xs bg-purple-950 text-purple-400 border border-purple-800/50 rounded px-2 py-0.5 font-bold ml-auto">
-                {volAlerts.length} stocks
-              </span>
-              <span className="text-xs text-gray-500">{volExpanded ? '▲' : '▼'}</span>
-            </div>
-            {volExpanded && (
-              <div className="grid grid-cols-1 gap-2">
-                {volAlerts.map((a, i) => (
-                  <div key={a.symbol} className={`flex items-center gap-4 px-4 py-3 rounded-xl border ${
-                    a.tier_color === 'RED' ? 'bg-red-950/20 border-red-800/30' :
-                    a.tier_color === 'ORANGE' ? 'bg-orange-950/20 border-orange-800/30' :
-                    a.tier_color === 'AMBER' ? 'bg-amber-950/10 border-amber-800/20' :
-                    'bg-gray-900/20 border-gray-800/30'
-                  }`}>
-                    {/* Symbol */}
-                    <div className="min-w-[120px]">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-white">{a.symbol}</span>
-                        <span className="text-xs font-bold px-1.5 py-0.5 rounded border
-                          bg-purple-950 text-purple-400 border-purple-800/50">
-                          {a.tier}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-gray-500">₹{a.close_price?.toLocaleString()}</p>
-                    </div>
-
-                    {/* Volume */}
-                    <div className="min-w-[140px]">
-                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">VOLUME</p>
-                      <p className="text-sm font-bold text-purple-400">{a.best_ratio}x pace</p>
-                      <p className="text-[10px] text-gray-600">
-                        10D: {a.ratio_10d}x
-                        {a.ratio_20d > 0 ? ` · 20D: ${a.ratio_20d}x` : ''}
-                      </p>
-                    </div>
-
-                    {/* OI */}
-                    <div className="min-w-[100px]">
-                      <p className="text-[10px] text-gray-500 font-semibold mb-0.5">SERIES OI CHG</p>
-                      <p className={`text-sm font-bold ${a.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {a.oi_chg_pct > 0 ? '+' : ''}{a.oi_chg_pct}%
-                      </p>
-                      <p className="text-[10px] text-gray-600">since series start</p>
-                    </div>
-
-                    {/* Radar context */}
-                    {a.in_radar && (
-                      <div className="min-w-[160px]">
-                        <p className="text-[10px] text-gray-500 font-semibold mb-0.5">POSITIONAL RADAR</p>
-                        <p className={`text-xs font-bold ${a.radar_bias === 'BULLISH' ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {a.radar_signal === 'LONG_BUILDUP' ? '🐂' : '🐻'} {a.radar_conviction}
-                        </p>
-                        <p className="text-[10px] text-gray-600">{a.radar_consistency}% consistency</p>
-                      </div>
-                    )}
-
-                    {/* Not in radar */}
-                    {!a.in_radar && (
-                      <div className="min-w-[160px]">
-                        <p className="text-[10px] text-gray-600">Not in Positional Radar</p>
-                      </div>
-                    )}
-
-                    {/* Badge */}
-                    <div className="ml-auto">
-                      {a.in_radar ? (
-                        <span className="text-[10px] font-bold px-2 py-1 rounded border bg-emerald-950/40 text-emerald-400 border-emerald-800/50">
-                          ✅ Radar + Vol
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold px-2 py-1 rounded border bg-gray-900/40 text-gray-500 border-gray-700/50">
-                          Vol only
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Conviction legend */}
-        {!writerView && (
-          <div className="bg-gray-900/20 border border-gray-800/40 rounded-xl px-4 py-3 mb-5">
-            <p className="text-xs text-gray-400 font-semibold mb-2">Signal conviction levels:</p>
-            <div className="flex items-center gap-6 flex-wrap">
-              {[
-                { level: 'RADAR',      emoji: '🔵', label: 'Radar',      desc: 'OI >3% + Price >0.5% over series. 0-1 consecutive days. Watch only.' },
-                { level: 'BUILDING',   emoji: '🟡', label: 'Building',   desc: '2+ consecutive days signal direction held. Add to watchlist.' },
-                { level: 'CONVICTION', emoji: '🟠', label: 'Conviction', desc: '3+ consecutive days + vol >7d avg by 20% OR OI accelerating. High confidence.' },
-                { level: 'IGNITION',   emoji: '🟢', label: 'Ignition',   desc: 'Conviction + FUT confirms bias today (OI >2%, price >0.2%). Quality score shown.' },
-              ].map(({ level, emoji, label, desc }) => {
-                const meta = CONVICTION_META[level]
-                return (
-                  <div key={level} className="flex items-center gap-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 ${meta.bg} ${meta.text} border ${meta.border} rounded font-bold`}>{emoji} {label}</span>
-                    <span className="text-[10px] text-gray-600">{desc}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* PRIMARY FILTER */}
-        <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-5 mb-5">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-sm font-bold text-white">Minimum consecutive days trending:</span>
-            <span className="text-xs text-gray-500">(filters stocks where signal held for at least N days in a row right up to today)</span>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            {[
-              { val: 0, label: 'All signals',       sub: 'Full series view' },
-              { val: 3, label: 'Active 3d+ streak', sub: 'Signal live last 3 days' },
-              { val: 5, label: 'Active 5d+ streak', sub: 'Signal live last 5 days' },
-              { val: 7, label: 'Active 7d+ streak', sub: 'Signal live last 7 days' },
-            ].map(({ val, label, sub }) => (
-              <button key={val} onClick={() => handleConsec(val)}
-                className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all text-left ${minConsec===val ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-                <div>{label}</div>
-                <div className="text-xs font-normal mt-0.5 text-gray-600">{sub}</div>
-              </button>
-            ))}
-          </div>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${tierColor}`}>
+          {s.tier}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-[10px] text-gray-400">OI Chg</p>
+          <p className="text-sm font-bold text-emerald-400">+{s.today_oi_chg?.toFixed(2)}%</p>
         </div>
-
-        {/* Summary boxes */}
-        <div className="grid grid-cols-8 gap-2 mb-5">
-          {[
-            { label: 'Total',        val: data?.total || 0,         color: 'text-white',        sub: 'signals' },
-            { label: '🟢 Ignition',  val: s?.ignition || 0,         color: 'text-emerald-400',  sub: 'FUT confirmed' },
-            { label: '🟠 Conviction',val: s?.conviction || 0,        color: 'text-orange-400',   sub: '3d+ triple' },
-            { label: '🟡 Building',  val: s?.building || 0,          color: 'text-yellow-400',   sub: '2-3d consec' },
-            { label: '🔵 Radar',     val: s?.radar || 0,             color: 'text-blue-400',     sub: 'early signal' },
-            { label: '✅ High',      val: s?.high_consistency || 0,  color: 'text-emerald-400',  sub: '70%+ days' },
-            { label: '🐂 Long',      val: s?.long_buildup || 0,      color: 'text-emerald-400',  sub: 'buildup' },
-            { label: '🐻 Short',     val: s?.short_buildup || 0,     color: 'text-red-400',      sub: 'buildup' },
-          ].map(({ label, val, color, sub }) => (
-            <div key={label} className="bg-gray-900/30 border border-gray-800 rounded-xl p-3">
-              <p className="text-[10px] text-gray-500 mb-1">{label}</p>
-              <p className={`text-xl font-black ${color}`}>{val}</p>
-              <p className="text-[10px] text-gray-600">{sub}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Secondary filters */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          {(['all','index','stocks'] as const).map(f => (
-            <button key={f} onClick={() => setTypeFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize ${typeFilter===f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>{f}</button>
-          ))}
-          <div className="w-px h-5 bg-gray-800 mx-1"/>
-          {(['all','BULLISH','BEARISH'] as const).map(b => (
-            <button key={b} onClick={() => setBiasFilter(b)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${biasFilter===b ? b==='BULLISH' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : b==='BEARISH' ? 'bg-red-950 text-red-400 border-red-800' : 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              {b==='all'?'All Bias':b==='BULLISH'?'↑ Bullish':'↓ Bearish'}
-            </button>
-          ))}
-          <div className="w-px h-5 bg-gray-800 mx-1"/>
-          {Object.entries(SIGNAL_META).map(([key, m]) => (
-            <button key={key} onClick={() => setSignalFilter(signalFilter===key?'all':key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${signalFilter===key ? `${m.bg} ${m.color} ${m.border}` : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              {m.icon} {m.label}
-            </button>
-          ))}
-          <div className="w-px h-5 bg-gray-800 mx-1"/>
-          {(['all','HIGH','MEDIUM','LOW'] as const).map(c => (
-            <button key={c} onClick={() => setConsisFilter(c)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${consisFilter===c ? c==='HIGH' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : c==='MEDIUM' ? 'bg-amber-950 text-amber-400 border-amber-800' : c==='LOW' ? 'bg-red-950 text-red-400 border-red-800' : 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              {c==='all'?'All Consistency':c}
-            </button>
-          ))}
-          {!writerView && <>
-            <div className="w-px h-5 bg-gray-800 mx-1"/>
-            {[
-              { val: 'all', label: 'All Levels' },
-              { val: 'IGNITION', label: '🟢 Ignition' },
-              { val: 'CONVICTION', label: '🟠 Conviction' },
-              { val: 'BUILDING', label: '🟡 Building' },
-              { val: 'RADAR', label: '🔵 Radar' },
-            ].map(({ val, label }) => (
-              <button key={val} onClick={() => setConvictionFilter(val)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${convictionFilter===val ? val==='IGNITION' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : val==='CONVICTION' ? 'bg-orange-950 text-orange-400 border-orange-800' : val==='BUILDING' ? 'bg-yellow-950 text-yellow-400 border-yellow-800' : val==='RADAR' ? 'bg-blue-950 text-blue-400 border-blue-800' : 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-                {label}
-              </button>
-            ))}
-            <div className="w-px h-5 bg-gray-800 mx-1"/>
-            <button onClick={() => setAccelOnly(a => !a)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${accelOnly ? 'bg-blue-950 text-blue-400 border-blue-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              🚀 Accelerating Only
-            </button>
-            <button onClick={() => setHighVolOnly(v => !v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${highVolOnly ? 'bg-purple-950 text-purple-400 border-purple-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              📊 High FUT Vol
-            </button>
-            <button onClick={() => setHighOiOnly(v => !v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${highOiOnly ? 'bg-cyan-950 text-cyan-400 border-cyan-800' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              📈 High OI
-            </button>
-          </>}
-          <button onClick={() => { setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setHighOiOnly(false); setTypeFilter('all') }}
-            className="text-xs text-gray-600 hover:text-gray-400 transition-colors ml-1">Clear filters</button>
-        </div>
-
-        <p className="text-xs text-gray-600 mb-4">
-          {results.length} signals · {minConsec > 0 ? `Active ${minConsec}d+ streak filter` : 'showing all signals'} · {writerView ? 'Writer\'s View (50%+ consistency)' : 'Trader View'} · Informational only
-        </p>
-
-        {/* Table */}
-        {loading ? (
-          <div className="space-y-2">{[1,2,3,4,5,6].map(i=>(
-            <div key={i} className="h-20 bg-gray-900/30 border border-gray-800 rounded-xl animate-pulse"/>
-          ))}</div>
-        ) : results.length > 0 ? (
-          <div className="rounded-2xl border border-gray-800 overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-900/60 border-b border-gray-800">
-                  {tableHeaders.map((h, i) => {
-                    const colKey = h === 'Volume (vs 7d avg)' ? 'vol'
-                      : h === 'OI (Series)' ? 'oi'
-                      : h === 'Consec' ? 'consec'
-                      : h === 'Consistency' ? 'consisPC'
-                      : h === 'Price (Series)' ? 'price'
-                      : null
-                    const isActive = sortCol === colKey
-                    return (
-                      <th key={h}
-                        onClick={colKey ? () => handleSort(colKey) : undefined}
-                        className={`text-xs font-semibold px-3 py-3.5 ${i <= 3 ? 'text-left' : 'text-right'} ${i===0?'pl-5':''} ${i===tableHeaders.length-1?'pr-5 text-left':''} ${colKey ? 'cursor-pointer hover:text-white select-none' : ''} ${isActive ? 'text-amber-400' : 'text-gray-500'}`}>
-                        {h}
-                        {colKey && (
-                          <span className="ml-1 text-[10px]">
-                            {isActive ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
-                          </span>
-                        )}
-                      </th>
-                    )
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r, i) => {
-                  const m        = SIGNAL_META[r.signal]
-                  const oiColor  = r.oi_chg_pct  > 0 ? '#10b981' : '#ef4444'
-                  const cmpColor = r.cmp_chg_pct > 0 ? '#10b981' : '#ef4444'
-                  const wt       = getWriterTake(r)
-                  const rowBg    = r.ignition
-                    ? 'bg-emerald-950/15 border-l-2 border-l-emerald-700'
-                    : r.conviction_level === 'CONVICTION' && r.accelerating
-                    ? 'bg-orange-950/15 border-l-2 border-l-orange-700'
-                    : r.conviction_level === 'CONVICTION' ? 'bg-orange-950/10'
-                    : r.accelerating ? 'bg-blue-950/8 border-l-2 border-l-blue-800'
-                    : i % 2 === 0 ? '' : 'bg-gray-900/20'
-
-                  return (
-                    <React.Fragment key={r.symbol}>
-                    <tr className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${rowBg}`}>
-
-                      {/* Symbol */}
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-sm font-black text-white">{r.symbol}</span>
-                          <ConvictionBadge level={r.conviction_level} label={r.conviction_label} emoji={r.conviction_emoji}/>
-                          {!writerView && r.accelerating && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-800/50 rounded">🚀 Accel</span>
-                          )}
-                          {r.is_index && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded">IDX</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-600 mt-0.5">₹{r.cmp.toLocaleString('en-IN')}</p>
-                        {r.ignition && r.fut_signal_today && (
-                          <div className="mt-0.5">
-                            <p className="text-[10px] text-emerald-500">⚡ FUT: {r.fut_signal_today.replace(/_/g, ' ')}</p>
-                            <p className="text-[10px] text-gray-700">positional threshold only</p>
-                          </div>
-                        )}
-                        {r.ignition && r.ignition_score !== undefined && r.ignition_score_breakdown && (
-                          <IgnitionScoreBar score={r.ignition_score} breakdown={r.ignition_score_breakdown}/>
-                        )}
-                      </td>
-
-                      {writerView ? <>
-                        {/* OI Structure */}
-                        <td className="px-3 py-3.5">
-                          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${wt.oiColor} ${wt.oiBg} ${wt.oiBorder}`}>{wt.oiType}</span>
-                          <p className="text-[10px] text-gray-500 mt-1">{r.composition_short || '—'}</p>
-                        </td>
-                        {/* Direction Held */}
-                        <td className="px-3 py-3.5 min-w-[110px]">
-                          <ConsistencyBar pct={r.consistency_pct} label={r.consistency_label}/>
-                          <p className="text-[10px] text-gray-600 mt-1">{r.match_days}/{r.total_days} days consistent</p>
-                        </td>
-                        {/* Consec */}
-                        <td className="px-3 py-3.5">
-                          <p className={`text-lg font-black ${r.consec_days >= 5 ? 'text-emerald-400' : r.consec_days >= 3 ? 'text-amber-400' : r.consec_days >= 1 ? 'text-white' : 'text-orange-400'}`}>
-                            {r.consec_days > 0 ? `${r.consec_days}d` : '—'}
-                          </p>
-                          <p className="text-[10px] text-gray-600">{r.consec_days > 0 ? 'in a row' : 'broke last day'}</p>
-                        </td>
-                        {/* OI Series */}
-                        <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.oi_chg_pct > 0 ? '+' : ''}{r.oi_chg_pct}%</p>
-                          <p className="text-[10px] text-gray-600">total OI series</p>
-                        </td>
-                        {/* CE/PE Split */}
-                        <td className="px-3 py-3.5 text-right">
-                          {r.ce_pct_of_total !== undefined && r.pe_pct_of_total !== undefined ? (<>
-                            <div className="flex items-center gap-1 justify-end mb-1">
-                              <span className="text-[10px] text-red-400 font-bold">CE {r.ce_pct_of_total}%</span>
-                              <span className="text-[10px] text-gray-600">/</span>
-                              <span className="text-[10px] text-emerald-400 font-bold">PE {r.pe_pct_of_total}%</span>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden flex w-20 ml-auto">
-                              <div className="bg-red-500/70 h-full" style={{width:`${r.ce_pct_of_total}%`}}/>
-                              <div className="bg-emerald-500/70 h-full" style={{width:`${r.pe_pct_of_total}%`}}/>
-                            </div>
-                            {r.pcr_series !== undefined && <p className="text-[10px] text-gray-600 mt-1">PCR {r.pcr_series.toFixed(2)}</p>}
-                          </>) : <span className="text-gray-700 text-xs">—</span>}
-                        </td>
-                        {/* Price Series */}
-                        <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.cmp_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.cmp_chg_pct > 0 ? '+' : ''}{r.cmp_chg_pct}%</p>
-                          <p className="text-[10px] text-gray-600">₹{r.cmp_series[0]?.toFixed(0)} → ₹{r.cmp.toFixed(0)}</p>
-                        </td>
-                        {/* Writer's Take */}
-                        <td className="px-5 py-3.5">
-                          <div className={`rounded-lg border px-3 py-2 ${wt.oiBg} ${wt.oiBorder}`}>
-                            <p className={`text-[10px] font-bold ${wt.safetyColor} mb-1`}>Direction Safety: {wt.safetyLabel}</p>
-                            <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded mb-1.5 ${wt.opportunityColor} ${wt.opportunityBg}`}>{wt.opportunityLabel}</div>
-                            <p className="text-[10px] text-gray-400 mb-1">{wt.structureNote}</p>
-                            <p className="text-[10px] text-gray-500">
-                              Ref strike: <span className="text-white font-bold">{wt.refStrike.toLocaleString()} {wt.refSide}</span>
-                              <span className="text-gray-600"> · ~3-5% OTM</span>
-                            </p>
-                            {wt.cautionNote && <p className="text-[10px] text-amber-400 mt-1">{wt.cautionNote}</p>}
-                            {r.ce_wall && r.pe_wall && (
-                              <div className="mt-1.5 pt-1.5 border-t border-gray-700/50">
-                                <p className="text-[10px] text-gray-500 mb-0.5">OI walls observed:</p>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[10px] font-bold text-red-400">📈 CE ₹{r.ce_wall.toLocaleString()} · {r.ce_wall_oi_L}L</span>
-                                  <span className="text-[10px] font-bold text-emerald-400">📉 PE ₹{r.pe_wall.toLocaleString()} · {r.pe_wall_oi_L}L</span>
-                                </div>
-                                <p className="text-[10px] text-gray-600 mt-0.5">Range: ₹{r.trade_range} · {r.trade_range_pct}% · {r.range_label}</p>
-                              </div>
-                            )}
-                            {/* OI Map + Buildup buttons in Writer's View */}
-                            <div className="flex gap-1 mt-2">
-                              <button
-                                onClick={() => fetchWalls(r.symbol)}
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                                  expandedSymbol === r.symbol && activePanel[r.symbol] === 'walls' ? 'bg-cyan-950 text-cyan-300 border-cyan-700' : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
-                                }`}>
-                                {wallsLoading === r.symbol && activePanel[r.symbol] === 'walls' ? '⏳' : '📊 OI Map'}
-                              </button>
-                              <button
-                                onClick={() => fetchBuildup(r.symbol)}
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                                  expandedSymbol === r.symbol && activePanel[r.symbol] === 'buildup' ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-gray-900/40 text-amber-400 border-amber-800/40 hover:border-amber-600'
-                                }`}>
-                                {wallsLoading === r.symbol && activePanel[r.symbol] === 'buildup' ? '⏳' : '📈 OI Buildup'}
-                              </button>
-                            </div>
-                            <p className="text-[10px] text-gray-700 mt-1">Verify OI wall before use</p>
-                          </div>
-                        </td>
-
-                      </> : <>
-                        {/* Trader View — Signal column with OI Map button */}
-                        <td className="px-3 py-3.5">
-                          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
-                            {m.icon} {m.label}
-                          </span>
-                          {r.ce_wall && r.pe_wall && (
-                            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                              <span className="text-[10px] font-bold text-red-400 bg-red-950/30 border border-red-800/30 px-1.5 py-0.5 rounded">📈 ₹{r.ce_wall.toLocaleString()}</span>
-                              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/30 border border-emerald-800/30 px-1.5 py-0.5 rounded">📉 ₹{r.pe_wall.toLocaleString()}</span>
-                              {r.range_label && <span className="text-[10px] text-gray-600">{r.trade_range_pct}%</span>}
-                            </div>
-                          )}
-                          {/* OI Map + Buildup buttons in Trader View */}
-                          <div className="flex gap-1 mt-1.5 flex-wrap">
-                            <button
-                              onClick={() => fetchWalls(r.symbol)}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                                expandedSymbol === r.symbol && activePanel[r.symbol] === 'walls' ? 'bg-cyan-950 text-cyan-300 border-cyan-700' : 'bg-gray-900/40 text-cyan-400 border-cyan-800/40 hover:border-cyan-600'
-                              }`}>
-                              {wallsLoading === r.symbol && activePanel[r.symbol] === 'walls' ? '⏳' : '📊 OI Map'}
-                            </button>
-                            <button
-                              onClick={() => fetchBuildup(r.symbol)}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                                expandedSymbol === r.symbol && activePanel[r.symbol] === 'buildup' ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-gray-900/40 text-amber-400 border-amber-800/40 hover:border-amber-600'
-                              }`}>
-                              {wallsLoading === r.symbol && activePanel[r.symbol] === 'buildup' ? '⏳' : '📈 OI Buildup'}
-                            </button>
-                            <button
-                              onClick={() => fetchWriter(r.symbol)}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
-                                expandedSymbol === r.symbol && activePanel[r.symbol] === 'writer' ? 'bg-purple-950 text-purple-300 border-purple-700' : 'bg-gray-900/40 text-purple-400 border-purple-800/40 hover:border-purple-600'
-                              }`}>
-                              {wallsLoading === r.symbol && activePanel[r.symbol] === 'writer' ? '⏳' : '✍️ W/B Score'}
-                            </button>
-                          </div>
-                        </td>
-
-                        {/* Consistency */}
-                        <td className="px-3 py-3.5 min-w-[110px]">
-                          <ConsistencyBar pct={r.consistency_pct} label={r.consistency_label}/>
-                          <p className="text-[10px] text-gray-600 mt-1">{r.match_days}/{r.total_days} days</p>
-                        </td>
-                        {/* Consecutive */}
-                        <td className="px-3 py-3.5">
-                          <p className={`text-lg font-black ${r.consec_days >= 5 ? 'text-emerald-400' : r.consec_days >= 3 ? 'text-amber-400' : r.consec_days >= 1 ? 'text-white' : 'text-orange-400'}`}>
-                            {r.consec_days > 0 ? `${r.consec_days}d` : '—'}
-                          </p>
-                          <p className="text-[10px] text-gray-600">{r.consec_days > 0 ? 'in a row' : 'broke last day'}</p>
-                        </td>
-                        {/* OI */}
-                        <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.oi_chg_pct > 0 ? '+' : ''}{r.oi_chg_pct}%</p>
-                          {r.accelerating && <p className="text-[10px] text-blue-400">🚀 {r.oi_first_half_chg}% → {r.oi_second_half_chg}%</p>}
-                        </td>
-                        {/* Volume */}
-                        <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.vol_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.vol_chg_pct > 0 ? '+' : ''}{r.vol_chg_pct}%</p>
-                          <p className="text-[10px] text-gray-600">vs 7d avg ({r.vol_avg_7d}L)</p>
-                          {r.conviction_level === 'CONVICTION' && <p className="text-[10px] text-orange-400">⚡ {r.vol_consec}d consec</p>}
-                        </td>
-                        {/* Price */}
-                        <td className="px-3 py-3.5 text-right">
-                          <p className={`text-sm font-black ${r.cmp_chg_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.cmp_chg_pct > 0 ? '+' : ''}{r.cmp_chg_pct}%</p>
-                          <p className="text-[10px] text-gray-600">₹{r.cmp_series[0]?.toFixed(0)} → ₹{r.cmp.toFixed(0)}</p>
-                        </td>
-                        {/* OI Sparkline */}
-                        <td className="px-3 py-3.5 text-right"><div className="flex justify-end"><Sparkline data={r.oi_series} color={oiColor}/></div></td>
-                        {/* Price Sparkline */}
-                        <td className="px-3 py-3.5 text-right"><div className="flex justify-end"><Sparkline data={r.cmp_series} color={cmpColor}/></div></td>
-                        {/* Deep Dive */}
-                        <td className="px-5 py-3.5">
-                          <div className="flex flex-col gap-1">
-                            {r.has_uoa ? (
-                              <a href={`/uoa?symbol=${r.symbol}`} className="text-xs text-blue-400 hover:text-blue-300 font-bold">🐋 UOA ✅ →</a>
-                            ) : (
-                              <span className="text-xs text-gray-700">🐋 UOA —</span>
-                            )}
-                            <a href={`/jungle?symbol=${r.symbol}`} className="text-xs text-amber-400 hover:text-amber-300">🌿 Jungle →</a>
-                          </div>
-                        </td>
-                      </>}
-                    </tr>
-
-                    {/* OI Map expandable panel */}
-                    {expandedSymbol === r.symbol && activePanel[r.symbol] === 'walls' && wallsData[r.symbol] && (
-                      <OIMapPanel symbol={r.symbol} wallsData={wallsData[r.symbol]} />
-                    )}
-
-                    {/* OI Buildup expandable panel */}
-                    {expandedSymbol === r.symbol && activePanel[r.symbol] === 'buildup' && (
-                      <tr>
-                        <td colSpan={10} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
-                          <div>
-                            <div className="flex items-center gap-3 mb-3">
-                              <p className="text-sm font-bold text-white">📈 {r.symbol} OI Buildup History</p>
-                              <span className="text-xs text-gray-500">Daily FUT OI change vs Price — positional conviction over time</span>
-                            </div>
-                            {!buildupData[r.symbol] ? (
-                              <div className="text-xs text-gray-500">Loading...</div>
-                            ) : (
-                              <div className="overflow-x-auto">
-                                <div className="flex gap-1 items-end min-w-max pb-2">
-                                  {buildupData[r.symbol]?.data?.map((d: any, idx: number) => {
-                                    const color = d.signal === 'LONG_BUILDUP' ? '#22c55e' :
-                                                  d.signal === 'SHORT_BUILDUP' ? '#ef4444' :
-                                                  d.signal === 'SHORT_COVERING' ? '#06b6d4' :
-                                                  d.signal === 'LONG_UNWINDING' ? '#f97316' : '#4b5563'
-                                    const height = Math.min(Math.abs(d.oi_chg_pct) * 3, 80)
-                                    const date = d.date.slice(5)
-                                    return (
-                                      <div key={idx} className="flex flex-col items-center gap-1" style={{ minWidth: 44 }}>
-                                        <div className="text-[9px] font-mono" style={{ color }}>
-                                          {d.oi_chg_pct > 0 ? '+' : ''}{d.oi_chg_pct}%
-                                        </div>
-                                        <div style={{ width: 32, height: Math.max(height, 4), background: color, borderRadius: 3, opacity: 0.85 }}
-                                          title={`${d.label} | OI: ${d.oi_chg_pct}% | Price: ${d.price_chg_pct}%`}/>
-                                        <div className="text-[9px] text-gray-500">{date}</div>
-                                        <div className={`text-[9px] font-bold ${d.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                          {d.price_chg_pct > 0 ? '+' : ''}{d.price_chg_pct}%
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                                <div className="flex gap-3 mt-2 flex-wrap">
-                                  {[
-                                    { color: '#22c55e', label: '🐂 Long Buildup' },
-                                    { color: '#ef4444', label: '🐻 Short Buildup' },
-                                    { color: '#06b6d4', label: '🔄 Short Covering' },
-                                    { color: '#f97316', label: '⚠️ Long Unwinding' },
-                                    { color: '#4b5563', label: '— Neutral' },
-                                  ].map(({ color, label }) => (
-                                    <div key={label} className="flex items-center gap-1">
-                                      <div style={{ width: 10, height: 10, background: color, borderRadius: 2 }}/>
-                                      <span className="text-[10px] text-gray-500">{label}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                                <p className="text-[10px] text-gray-700 mt-1">Bar height = OI change magnitude · Color = signal type · Price % shown below</p>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                      {/* Writer vs Buyer Score panel */}
-                    {expandedSymbol === r.symbol && activePanel[r.symbol] === 'writer' && (
-                      <tr>
-                        <td colSpan={10} className="px-5 py-4 bg-gray-900/50 border-b border-gray-800">
-                          {!writerData[r.symbol] ? (
-                            <div className="text-xs text-gray-500">Loading...</div>
-                          ) : (
-                            <div>
-                              <div className="flex items-center gap-4 mb-4 flex-wrap">
-                                <div>
-                                  <p className="text-sm font-bold text-white mb-0.5">✍️ {r.symbol} Writer vs Buyer Score</p>
-                                  <p className="text-xs text-gray-500">Based on OI concentration, PCR stability, FUT alignment, consistency</p>
-                                </div>
-                                <div className={`px-4 py-2 rounded-xl border ${
-                                  writerData[r.symbol].verdict_color === 'EMERALD' ? 'bg-emerald-950/40 border-emerald-800/40' :
-                                  writerData[r.symbol].verdict_color === 'AMBER' ? 'bg-amber-950/40 border-amber-800/40' :
-                                  'bg-red-950/40 border-red-800/40'
-                                }`}>
-                                  <p className={`text-lg font-black ${
-                                    writerData[r.symbol].verdict_color === 'EMERALD' ? 'text-emerald-400' :
-                                    writerData[r.symbol].verdict_color === 'AMBER' ? 'text-amber-400' : 'text-red-400'
-                                  }`}>{writerData[r.symbol].score}/100</p>
-                                  <p className={`text-xs font-bold ${
-                                    writerData[r.symbol].verdict_color === 'EMERALD' ? 'text-emerald-400' :
-                                    writerData[r.symbol].verdict_color === 'AMBER' ? 'text-amber-400' : 'text-red-400'
-                                  }`}>{writerData[r.symbol].verdict_label}</p>
-                                </div>
-                                <p className="text-xs text-gray-400 max-w-xs">{writerData[r.symbol].verdict_note}</p>
-                              </div>
-
-                              {/* Score breakdown */}
-                              <div className="grid grid-cols-4 gap-3 mb-4">
-                                {Object.entries(writerData[r.symbol].breakdown || {}).map(([key, v]: [string, any]) => {
-                                  const pct = (v.score / v.max) * 100
-                                  const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-500'
-                                  const label = key === 'concentration'
-                                    ? { title: '📍 OI Concentration', what: 'OI near ATM vs far OTM', high: 'Writers active near ATM', low: 'Buyers active far OTM' }
-                                    : key === 'pcr_stability'
-                                    ? { title: '⚖️ PCR Balance', what: 'Put/Call ratio balance', high: 'Balanced — writers on both sides', low: 'Skewed — one side dominant' }
-                                    : key === 'fut_alignment'
-                                    ? { title: '🔗 FUT Alignment', what: 'FUT + Options moving together', high: 'Coordinated institutional positioning', low: 'FUT and options diverging' }
-                                    : { title: '📅 OI Consistency', what: 'Same signal % of series days', high: 'Consistent directional positioning', low: 'Mixed signals across days' }
-                                  return (
-                                    <div key={key} className="bg-gray-900/40 border border-gray-800/40 rounded-lg px-3 py-2">
-                                      <div className="flex items-center justify-between mb-1">
-                                        <span className="text-[10px] text-gray-400 font-bold">{label.title}</span>
-                                        <span className={`text-[10px] font-black ${pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{v.score}/{v.max}</span>
-                                      </div>
-                                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mb-1.5">
-                                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }}/>
-                                      </div>
-                                      <p className="text-[10px] text-gray-500 mb-0.5">{label.what}</p>
-                                      <p className="text-[10px] text-gray-600">{v.score >= (v.max * 0.7) ? label.high : label.low}</p>
-                                      <p className="text-[10px] font-semibold text-gray-400 mt-1">{v.note}</p>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                              <div className="bg-gray-900/30 border border-gray-800/30 rounded-lg px-3 py-2 mb-3">
-                                <p className="text-[10px] text-gray-500 font-semibold mb-1">📖 How to read this score</p>
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div><span className="text-[10px] text-emerald-400 font-bold">70-100 · Writer Dominated</span><p className="text-[10px] text-gray-600">Institutional writers observably active — high conviction positioning observed</p></div>
-                                  <div><span className="text-[10px] text-amber-400 font-bold">45-70 · Mixed Activity</span><p className="text-[10px] text-gray-600">Both writers and buyers active — positioning unclear</p></div>
-                                  <div><span className="text-[10px] text-red-400 font-bold">0-45 · Buyer Dominated</span><p className="text-[10px] text-gray-600">Speculative/event-driven activity observed — options being bought</p></div>
-                                </div>
-                              </div>
-
-                              {/* ATM data */}
-                              <div className="flex items-center gap-4 flex-wrap">
-                                <div className="flex items-center gap-2 bg-gray-900/40 border border-gray-700 rounded-lg px-3 py-1.5">
-                                  <span className="text-[10px] text-gray-500">ATM Strike</span>
-                                  <span className="text-[10px] font-bold text-amber-400">₹{writerData[r.symbol].atm_data?.atm_strike?.toLocaleString()}</span>
-                                </div>
-                                <div className="flex items-center gap-2 bg-gray-900/40 border border-gray-700 rounded-lg px-3 py-1.5">
-                                  <span className="text-[10px] text-gray-500">ATM±3 CE</span>
-                                  <span className="text-[10px] font-bold text-red-400">{writerData[r.symbol].atm_data?.atm3_ce_L}L</span>
-                                  <span className="text-[10px] text-gray-600">·</span>
-                                  <span className="text-[10px] text-gray-500">PE</span>
-                                  <span className="text-[10px] font-bold text-emerald-400">{writerData[r.symbol].atm_data?.atm3_pe_L}L</span>
-                                </div>
-                                <div className="flex items-center gap-2 bg-gray-900/40 border border-gray-700 rounded-lg px-3 py-1.5">
-                                  <span className="text-[10px] text-gray-500">PCR</span>
-                                  <span className="text-[10px] font-bold text-white">{writerData[r.symbol].atm_data?.pcr}</span>
-                                </div>
-                              </div>
-                              <p className="text-[10px] text-gray-700 mt-2">⚠️ All observations are informational only · Not investment advice · GreekNova is not SEBI-registered · Consult a SEBI-registered advisor before trading</p>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                    </React.Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
-            <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-4 text-3xl">📈</div>
-            <h3 className="text-lg font-bold text-gray-400 mb-2">No signals match</h3>
-            <p className="text-sm text-gray-600 mb-3">{minConsec > 0 ? `No stocks had ${minConsec}+ consecutive days of this signal.` : 'Try changing the filters above.'}</p>
-            <button onClick={() => { handleConsec(0); setSignalFilter('all'); setBiasFilter('all'); setConsisFilter('all'); setConvictionFilter('all'); setAccelOnly(false); setHighVolOnly(false); setHighOiOnly(false); setTypeFilter('all'); }}
-              className="text-xs text-emerald-400 hover:text-emerald-300">Reset all filters</button>
-          </div>
-        )}
-
-        <div className="mt-8 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
-          <p className="text-xs text-gray-600 leading-relaxed">
-            <span className="text-gray-400 font-semibold">Disclaimer:</span> Positional Radar shows observed OI, volume and price trends from NSE publicly available data.
-            All signals and reference strikes are informational only — not investment advice. Always confirm with UOA and live OI walls before making any decisions.
-            GreekNova is not SEBI-registered. Trade at your own risk.
+        <div>
+          <p className="text-[10px] text-gray-400">Price Chg</p>
+          <p className={`text-sm font-bold ${s.price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {fmt(s.price_chg)}
           </p>
         </div>
+        <div>
+          <p className="text-[10px] text-gray-400">Net Delta</p>
+          <p className={`text-sm font-bold ${s.net_delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {s.net_delta >= 0 ? '+' : ''}{(s.net_delta / 100000).toFixed(1)}L
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Vol Breakout Card ─────────────────────────────────────────────────────────
+function VolCard({ s }: { s: VolStock }) {
+  const isLong = s.signal_type?.includes('LONG') || s.signal_type?.includes('BULLISH')
+  return (
+    <div className={`rounded-xl border p-4 ${isLong ? 'border-emerald-700/50 bg-emerald-950/20' : 'border-red-700/50 bg-red-950/20'}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <p className="text-lg font-bold text-white">{s.symbol}</p>
+          <p className="text-sm text-gray-300">₹{fmtCmp(s.cmp)}</p>
+        </div>
+        <span className={`text-xs font-semibold ${isLong ? 'text-emerald-400' : 'text-red-400'}`}>
+          {s.signal_type?.replace(/_/g, ' ')}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div>
+          <p className="text-[10px] text-gray-400">Vol Ratio</p>
+          <p className="text-sm font-bold text-amber-400">{s.volume_ratio?.toFixed(1)}x</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-gray-400">OI Chg</p>
+          <p className={`text-sm font-bold ${s.oi_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {fmt(s.oi_chg_pct)}
+          </p>
+        </div>
+      </div>
+      {s.price_context && (
+        <p className="text-[10px] text-amber-300 mt-2 text-center">{s.price_context}</p>
+      )}
+    </div>
+  )
+}
+
+// ── Filter Button ─────────────────────────────────────────────────────────────
+function FilterBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
+        active
+          ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+          : 'bg-gray-900/50 border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+export default function PositionalIntelligence() {
+  const [data, setData]       = useState<PIData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState<string | null>(null)
+  const [signalFilter, setSignalFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP'>('all')
+  const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days'>('consistency')
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API}/positional-intelligence`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      setData(json)
+    } catch (e: any) {
+      setError(e.message || 'Failed to load')
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // Filtered + sorted series buildup
+  const seriesFiltered = (data?.series_buildup || [])
+    .filter(s => signalFilter === 'all' || s.signal === signalFilter)
+    .sort((a, b) => {
+      if (sortBy === 'consistency') return b.consistency_pct - a.consistency_pct
+      if (sortBy === 'series_oi')   return b.series_oi_pct - a.series_oi_pct
+      return (b.signal === 'LONG_BUILDUP' ? b.lb_days : b.sb_days) - (a.signal === 'LONG_BUILDUP' ? a.lb_days : a.sb_days)
+    })
+
+  const daysLeft = data
+    ? Math.ceil((new Date(data.expiry).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    : null
+
+  // ── Skeleton ────────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen bg-black p-4 md:p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="h-8 w-56 bg-gray-800 rounded-lg animate-pulse" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[1,2,3,4].map(i => <div key={i} className="h-20 bg-gray-900 rounded-xl animate-pulse" />)}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1,2,3,4].map(i => <div key={i} className="h-40 bg-gray-900 rounded-xl animate-pulse" />)}
+        </div>
+        <div className="h-64 bg-gray-900 rounded-xl animate-pulse" />
+      </div>
+    </div>
+  )
+
+  if (error) return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="text-center">
+        <p className="text-red-400 text-lg font-semibold mb-2">Failed to load</p>
+        <p className="text-gray-400 text-sm mb-4">{error}</p>
+        <button onClick={fetchData} className="text-sm px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg hover:bg-gray-700">
+          Retry
+        </button>
+      </div>
+    </div>
+  )
+
+  if (!data) return null
+
+  const s = data.summary
+
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-8">
+
+        {/* ── Page Header ─────────────────────────────────────────────────── */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-black text-white tracking-tight">Positional Intelligence</h1>
+            <p className="text-gray-400 text-sm mt-1">
+              FUT OI momentum across the series · {data.total_trading_days} trading days ·
+              Series ends <span className="text-amber-400 font-semibold">{data.expiry}</span>
+              {daysLeft !== null && <span className="text-gray-500"> ({daysLeft}d left)</span>}
+            </p>
+          </div>
+          <button
+            onClick={fetchData}
+            className="text-xs px-3 py-1.5 bg-gray-900 border border-gray-700 text-gray-300 rounded-lg hover:border-gray-500 hover:text-white transition-all"
+          >
+            ↻ Refresh
+          </button>
+        </div>
+
+        {/* ── Summary Strip ───────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Active Conviction', val: s.active_conviction, color: 'text-orange-400', sub: '2+ consecutive days' },
+            { label: 'Stealth Buildup',   val: s.stealth_buildup,   color: 'text-amber-400',  sub: "Today's alerts" },
+            { label: 'Vol Breakout',      val: s.vol_breakout,      color: 'text-sky-400',    sub: 'Volume surge signals' },
+            { label: 'Series Buildup',    val: s.series_buildup,    color: 'text-emerald-400',sub: '60%+ consistent' },
+          ].map(item => (
+            <div key={item.label} className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
+              <p className="text-xs text-gray-400 mb-1">{item.label}</p>
+              <p className={`text-3xl font-black ${item.color}`}>{item.val}</p>
+              <p className="text-[10px] text-gray-500 mt-1">{item.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Market bias strip */}
+        <div className="flex items-center gap-4 px-4 py-3 bg-gray-900/40 border border-gray-800 rounded-xl text-sm">
+          <span className="text-gray-400">Market Bias today:</span>
+          <span className="text-emerald-400 font-bold">{s.long_bias} Long</span>
+          <span className="text-gray-600">·</span>
+          <span className="text-red-400 font-bold">{s.short_bias} Short</span>
+          <span className="text-gray-600">·</span>
+          <span className="text-gray-300 text-xs">Active conviction signals only</span>
+          <span className="ml-auto text-[10px] text-gray-600">Informational only · Not buy/sell advice</span>
+        </div>
+
+        {/* ── Section 1: Active Conviction ────────────────────────────────── */}
+        <section>
+          <SectionHeader
+            emoji="🔥"
+            title="Active Conviction"
+            count={data.active_conviction.length}
+            subtitle="2+ consecutive FUT signal days — institutional positioning in play"
+            color="bg-orange-900/50 text-orange-300"
+          />
+          {data.active_conviction.length === 0 ? (
+            <EmptyState message="No active conviction signals today. Check back during market hours." />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {data.active_conviction.map((s, i) => (
+                <ConvictionCard key={s.symbol} s={s} rank={i + 1} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* ── Section 2: Stealth + Vol ─────────────────────────────────────── */}
+        <section>
+          <SectionHeader
+            emoji="🕵️"
+            title="Stealth + Volume Alerts"
+            count={data.stealth_buildup.length + data.vol_breakout.length}
+            subtitle="Today's stealth accumulation and volume-backed breakout signals"
+            color="bg-amber-900/50 text-amber-300"
+          />
+          {data.stealth_buildup.length === 0 && data.vol_breakout.length === 0 ? (
+            <EmptyState message="No stealth or volume alerts today. Available during market hours (9:15 AM – 3:30 PM)." />
+          ) : (
+            <div className="space-y-4">
+              {data.stealth_buildup.length > 0 && (
+                <>
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Stealth Buildup</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {data.stealth_buildup.map(s => <StealthCard key={s.symbol} s={s} />)}
+                  </div>
+                </>
+              )}
+              {data.vol_breakout.length > 0 && (
+                <>
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mt-2">Vol + OI Breakout</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {data.vol_breakout.map(s => <VolCard key={s.symbol} s={s} />)}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── Section 3: Series Buildup ────────────────────────────────────── */}
+        <section>
+          <SectionHeader
+            emoji="📈"
+            title="Series Buildup"
+            count={seriesFiltered.length}
+            subtitle={`60%+ signal consistency · minimum 3 signal days · across ${data.total_trading_days} trading days this series`}
+            color="bg-emerald-900/50 text-emerald-300"
+          />
+
+          {/* Filters + Sort */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-xs text-gray-500">Signal:</span>
+            <FilterBtn label="All" active={signalFilter === 'all'} onClick={() => setSignalFilter('all')} />
+            <FilterBtn label="🟢 Long Buildup" active={signalFilter === 'LONG_BUILDUP'} onClick={() => setSignalFilter('LONG_BUILDUP')} />
+            <FilterBtn label="🔴 Short Buildup" active={signalFilter === 'SHORT_BUILDUP'} onClick={() => setSignalFilter('SHORT_BUILDUP')} />
+            <span className="ml-4 text-xs text-gray-500">Sort:</span>
+            <FilterBtn label="Consistency" active={sortBy === 'consistency'} onClick={() => setSortBy('consistency')} />
+            <FilterBtn label="Series OI" active={sortBy === 'series_oi'} onClick={() => setSortBy('series_oi')} />
+            <FilterBtn label="Signal Days" active={sortBy === 'lb_days'} onClick={() => setSortBy('lb_days')} />
+          </div>
+
+          {seriesFiltered.length === 0 ? (
+            <EmptyState message="No series buildup matches the current filter." />
+          ) : (
+            <div className="rounded-2xl border border-gray-800 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-900/80 border-b border-gray-700">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Symbol</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Series Signal</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Consistency</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Series OI</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Latest</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">CPR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {seriesFiltered.map((s, i) => (
+                    <SeriesRow key={s.symbol} s={s} i={i} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* ── Footer ──────────────────────────────────────────────────────── */}
+        <div className="border-t border-gray-800 pt-4 text-center">
+          <p className="text-[11px] text-gray-600">
+            GreekNova · Positional Intelligence · Data as of {data.date} ·
+            FUT OI signals from {data.series_start} to expiry {data.expiry} ·
+            For educational purposes only · Not SEBI registered · Not buy/sell advice
+          </p>
+        </div>
+
       </div>
     </div>
   )

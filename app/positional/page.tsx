@@ -239,9 +239,9 @@ function SeriesRow({ s, i }: { s: PIStock; i: number }) {
         </div>
       </td>
 
-      {/* Series OI */}
+      {/* Series OI — color by signal direction, not sign */}
       <td className="px-4 py-3 text-right">
-        <p className={`text-sm font-bold ${s.series_oi_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+        <p className={`text-sm font-bold ${isLong ? 'text-emerald-400' : 'text-red-400'}`}>
           {s.series_oi_pct > 0 ? '+' : ''}{s.series_oi_pct}%
         </p>
         <p className="text-[10px] text-gray-400">series OI</p>
@@ -362,6 +362,121 @@ function FilterBtn({ label, active, onClick }: { label: string; active: boolean;
   )
 }
 
+// ── How To Read ───────────────────────────────────────────────────────────────
+function HowToRead() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="border border-gray-800 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-900/60 hover:bg-gray-900 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-base">📖</span>
+          <span className="text-sm font-semibold text-gray-300">How to read this page as a trader</span>
+        </div>
+        <span className="text-gray-500 text-sm">{open ? '▲ Close' : '▼ Open'}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-5 pt-1 bg-gray-950/60 space-y-5">
+
+          {/* Step 1 */}
+          <div className="flex gap-3 pt-3">
+            <div className="w-7 h-7 rounded-full bg-orange-900/60 border border-orange-700/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-orange-400 text-xs font-black">1</span>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm mb-1">🔥 Active Conviction — your shortlist for the day</p>
+              <p className="text-gray-300 text-xs leading-relaxed">
+                These stocks have FUT OI building or shrinking in the <span className="text-white font-semibold">same direction for 2+ consecutive days</span> — meaning smart money is not dipping in and out, they're holding a position. This is your high-priority watchlist.
+              </p>
+              <div className="mt-2 grid grid-cols-1 gap-1.5">
+                <p className="text-xs text-gray-400">
+                  <span className="text-emerald-400 font-semibold">Long Buildup</span> = FUT OI ↑ + Price ↑ → fresh longs being added, bullish bias
+                </p>
+                <p className="text-xs text-gray-400">
+                  <span className="text-red-400 font-semibold">Short Buildup</span> = FUT OI ↑ + Price ↓ → fresh shorts being added, bearish bias
+                </p>
+                <p className="text-xs text-gray-400">
+                  <span className="text-amber-400 font-semibold">CPR position</span> = price above/below the pivot zone for next trading day — confirms or contradicts the FUT signal
+                </p>
+              </div>
+              <p className="text-xs text-gray-500 mt-2 italic">
+                Example: TRENT 3d Long Buildup + Above CPR + Ascending trend = strong bullish conviction. INFY 2d Short Buildup + Above CPR + Descending = shorts building but price still elevated — watch for breakdown.
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-800" />
+
+          {/* Step 2 */}
+          <div className="flex gap-3">
+            <div className="w-7 h-7 rounded-full bg-amber-900/60 border border-amber-700/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-amber-400 text-xs font-black">2</span>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm mb-1">🕵️ Stealth + Volume — intraday triggers</p>
+              <p className="text-gray-300 text-xs leading-relaxed">
+                Available only during market hours. Stealth Buildup = <span className="text-white font-semibold">large FUT OI addition with almost no price movement</span> — someone accumulating quietly without revealing their hand. Vol Breakout = volume surging well above the 7-day average with OI confirmation.
+              </p>
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-gray-400"><span className="text-amber-400 font-semibold">ELITE tier</span> = top-3 OI day of last 15 + price barely moved + Net Delta bullish → highest quality stealth signal</p>
+                <p className="text-xs text-gray-400"><span className="text-emerald-400 font-semibold">STRONG tier</span> = top-3 OI day + small price candle</p>
+                <p className="text-xs text-gray-400"><span className="text-sky-400 font-semibold">WATCH tier</span> = top-5 OI day + modest price reaction</p>
+              </div>
+              <p className="text-xs text-gray-500 mt-2 italic">
+                Use these as same-day alerts — if a stock is already in Active Conviction AND appears in Stealth today, that's a high-confluence setup.
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-800" />
+
+          {/* Step 3 */}
+          <div className="flex gap-3">
+            <div className="w-7 h-7 rounded-full bg-emerald-900/60 border border-emerald-700/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-emerald-400 text-xs font-black">3</span>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm mb-1">📈 Series Buildup — longer-term positioning map</p>
+              <p className="text-gray-300 text-xs leading-relaxed">
+                Zooms out to the <span className="text-white font-semibold">entire series (expiry cycle)</span>. A stock with 80%+ Long Buildup consistency across 15 trading days means institutional longs have been present for most of the series — this is structural positioning, not day trading.
+              </p>
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Consistency %</span> = what % of series trading days showed the dominant signal. 100% = every single day this series was the same direction.</p>
+                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Series OI %</span> = total OI change for that direction across the series. +29.8% means FUT OI has grown nearly 30% this series — significant open interest being built.</p>
+                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Latest</span> = what signal fired on the most recent trading day — tells you if the trend is still intact or broke down on the last day.</p>
+                <p className="text-xs text-gray-400"><span className="text-white font-semibold">CPR trend</span> = Ascending/Descending/Sideways pivot trend over recent days — a Long Buildup series with Ascending CPR is most bullish combination.</p>
+              </div>
+              <p className="text-xs text-gray-500 mt-2 italic">
+                Example read: INDIGO Long Buildup, 100% consistency, 5 signal days, +29.8% series OI, Above CPR, Ascending = FUT longs have been adding all series, every day, with large OI. Price confirmed above pivot. This is a high-conviction positional long setup to monitor.
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-800" />
+
+          {/* Combined read */}
+          <div className="bg-gray-900/50 rounded-xl p-3 border border-gray-700/50">
+            <p className="text-xs font-semibold text-gray-300 mb-2">🎯 Putting it all together — the ideal setup</p>
+            <div className="space-y-1.5 text-xs text-gray-400">
+              <p>✅ Stock appears in <span className="text-orange-300">Active Conviction</span> (2+ consecutive days)</p>
+              <p>✅ Also shows in <span className="text-emerald-300">Series Buildup</span> with 70%+ consistency</p>
+              <p>✅ CPR trend matches direction (Ascending for longs, Descending for shorts)</p>
+              <p>✅ Stealth or Vol alert fires intraday → use as entry timing signal</p>
+              <p className="text-gray-500 pt-1">The more boxes checked, the stronger the institutional footprint. No single signal is enough — confluence across sections is what creates high-probability setups.</p>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-gray-600 text-center">All signals are informational only · GreekNova is not SEBI registered · Not buy/sell advice</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PositionalIntelligence() {
   const [data, setData]       = useState<PIData | null>(null)
@@ -479,6 +594,9 @@ export default function PositionalIntelligence() {
           <span className="text-gray-300 text-xs">Active conviction signals only</span>
           <span className="ml-auto text-[10px] text-gray-600">Informational only · Not buy/sell advice</span>
         </div>
+
+        {/* ── How To Read ─────────────────────────────────────────────────── */}
+        <HowToRead />
 
         {/* ── Section 1: Active Conviction ────────────────────────────────── */}
         <section>

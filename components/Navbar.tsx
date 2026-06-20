@@ -41,7 +41,7 @@ const NAV_GROUPS = [
       { href: '/rs',          label: 'Rel. Strength' },
       { href: '/uoa',         label: 'UOA' },
       { href: '/jungle',      label: '🌿 Options Jungle' },
-      { href: '/positional',  label: '📈 Positional Radar' },
+      { href: '/positional',  label: '🧠 Positional Intelligence' },
       { href: '/signals/intraday', label: '📋 Intraday Log' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
       { href: '/signals/wall-migration', label: '🧱 Wall Migration' }

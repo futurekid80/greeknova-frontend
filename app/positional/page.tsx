@@ -538,7 +538,7 @@ export default function PositionalIntelligence() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
   const [signalFilter, setSignalFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP'>('all')
-  const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days'>('consistency')
+  const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days' | 'signal'>('consistency')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -560,6 +560,11 @@ export default function PositionalIntelligence() {
   const seriesFiltered = (data?.series_buildup || [])
     .filter(s => signalFilter === 'all' || s.signal === signalFilter)
     .sort((a, b) => {
+      if (sortBy === 'signal') {
+        // Long first, then Short — then by consistency within each group
+        if (a.signal !== b.signal) return a.signal === 'LONG_BUILDUP' ? -1 : 1
+        return b.consistency_pct - a.consistency_pct
+      }
       if (sortBy === 'consistency') return b.consistency_pct - a.consistency_pct
       if (sortBy === 'series_oi')   return b.series_oi_pct - a.series_oi_pct
       return (b.signal === 'LONG_BUILDUP' ? b.lb_days : b.sb_days) - (a.signal === 'LONG_BUILDUP' ? a.lb_days : a.sb_days)
@@ -722,10 +727,7 @@ export default function PositionalIntelligence() {
             <FilterBtn label="All" active={signalFilter === 'all'} onClick={() => setSignalFilter('all')} />
             <FilterBtn label="🟢 Long Buildup" active={signalFilter === 'LONG_BUILDUP'} onClick={() => setSignalFilter('LONG_BUILDUP')} />
             <FilterBtn label="🔴 Short Buildup" active={signalFilter === 'SHORT_BUILDUP'} onClick={() => setSignalFilter('SHORT_BUILDUP')} />
-            <span className="ml-4 text-xs text-gray-500">Sort:</span>
-            <FilterBtn label="Consistency" active={sortBy === 'consistency'} onClick={() => setSortBy('consistency')} />
-            <FilterBtn label="Series OI" active={sortBy === 'series_oi'} onClick={() => setSortBy('series_oi')} />
-            <FilterBtn label="Signal Days" active={sortBy === 'lb_days'} onClick={() => setSortBy('lb_days')} />
+            <span className="ml-4 text-xs text-gray-400 italic">↕ Click column headers to sort</span>
           </div>
 
           {seriesFiltered.length === 0 ? (
@@ -736,9 +738,30 @@ export default function PositionalIntelligence() {
                 <thead>
                   <tr className="bg-gray-900/80 border-b border-gray-700">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Symbol</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Series Signal</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Consistency</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Series OI</th>
+                    <th
+                      className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => setSortBy('signal')}
+                    >
+                      <span className={sortBy === 'signal' ? 'text-amber-400' : 'text-gray-300'}>
+                        Series Signal {sortBy === 'signal' ? '↕' : ''}
+                      </span>
+                    </th>
+                    <th
+                      className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => setSortBy('consistency')}
+                    >
+                      <span className={sortBy === 'consistency' ? 'text-amber-400' : 'text-gray-300'}>
+                        Consistency {sortBy === 'consistency' ? '↓' : ''}
+                      </span>
+                    </th>
+                    <th
+                      className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => setSortBy('series_oi')}
+                    >
+                      <span className={sortBy === 'series_oi' ? 'text-amber-400' : 'text-gray-300'}>
+                        Series OI {sortBy === 'series_oi' ? '↓' : ''}
+                      </span>
+                    </th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">Latest</th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-gray-300 uppercase tracking-wide">CPR</th>
                   </tr>

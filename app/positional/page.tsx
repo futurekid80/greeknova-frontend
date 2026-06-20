@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import Navbar from '@/components/Navbar'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://greeknova-backend-production.up.railway.app'
 
@@ -622,6 +623,7 @@ export default function PositionalIntelligence() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <Navbar active="/positional" />
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-8">
 
         {/* ── Page Header ─────────────────────────────────────────────────── */}

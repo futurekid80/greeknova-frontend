@@ -29,6 +29,9 @@ interface WallSignal {
   zone_color: string
   convergence_zone: boolean
   iv: number | null
+  ivr: number | null
+  ivp: number | null
+  iv_history_days: number
   iv_label: string | null
   iv_color: string | null
   strategy: string | null
@@ -240,21 +243,31 @@ function SignalCard({ s }: { s: WallSignal }) {
           </button>
         </div>
 
-        {/* IV + Strategy row */}
-        {s.iv !== null && s.iv !== undefined && (
+        {/* IVR/IVP row */}
+        {s.iv_label && (
           <div className={`mt-2 flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${
-            s.iv_color === 'sky'     ? 'bg-sky-950/30 border-sky-800/40' :
-            s.iv_color === 'amber'   ? 'bg-amber-950/30 border-amber-800/40' :
+            s.iv_color === 'sky'    ? 'bg-sky-950/30 border-sky-800/40' :
+            s.iv_color === 'amber'  ? 'bg-amber-950/30 border-amber-800/40' :
+            s.iv_color === 'gray'   ? 'bg-gray-900/40 border-gray-700/40' :
             'bg-emerald-950/30 border-emerald-800/40'
           }`}>
-            <span className={`font-bold ${
-              s.iv_color === 'sky'   ? 'text-sky-400' :
-              s.iv_color === 'amber' ? 'text-amber-400' :
-              'text-emerald-400'
-            }`}>
-              📊 {s.iv_label}
-            </span>
-            <span className="text-gray-300">{s.strategy}</span>
+            <div className="flex items-center gap-2">
+              <span className={`font-bold ${
+                s.iv_color === 'sky'   ? 'text-sky-400' :
+                s.iv_color === 'amber' ? 'text-amber-400' :
+                s.iv_color === 'gray'  ? 'text-gray-400' :
+                'text-emerald-400'
+              }`}>
+                📊 {s.iv_label}
+              </span>
+              {s.ivp !== null && s.ivp !== undefined && (
+                <span className="text-gray-500 text-[10px]">IVP {s.ivp?.toFixed(0)}%ile</span>
+              )}
+              {s.iv_history_days > 0 && (
+                <span className="text-gray-600 text-[9px]">{s.iv_history_days}d history</span>
+              )}
+            </div>
+            <span className="text-gray-300 text-[10px] max-w-[180px] text-right">{s.strategy}</span>
           </div>
         )}
       </div>

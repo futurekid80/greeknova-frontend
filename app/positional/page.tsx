@@ -250,7 +250,14 @@ function SeriesRow({ s, i }: { s: PIStock; i: number }) {
       {/* Latest signal */}
       <td className="px-4 py-3 text-right">
         <SignalBadge signal={s.latest_signal} />
-        <p className={`text-xs mt-1 ${s.latest_price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+        {((s.signal === 'LONG_BUILDUP' && s.latest_signal === 'SHORT_BUILDUP') ||
+          (s.signal === 'SHORT_BUILDUP' && s.latest_signal === 'LONG_BUILDUP')) && (
+          <p className="text-[10px] text-amber-400 font-semibold mt-0.5">⚠️ Reversal signal</p>
+        )}
+        {s.latest_signal === 'NEUTRAL' && (
+          <p className="text-[10px] text-gray-500 mt-0.5">trend pausing</p>
+        )}
+        <p className={`text-xs mt-0.5 ${s.latest_price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
           {fmt(s.latest_price_chg, 2)}
         </p>
       </td>

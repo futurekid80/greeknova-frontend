@@ -143,8 +143,53 @@ function SignalCard({ s }: { s: WallSignal }) {
 
       {/* Level grid */}
       <div className="px-4 pb-3">
-        {/* Visual price bar */}
-        <div className="relative h-6 bg-gray-800 rounded-full mb-3 overflow-hidden">
+        {/* Visual price bar — or perfect convergence label */}
+        {s.range_pts === 0 || s.ce_wall === s.pe_wall ? (
+          <div className="flex items-center justify-center gap-2 py-2 mb-3 bg-purple-950/30 border border-purple-700/40 rounded-xl">
+            <span className="text-purple-300 text-sm font-bold">🎯 Perfect Convergence</span>
+            <span className="text-gray-400 text-xs">CE Wall = PE Wall = POC at ₹{fmtPrice(s.ce_wall)}</span>
+          </div>
+        ) : (
+          <>
+            <div className="relative h-6 bg-gray-800 rounded-full mb-3 overflow-hidden">
+              {/* PE Wall marker */}
+              {s.pe_wall > 0 && s.ce_wall > s.pe_wall && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-emerald-500"
+                  style={{ left: `${((s.pe_wall - s.pe_wall * 0.85) / (s.ce_wall * 1.15 - s.pe_wall * 0.85)) * 100}%` }}
+                />
+              )}
+              {/* CE Wall marker */}
+              {s.ce_wall > 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-red-500"
+                  style={{ left: `${Math.min(95, ((s.ce_wall - s.pe_wall * 0.85) / (s.ce_wall * 1.15 - s.pe_wall * 0.85)) * 100)}%` }}
+                />
+              )}
+              {/* POC marker */}
+              {s.poc > 0 && s.ce_wall > s.pe_wall && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-purple-400 opacity-70"
+                  style={{ left: `${((s.poc - s.pe_wall * 0.85) / (s.ce_wall * 1.15 - s.pe_wall * 0.85)) * 100}%` }}
+                />
+              )}
+              {/* CMP dot */}
+              {s.cmp > 0 && s.ce_wall > 0 && s.pe_wall > 0 && (
+                <div
+                  className="absolute top-1 bottom-1 w-3 h-4 rounded-full bg-white shadow-lg"
+                  style={{
+                    left: `${Math.max(2, Math.min(94, ((s.cmp - s.pe_wall * 0.85) / (s.ce_wall * 1.15 - s.pe_wall * 0.85)) * 100))}%`,
+                  }}
+                />
+              )}
+            </div>
+            <div className="flex justify-between text-[9px] text-gray-600 mb-3 -mt-1">
+              <span className="text-emerald-600">🟢 PE {fmtPrice(s.pe_wall)}</span>
+              <span className="text-purple-500">◆ POC {fmtPrice(s.poc)}</span>
+              <span className="text-red-600">🔴 CE {fmtPrice(s.ce_wall)}</span>
+            </div>
+          </>
+        )}
           {/* PE Wall marker */}
           {s.pe_wall > 0 && s.ce_wall > s.pe_wall && (
             <div

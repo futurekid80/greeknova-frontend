@@ -363,8 +363,48 @@ function FilterBtn({ label, active, onClick }: { label: string; active: boolean;
 }
 
 // ── How To Read ───────────────────────────────────────────────────────────────
-function HowToRead() {
+function HowToRead({ data }: { data: PIData }) {
   const [open, setOpen] = useState(false)
+
+  // Dynamic examples — auto-picked from live data, never stale
+  const topConviction = data.active_conviction[0] ?? null
+  const topShortConviction = data.active_conviction.find(s => s.signal === 'SHORT_BUILDUP') ?? null
+  const topSeries = [...data.series_buildup].sort((a, b) => b.series_oi_pct - a.series_oi_pct)[0] ?? null
+
+  // Build conviction example sentence from real data
+  const convictionExample = (() => {
+    if (!topConviction) return 'No active conviction signals right now — check back on a trading day.'
+    const isLong = topConviction.signal === 'LONG_BUILDUP'
+    const parts = [
+      `${topConviction.symbol} ${topConviction.consec_days}d ${isLong ? 'Long Buildup' : 'Short Buildup'}`,
+      topConviction.cpr_position ? topConviction.cpr_position : null,
+      topConviction.cpr_trend ? `${topConviction.cpr_trend.charAt(0) + topConviction.cpr_trend.slice(1).toLowerCase()} CPR trend` : null,
+    ].filter(Boolean).join(' + ')
+    const reading = isLong
+      ? 'strong bullish conviction — FUT longs accumulating for multiple days'
+      : 'sustained short pressure — FUT shorts being added day after day'
+    return `${parts} = ${reading}.`
+      + (topShortConviction && topShortConviction.symbol !== topConviction.symbol
+        ? ` ${topShortConviction.symbol} ${topShortConviction.consec_days}d Short Buildup${topShortConviction.cpr_position ? ' + ' + topShortConviction.cpr_position : ''} = shorts building${topShortConviction.cpr_trend === 'DESCENDING' ? ', price trend descending — watch for follow-through' : ''}.`
+        : '')
+  })()
+
+  // Build series example sentence from real data
+  const seriesExample = (() => {
+    if (!topSeries) return 'No series buildup data available.'
+    const isLong = topSeries.signal === 'LONG_BUILDUP'
+    const signalDays = isLong ? topSeries.lb_days : topSeries.sb_days
+    const direction = isLong ? 'longs' : 'shorts'
+    const cprStr = topSeries.cpr_position && topSeries.cpr_trend
+      ? `, ${topSeries.cpr_position}, ${topSeries.cpr_trend.charAt(0) + topSeries.cpr_trend.slice(1).toLowerCase()} CPR`
+      : ''
+    return `${topSeries.symbol} ${isLong ? 'Long' : 'Short'} Buildup — ${topSeries.consistency_pct}% consistency, ${signalDays} signal days, ${topSeries.series_oi_pct > 0 ? '+' : ''}${topSeries.series_oi_pct}% series OI${cprStr}. FUT ${direction} have been present for most of this series — structural positioning, not day trading.`
+  })()
+
+  // Confluence example — stock in both active conviction AND series buildup
+  const confluenceStock = data.active_conviction.find(ac =>
+    data.series_buildup.some(sb => sb.symbol === ac.symbol && sb.signal === ac.signal)
+  ) ?? null
 
   return (
     <div className="border border-gray-800 rounded-xl overflow-hidden">
@@ -403,9 +443,11 @@ function HowToRead() {
                   <span className="text-amber-400 font-semibold">CPR position</span> = price above/below the pivot zone for next trading day — confirms or contradicts the FUT signal
                 </p>
               </div>
-              <p className="text-xs text-gray-500 mt-2 italic">
-                Example: TRENT 3d Long Buildup + Above CPR + Ascending trend = strong bullish conviction. INFY 2d Short Buildup + Above CPR + Descending = shorts building but price still elevated — watch for breakdown.
-              </p>
+              {/* Dynamic example from live data */}
+              <div className="mt-2 bg-black/30 rounded-lg px-3 py-2 border border-gray-800">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Live example from today's data</p>
+                <p className="text-xs text-gray-300 italic leading-relaxed">{convictionExample}</p>
+              </div>
             </div>
           </div>
 
@@ -426,9 +468,15 @@ function HowToRead() {
                 <p className="text-xs text-gray-400"><span className="text-emerald-400 font-semibold">STRONG tier</span> = top-3 OI day + small price candle</p>
                 <p className="text-xs text-gray-400"><span className="text-sky-400 font-semibold">WATCH tier</span> = top-5 OI day + modest price reaction</p>
               </div>
-              <p className="text-xs text-gray-500 mt-2 italic">
-                Use these as same-day alerts — if a stock is already in Active Conviction AND appears in Stealth today, that's a high-confluence setup.
-              </p>
+              <div className="mt-2 bg-black/30 rounded-lg px-3 py-2 border border-gray-800">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Live example from today's data</p>
+                <p className="text-xs text-gray-300 italic">
+                  {data.stealth_buildup.length > 0
+                    ? `${data.stealth_buildup[0].symbol} — ${data.stealth_buildup[0].tier} tier, OI +${data.stealth_buildup[0].today_oi_chg?.toFixed(1)}%, price moved only ${Math.abs(data.stealth_buildup[0].price_chg).toFixed(2)}% — classic quiet accumulation.`
+                    : 'No stealth signals right now. These appear during market hours (9:15 AM – 3:30 PM) when FUT OI surges without a matching price move.'
+                  }
+                </p>
+              </div>
             </div>
           </div>
 
@@ -442,23 +490,24 @@ function HowToRead() {
             <div>
               <p className="text-white font-semibold text-sm mb-1">📈 Series Buildup — longer-term positioning map</p>
               <p className="text-gray-300 text-xs leading-relaxed">
-                Zooms out to the <span className="text-white font-semibold">entire series (expiry cycle)</span>. A stock with 80%+ Long Buildup consistency across 15 trading days means institutional longs have been present for most of the series — this is structural positioning, not day trading.
+                Zooms out to the <span className="text-white font-semibold">entire series (expiry cycle)</span>. High consistency means institutional positioning held across most of the series — not day trading noise.
               </p>
               <div className="mt-2 space-y-1">
-                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Consistency %</span> = what % of series trading days showed the dominant signal. 100% = every single day this series was the same direction.</p>
-                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Series OI %</span> = total OI change for that direction across the series. +29.8% means FUT OI has grown nearly 30% this series — significant open interest being built.</p>
-                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Latest</span> = what signal fired on the most recent trading day — tells you if the trend is still intact or broke down on the last day.</p>
-                <p className="text-xs text-gray-400"><span className="text-white font-semibold">CPR trend</span> = Ascending/Descending/Sideways pivot trend over recent days — a Long Buildup series with Ascending CPR is most bullish combination.</p>
+                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Consistency %</span> = what % of series trading days showed the dominant signal. 100% = same direction every single day this series.</p>
+                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Series OI %</span> = total OI change for that direction across the series. A large number means significant open interest being built or unwound.</p>
+                <p className="text-xs text-gray-400"><span className="text-white font-semibold">Latest</span> = signal on the most recent trading day — tells you if the trend is still intact or broke down last session.</p>
+                <p className="text-xs text-gray-400"><span className="text-white font-semibold">CPR trend</span> = pivot trend direction — Long Buildup with Ascending CPR is most bullish; Short Buildup with Descending is most bearish.</p>
               </div>
-              <p className="text-xs text-gray-500 mt-2 italic">
-                Example read: INDIGO Long Buildup, 100% consistency, 5 signal days, +29.8% series OI, Above CPR, Ascending = FUT longs have been adding all series, every day, with large OI. Price confirmed above pivot. This is a high-conviction positional long setup to monitor.
-              </p>
+              <div className="mt-2 bg-black/30 rounded-lg px-3 py-2 border border-gray-800">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Live example from today's data</p>
+                <p className="text-xs text-gray-300 italic leading-relaxed">{seriesExample}</p>
+              </div>
             </div>
           </div>
 
           <div className="border-t border-gray-800" />
 
-          {/* Combined read */}
+          {/* Confluence box — dynamic */}
           <div className="bg-gray-900/50 rounded-xl p-3 border border-gray-700/50">
             <p className="text-xs font-semibold text-gray-300 mb-2">🎯 Putting it all together — the ideal setup</p>
             <div className="space-y-1.5 text-xs text-gray-400">
@@ -466,7 +515,13 @@ function HowToRead() {
               <p>✅ Also shows in <span className="text-emerald-300">Series Buildup</span> with 70%+ consistency</p>
               <p>✅ CPR trend matches direction (Ascending for longs, Descending for shorts)</p>
               <p>✅ Stealth or Vol alert fires intraday → use as entry timing signal</p>
-              <p className="text-gray-500 pt-1">The more boxes checked, the stronger the institutional footprint. No single signal is enough — confluence across sections is what creates high-probability setups.</p>
+              {confluenceStock ? (
+                <p className="text-amber-300 pt-1 font-medium">
+                  💡 Today: <span className="text-white font-bold">{confluenceStock.symbol}</span> appears in both Active Conviction ({confluenceStock.consec_days}d streak) and Series Buildup — this is the kind of confluence to watch closely.
+                </p>
+              ) : (
+                <p className="text-gray-500 pt-1">The more boxes checked, the stronger the institutional footprint. No single signal is enough — confluence across sections is what creates high-probability setups.</p>
+              )}
             </div>
           </div>
 
@@ -596,7 +651,7 @@ export default function PositionalIntelligence() {
         </div>
 
         {/* ── How To Read ─────────────────────────────────────────────────── */}
-        <HowToRead />
+        <HowToRead data={data} />
 
         {/* ── Section 1: Active Conviction ────────────────────────────────── */}
         <section>

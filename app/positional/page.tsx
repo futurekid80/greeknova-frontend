@@ -319,7 +319,7 @@ function StealthCard({ s }: { s: StealthStock }) {
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
           <p className="text-[10px] text-gray-400">OI Chg</p>
-          <p className="text-sm font-bold text-emerald-400">+{s.today_oi_chg?.toFixed(2)}%</p>
+          <p className="text-sm font-bold text-emerald-400">+{(s.today_oi_chg ?? 0).toFixed(2)}%</p>
         </div>
         <div>
           <p className="text-[10px] text-gray-400">Price Chg</p>
@@ -329,8 +329,8 @@ function StealthCard({ s }: { s: StealthStock }) {
         </div>
         <div>
           <p className="text-[10px] text-gray-400">Net Delta</p>
-          <p className={`text-sm font-bold ${s.net_delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {s.net_delta >= 0 ? '+' : ''}{(s.net_delta / 100000).toFixed(1)}L
+          <p className={`text-sm font-bold ${(s.net_delta ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {(s.net_delta ?? 0) >= 0 ? '+' : ''}{((s.net_delta ?? 0) / 100000).toFixed(1)}L
           </p>
         </div>
       </div>

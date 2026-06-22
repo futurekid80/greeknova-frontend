@@ -598,6 +598,9 @@ export default function OptionsJungle() {
                         <td className="px-4 py-3.5 text-right">
                           <span className={`text-xs font-bold ${(s as any).snapshot_count >= 5 ? 'text-emerald-400' : (s as any).snapshot_count >= 3 ? 'text-amber-400' : 'text-gray-500'}`}>
                             {(s as any).snapshot_count ? `${(s as any).snapshot_count}×` : '—'}
+                            {(s as any).gaps > 0 && (
+                              <span className="text-red-400 font-normal ml-1">· {(s as any).gaps}g</span>
+                            )}
                           </span>
                         </td>
                         <td className={`px-4 py-3.5 text-right text-sm font-black ${s.oi_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>

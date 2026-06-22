@@ -198,7 +198,7 @@ function ConvictionCard({ s, rank, onSymbolClick }: { s: PIStock; rank: number; 
         </div>
         <div className="bg-black/30 rounded-lg p-2 text-center">
           <p className="text-[10px] text-gray-400 uppercase tracking-wide">Series OI</p>
-          <p className="text-sm font-bold text-amber-400">{(s.vol_ratio ?? s.volume_ratio ?? 0).toFixed(1)}x</p>
+          <p className="text-sm font-bold text-amber-400">{((s as any).vol_ratio ?? (s as any).volume_ratio ?? 0).toFixed(1)}x</p>
         </div>
       </div>
 
@@ -359,8 +359,8 @@ function VolCard({ s }: { s: VolStock }) {
         </div>
         <div>
           <p className="text-[10px] text-gray-400">OI Chg</p>
-          <p className={`text-sm font-bold ${(s.oi_chg_pct ?? s.fut_oi_chg_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {fmt(s.oi_chg_pct ?? s.fut_oi_chg_pct ?? 0)}
+          <p className={`text-sm font-bold ${((s as any).oi_chg_pct ?? (s as any).fut_oi_chg_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {fmt((s as any).oi_chg_pct ?? (s as any).fut_oi_chg_pct ?? 0)}
           </p>
         </div>
       </div>

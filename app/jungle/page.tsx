@@ -612,11 +612,17 @@ export default function OptionsJungle() {
                           {s.old_oi > 0 ? `${s.vol_change > 0 ? '+' : ''}${Math.round(s.vol_change / s.old_oi * 100)}%` : '—'}
                         </td>
                         <td className="px-4 py-3.5 text-right text-sm">
-                          {s.otm_pct > 0 ? (
-                            <span className={s.otm_pct <= 2 ? 'text-emerald-400 font-bold' : s.otm_pct <= 5 ? 'text-amber-400' : 'text-gray-500'}>
-                              {s.otm_pct}%
-                            </span>
-                          ) : <span className="text-blue-400 font-bold">ITM</span>}
+                          {(() => {
+                            const signed = s.option_type === 'CE'
+                              ? ((s.strike - s.cmp) / s.cmp) * 100
+                              : ((s.cmp - s.strike) / s.cmp) * 100
+                            const abs = Math.abs(signed)
+                            const isOtm = signed >= 0
+                            const color = isOtm
+                              ? (abs <= 2 ? 'text-emerald-400 font-bold' : abs <= 5 ? 'text-amber-400' : 'text-gray-500')
+                              : 'text-red-400 font-bold'
+                            return <span className={color}>{signed >= 0 ? '+' : ''}{signed.toFixed(2)}%</span>
+                          })()}
                         </td>
                         <td className="px-5 py-3.5 text-right text-sm font-bold text-amber-400">₹{s.last_price}</td>
                       </tr>
@@ -684,11 +690,17 @@ export default function OptionsJungle() {
                         </td>
                         <td className="px-4 py-3.5 text-right text-sm text-gray-300">{fmtOI(s.new_volume)}</td>
                         <td className="px-4 py-3.5 text-right text-sm">
-                          {s.otm_pct > 0 ? (
-                            <span className={s.otm_pct <= 2 ? 'text-emerald-400 font-bold' : s.otm_pct <= 5 ? 'text-amber-400' : 'text-gray-500'}>
-                              {s.otm_pct}%
-                            </span>
-                          ) : <span className="text-blue-400 font-bold">ITM</span>}
+                          {(() => {
+                            const signed = s.option_type === 'CE'
+                              ? ((s.strike - s.cmp) / s.cmp) * 100
+                              : ((s.cmp - s.strike) / s.cmp) * 100
+                            const abs = Math.abs(signed)
+                            const isOtm = signed >= 0
+                            const color = isOtm
+                              ? (abs <= 2 ? 'text-emerald-400 font-bold' : abs <= 5 ? 'text-amber-400' : 'text-gray-500')
+                              : 'text-red-400 font-bold'
+                            return <span className={color}>{signed >= 0 ? '+' : ''}{signed.toFixed(2)}%</span>
+                          })()}
                         </td>
                         <td className="px-5 py-3.5 text-right text-sm font-bold text-amber-400">₹{s.last_price}</td>
                       </tr>

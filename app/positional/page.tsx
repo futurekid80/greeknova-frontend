@@ -664,7 +664,7 @@ function HowToRead({ data }: { data: PIData }) {
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Live example from today's data</p>
                 <p className="text-xs text-gray-300 italic">
                   {data.stealth_buildup.length > 0
-                    ? `${data.stealth_buildup[0].symbol} — ${data.stealth_buildup[0].tier} tier, OI +${data.stealth_buildup[0].today_oi_chg?.toFixed(1)}%, price moved only ${Math.abs(data.stealth_buildup[0].price_chg).toFixed(2)}% — classic quiet accumulation.`
+                    ? `${data.stealth_buildup[0].symbol} — ${data.stealth_buildup[0].tier} tier, OI +${(data.stealth_buildup[0].today_oi_chg ?? 0).toFixed(1)}%, price moved only ${Math.abs(data.stealth_buildup[0].price_chg ?? 0).toFixed(2)}% — classic quiet accumulation.`
                     : 'No stealth signals right now. These appear during market hours (9:15 AM – 3:30 PM) when FUT OI surges without a matching price move.'
                   }
                 </p>

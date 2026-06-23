@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.3'
+const SW_VERSION = 'v2.0.4'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
@@ -168,7 +168,8 @@ async function checkOptionsJungle() {
 
     const isBuild = spike.direction === 'BUILD'
     const icon    = isBuild ? '🔥' : '📉'
-    const title   = `${icon} OI ${spike.direction} — ${spike.symbol} ${spike.strike} ${spike.option_type}`
+    const expStr  = spike.expiry ? ` (${spike.expiry.slice(5).replace('-','/')})` : ''
+    const title   = `${icon} OI ${spike.direction} — ${spike.symbol} ${spike.strike} ${spike.option_type}${expStr}`
     const body    = `OI ${spike.oi_pct > 0 ? '+' : ''}${spike.oi_pct}% in 5 min | OI: ${fmtOI(spike.new_oi)} | LTP: ₹${spike.last_price}${spike.interpretation ? ' | ' + spike.interpretation.replace(/_/g,' ') : ''}`
 
     playSound()
@@ -203,7 +204,8 @@ async function checkOptionsJungle() {
     if (previousKeys.has(key)) continue
     previousKeys.add(key)
 
-    const title = `🌱 Fresh Build — ${spike.symbol} ${spike.strike} ${spike.option_type}`
+    const expStr = spike.expiry ? ` (${spike.expiry.slice(5).replace('-','/')})` : ''
+    const title = `🌱 Fresh Build — ${spike.symbol} ${spike.strike} ${spike.option_type}${expStr}`
     const body  = `Vol +${spike.vol_pct}% | OI +${spike.oi_pct}% | LTP: ₹${spike.last_price}`
 
     playSound()

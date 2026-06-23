@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.2'
+const SW_VERSION = 'v2.0.3'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
@@ -8,6 +8,13 @@ const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
 self.addEventListener('install', (e) => {
   console.log(`[SW ${SW_VERSION}] Installing`)
   self.skipWaiting()
+})
+
+// Keep SW alive with periodic fetch events
+self.addEventListener('periodicsync', (e) => {
+  if (e.tag === 'gn-alerts') {
+    e.waitUntil(runChecks())
+  }
 })
 
 self.addEventListener('activate', (e) => {
@@ -42,15 +49,17 @@ function scheduleNext() {
   schedulerTimer = setTimeout(() => {
     if (!enabled) return
 
-    const checkPromise = runChecks().then(() => {
-      scheduleNext()  // Schedule next after current completes
+    // Extend SW lifetime by doing a fetch
+    const keepAlivePromise = fetch(`${API}/health`).catch(() => {})
+
+    const checkPromise = Promise.all([keepAlivePromise, runChecks()]).then(() => {
+      scheduleNext()
     }).catch(e => {
       console.error('[SW] Check failed:', e)
-      scheduleNext()  // Still reschedule even on error
+      scheduleNext()
     })
 
-    // Keep SW alive during the check
-    self.registration.active?.postMessage?.({ type: 'KEEPALIVE' })
+    event?.waitUntil?.(checkPromise)
   }, CHECK_INTERVAL_MS)
 }
 

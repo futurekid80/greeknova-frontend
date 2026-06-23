@@ -166,21 +166,21 @@ export default function OptionsJungle() {
     .filter(s => volSigFilter === 'all' || s.vol_signal === volSigFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
     .sort((a, b) => {
-      if (sortBy === 'symbol' || sortBy === 'option_type' || sortBy === 'interpretation' || sortBy === 'first_seen') {
-        const av = String((a as any)[sortBy] || '')
-        const bv = String((b as any)[sortBy] || '')
-        return av.localeCompare(bv) * sortDir
+      if (volSortBy === 'symbol' || volSortBy === 'option_type' || volSortBy === 'vol_signal' || volSortBy === 'first_seen') {
+        const av = String((a as any)[volSortBy] || '')
+        const bv = String((b as any)[volSortBy] || '')
+        return av.localeCompare(bv) * volSortDir
       }
       const getVal = (s: any) => {
-        if (sortBy === 'oi_pct') return Math.abs(s.oi_pct)
-        if (sortBy === 'ltp_chg_pct') return Math.abs(s.ltp_chg_pct)
-        if (sortBy === 'volume') return s.volume
-        if (sortBy === 'otm_pct') return s.otm_pct
-        if (sortBy === 'strike') return Number(s.strike)
-        if (sortBy === 'snapshot_count') return Number(s.snapshot_count || 0)
+        if (volSortBy === 'vol_pct') return s.vol_pct
+        if (volSortBy === 'oi_pct') return Math.abs(s.oi_pct)
+        if (volSortBy === 'ltp_chg_pct') return Math.abs(s.ltp_chg_pct)
+        if (volSortBy === 'new_volume') return s.new_volume
+        if (volSortBy === 'otm_pct') return s.otm_pct
+        if (volSortBy === 'strike') return Number(s.strike)
         return s.last_price
       }
-      return (getVal(b) - getVal(a)) * sortDir
+      return (getVal(b) - getVal(a)) * volSortDir
     })
 
   // ── Two-way detection for OI spikes ──────────────────────────────────────
@@ -583,7 +583,10 @@ export default function OptionsJungle() {
                           </div>
                           <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{s.cmp.toLocaleString()}</p>
                         </td>
-                        <td className="px-4 py-3.5 text-sm font-bold text-gray-300">{s.strike.toLocaleString()}</td>
+                        <td className="px-4 py-3.5">
+                          <p className="text-sm font-bold text-gray-300">{s.strike.toLocaleString()}</p>
+                          {(s as any).expiry && <p className="text-[10px] text-gray-600 mt-0.5">{(s as any).expiry.slice(5).replace('-','/')}</p>}
+                        </td>
                         <td className="px-4 py-3.5">
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isCE?'bg-red-950/50 text-red-400 border border-red-800/50':'bg-emerald-950/50 text-emerald-400 border border-emerald-800/50'}`}>{s.option_type}</span>
                         </td>
@@ -675,7 +678,10 @@ export default function OptionsJungle() {
                           </div>
                           <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{s.cmp.toLocaleString()}</p>
                         </td>
-                        <td className="px-4 py-3.5 text-sm font-bold text-gray-300">{s.strike.toLocaleString()}</td>
+                       <td className="px-4 py-3.5">
+                          <p className="text-sm font-bold text-gray-300">{s.strike.toLocaleString()}</p>
+                          {(s as any).expiry && <p className="text-[10px] text-gray-600 mt-0.5">{(s as any).expiry.slice(5).replace('-','/')}</p>}
+                        </td>
                         <td className="px-4 py-3.5">
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isCE?'bg-red-950/50 text-red-400 border border-red-800/50':'bg-emerald-950/50 text-emerald-400 border border-emerald-800/50'}`}>{s.option_type}</span>
                         </td>

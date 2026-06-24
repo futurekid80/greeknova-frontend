@@ -44,7 +44,7 @@ interface StealthStock {
   tier: string
   today_oi_chg: number
   price_chg: number
-  net_delta: number
+  net_delta: number | null
   rank: number
 }
 
@@ -329,9 +329,13 @@ function StealthCard({ s }: { s: StealthStock }) {
         </div>
         <div>
           <p className="text-[10px] text-gray-400">Net Delta</p>
-          <p className={`text-sm font-bold ${(s.net_delta ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {(s.net_delta ?? 0) >= 0 ? '+' : ''}{((s.net_delta ?? 0) / 100000).toFixed(1)}L
-          </p>
+          {s.net_delta === null || s.net_delta === undefined ? (
+            <p className="text-sm font-bold text-gray-600">—</p>
+          ) : (
+            <p className={`text-sm font-bold ${s.net_delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {s.net_delta >= 0 ? '+' : ''}{(s.net_delta / 100000).toFixed(1)}L
+            </p>
+          )}
         </div>
       </div>
     </div>

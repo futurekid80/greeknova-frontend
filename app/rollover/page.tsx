@@ -262,7 +262,7 @@ export default function RolloverPage() {
                 tickFormatter={v => `${v}%`} domain={[0, 100]} />
               <Tooltip
                 contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 11 }}
-                formatter={(v: any, name: string) => [`${v}%`, name === 'current' ? 'This Series' : 'Last Series']}
+                formatter={(v: any, name: any) => [`${v}%`, name === 'current' ? 'This Series' : 'Last Series']}
                 cursor={{ fill: 'rgba(255,255,255,0.03)' }}
               />
               <ReferenceLine y={50} stroke="#374151" strokeDasharray="3 3" />

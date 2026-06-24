@@ -45,8 +45,8 @@ const NAV_GROUPS = [
       { href: '/positional',  label: '🧠 Positional Intelligence' },
       { href: '/signals/intraday', label: '📋 Intraday Log' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
-      { href: '/signals/wall-migration', label: '🧱 Wall Migration' }
-      { href: '/rollover', label: '🔄 Rollover Tracker' }
+      { href: '/signals/wall-migration', label: '🧱 Wall Migration' },
+      { href: '/rollover', label: '🔄 Rollover Tracker' },
     ]
   },
 ]

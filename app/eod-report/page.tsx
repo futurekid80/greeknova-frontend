@@ -323,7 +323,7 @@ export default function EODReport() {
           <Section title="Participant Flow" subtitle="Index futures net positions">
             <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-5">
               {/* FII Summary */}
-              <div className="flex items-center gap-4 mb-4 p-3 rounded-xl bg-gray-900/60 border border-gray-700/50">
+              <div className="flex items-center gap-4 mb-4 p-3 rounded-xl bg-gray-900/60 border border-gray-700/50 flex-wrap">
                 <div>
                   <p className="text-xs text-gray-500 mb-0.5">FII Index Fut</p>
                   <p className={`text-lg font-black ${fiiIdxNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -338,34 +338,32 @@ export default function EODReport() {
                   </p>
                 </div>
                 <div className="w-px h-10 bg-gray-700" />
-              {(data as any).cash_flow?.FII ? (
-                <>
-                  ) : (
-                <>
-                  <div className="w-px h-10 bg-gray-700" />
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">FII/DII Cash</p>
-                    <p className="text-xs text-gray-600 mt-1">Available after 7:30 PM</p>
-                  </div>
-                  <div className="w-px h-10 bg-gray-700" />
-                </>
-              )}
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">FII Cash</p>
-                    <p className={`text-lg font-black ${(data as any).cash_flow.FII.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {(data as any).cash_flow.FII.net >= 0 ? '+' : ''}₹{(data as any).cash_flow.FII.net.toFixed(0)}Cr
-                    </p>
-                  </div>
-                  <div className="w-px h-10 bg-gray-700" />
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">DII Cash</p>
-                    <p className={`text-lg font-black ${(data as any).cash_flow?.DII?.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {(data as any).cash_flow?.DII?.net >= 0 ? '+' : ''}₹{(data as any).cash_flow?.DII?.net?.toFixed(0) ?? '—'}Cr
-                    </p>
-                  </div>
-                  <div className="w-px h-10 bg-gray-700" />
-                </>
-              )}
+                {(data as any).cash_flow?.FII ? (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">FII Cash</p>
+                      <p className={`text-lg font-black ${(data as any).cash_flow.FII.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {(data as any).cash_flow.FII.net >= 0 ? '+' : ''}₹{(data as any).cash_flow.FII.net.toFixed(0)}Cr
+                      </p>
+                    </div>
+                    <div className="w-px h-10 bg-gray-700" />
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">DII Cash</p>
+                      <p className={`text-lg font-black ${((data as any).cash_flow?.DII?.net ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {((data as any).cash_flow?.DII?.net ?? 0) >= 0 ? '+' : ''}₹{((data as any).cash_flow?.DII?.net ?? 0).toFixed(0)}Cr
+                      </p>
+                    </div>
+                    <div className="w-px h-10 bg-gray-700" />
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">FII/DII Cash</p>
+                      <p className="text-xs text-gray-600 mt-1">Available after 7:30 PM</p>
+                    </div>
+                    <div className="w-px h-10 bg-gray-700" />
+                  </>
+                )}
                 <div>
                   <p className="text-xs text-gray-500 mb-0.5">FII Stance</p>
                   <p className={`text-sm font-bold ${fiiIdxNet < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
@@ -385,10 +383,8 @@ export default function EODReport() {
                 </ResponsiveContainer>
               </div>
               <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-600">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>Idx Fut</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"/>Stk Fut</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"/>Call Net</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>Put Net</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>Idx Fut Net</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"/>Put-Call Net</span>
               </div>
             </div>
           </Section>

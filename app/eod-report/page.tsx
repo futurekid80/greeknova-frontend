@@ -189,10 +189,8 @@ export default function EODReport() {
   // ── Participant flow bar data ──────────────────────────────────────────────
   const pfBar = ['FII', 'DII', 'CLIENT', 'PRO'].map(p => ({
     name: p,
-    'Idx Fut': pf[p]?.fut_idx_net || 0,
-    'Stk Fut': pf[p]?.fut_stk_net || 0,
-    'Call Net': pf[p]?.opt_idx_call_net || 0,
-    'Put Net':  pf[p]?.opt_idx_put_net || 0,
+    'Idx Fut Net': pf[p]?.fut_idx_net || 0,
+    'Put-Call Net': (pf[p]?.opt_idx_put_net || 0) - (pf[p]?.opt_idx_call_net || 0),
   }))
 
   // ── Overall market bias ───────────────────────────────────────────────────
@@ -340,6 +338,24 @@ export default function EODReport() {
                   </p>
                 </div>
                 <div className="w-px h-10 bg-gray-700" />
+              {(data as any).cash_flow?.FII && (
+                <>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">FII Cash</p>
+                    <p className={`text-lg font-black ${(data as any).cash_flow.FII.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {(data as any).cash_flow.FII.net >= 0 ? '+' : ''}₹{(data as any).cash_flow.FII.net.toFixed(0)}Cr
+                    </p>
+                  </div>
+                  <div className="w-px h-10 bg-gray-700" />
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">DII Cash</p>
+                    <p className={`text-lg font-black ${(data as any).cash_flow?.DII?.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {(data as any).cash_flow?.DII?.net >= 0 ? '+' : ''}₹{(data as any).cash_flow?.DII?.net?.toFixed(0) ?? '—'}Cr
+                    </p>
+                  </div>
+                  <div className="w-px h-10 bg-gray-700" />
+                </>
+              )}
                 <div>
                   <p className="text-xs text-gray-500 mb-0.5">FII Stance</p>
                   <p className={`text-sm font-bold ${fiiIdxNet < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
@@ -353,10 +369,8 @@ export default function EODReport() {
                     <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tickFormatter={v => fmtL(v)} tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} width={50} />
                     <Tooltip content={<CustomBarTooltip />} />
-                    <Bar dataKey="Idx Fut" fill="#10b981" radius={[3,3,0,0]} maxBarSize={20} />
-                    <Bar dataKey="Stk Fut" fill="#6366f1" radius={[3,3,0,0]} maxBarSize={20} />
-                    <Bar dataKey="Call Net" fill="#ef4444" radius={[3,3,0,0]} maxBarSize={20} />
-                    <Bar dataKey="Put Net"  fill="#10b981" radius={[3,3,0,0]} maxBarSize={20} />
+                    <Bar dataKey="Idx Fut Net" fill="#10b981" radius={[3,3,0,0]} maxBarSize={30} />
+                    <Bar dataKey="Put-Call Net" fill="#6366f1" radius={[3,3,0,0]} maxBarSize={30} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

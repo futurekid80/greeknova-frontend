@@ -302,7 +302,9 @@ export default function RolloverPage() {
               <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false}
                 tickFormatter={v => `${v}%`} domain={[0, 100]} />
               <Tooltip
-                contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 11 }}
+                contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 11, color: '#fff' }}
+              labelStyle={{ color: '#9ca3af', fontWeight: 'bold' }}
+              itemStyle={{ color: '#e5e7eb' }}
                 formatter={(v: any, name: any) => [`${v}%`, name === 'current' ? 'This Series' : 'Last Series']}
                 cursor={{ fill: 'rgba(255,255,255,0.03)' }}
               />

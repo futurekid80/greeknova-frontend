@@ -171,7 +171,11 @@ export default function RolloverPage() {
 
   // Filter + sort symbols
   const filtered = data.symbols
-    .filter(s => filter === 'all' || s.roll_signal === filter)
+    .filter(s => {
+      if (filter === 'all') return true
+      if (filter === 'SQUARING') return s.roll_signal === 'SQUARING' || s.roll_signal === 'EARLY'
+      return s.roll_signal === filter
+    })
     .sort((a, b) => {
       const av = sortCol === 'rollover_pct' ? a.rollover_pct :
                  sortCol === 'vs_prev' ? (a.vs_prev ?? -999) :
@@ -247,6 +251,43 @@ export default function RolloverPage() {
             <p className="text-xs text-gray-600 mt-1">{fmtDate(data.next_expiry)} expiry</p>
           </div>
         </div>
+
+        {/* How to read */}
+        <details className="bg-blue-950/20 border border-blue-800/30 rounded-2xl p-5 mb-8 group">
+          <summary className="text-sm font-bold text-blue-400 cursor-pointer flex items-center gap-2 select-none">
+            <span>📖 How to read this page</span>
+            <span className="text-xs text-gray-500 font-normal ml-1">click to expand</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-gray-400 leading-relaxed">
+            <div>
+              <p className="text-white font-bold mb-2">What is Rollover?</p>
+              <p className="mb-2">As expiry approaches, traders who want to keep their positions move (roll) from the current month contract to next month. Rollover % = Next OI ÷ (Current + Next) × 100.</p>
+              <p>A higher rollover % means more positions are being carried forward into next month. Low rollover means traders are squaring off and not continuing.</p>
+            </div>
+            <div>
+              <p className="text-white font-bold mb-2">What do the signals mean?</p>
+              <div className="space-y-1.5">
+                <p><span className="text-emerald-400 font-bold">🐂 Bullish Roll</span> — OI rolling + price stable/up → longs maintaining positions into next series</p>
+                <p><span className="text-red-400 font-bold">🐻 Bearish Roll</span> — OI rolling + price down → shorts maintaining pressure into next series</p>
+                <p><span className="text-amber-400 font-bold">🔄 Rolling</span> — OI rolling but price flat, direction unclear</p>
+                <p><span className="text-gray-400 font-bold">❌ Squaring Off</span> — Both expiries losing OI, positions closing, no continuation</p>
+                <p><span className="text-blue-400 font-bold">⏳ Early Stage</span> — Very little next month OI, rollover just starting</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-white font-bold mb-2">vs Last Series</p>
+              <p>Compares today's rollover % with the same DTE (days to expiry) from the previous series (May 25, 2 days before May 26 expiry). If rollover is slower than last series, market is less committed to carrying positions forward — typically bearish.</p>
+            </div>
+            <div>
+              <p className="text-white font-bold mb-2">Speed Badge</p>
+              <p><span className="text-emerald-400">⚡ Faster</span> — Rolling quicker than last series at same DTE (more conviction)</p>
+              <p className="mt-1"><span className="text-red-400">🐢 Slower</span> — Rolling slower than last series (less conviction, more uncertainty)</p>
+              <p className="mt-1"><span className="text-gray-400">≈ Similar</span> — Within 5% of last series pace</p>
+            </div>
+          </div>
+        </details>
+
+        {/* Top Rollers Chart */}
 
         {/* Top Rollers Chart */}
         <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-6 mb-8">

@@ -328,7 +328,11 @@ function StealthCard({ s }: { s: StealthStock }) {
           </p>
         </div>
         <div>
-          <p className="text-[10px] text-gray-400">Net Delta</p>
+          <p className="text-[10px] text-gray-400 flex items-center gap-1">
+        Net Delta
+        <span title="Net Delta = PE OI minus CE OI at ATM±5 strikes. Positive = more put writing (support below, bullish). Negative = more call writing (resistance above, bearish options bias). Can conflict with FUT signal — use as context, not as standalone signal."
+          className="cursor-help text-gray-600 hover:text-gray-400 transition-colors">ⓘ</span>
+      </p>
           {s.net_delta === null || s.net_delta === undefined ? (
             <p className="text-sm font-bold text-gray-600">—</p>
           ) : (

@@ -234,7 +234,7 @@ export default function EODReport() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
 
           {/* Market Breadth */}
-          <Section title="Market Breadth" subtitle={`${mb.total} F&O symbols`}>
+          <Section title="Market Breadth" subtitle={`${mb.total} F&O symbols · Open → Close OI classification`}>
             <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-5">
               <div className="flex items-center gap-6 mb-4">
                 <div className="text-center">

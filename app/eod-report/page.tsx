@@ -8,7 +8,6 @@ import {
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface Mover {
   symbol: string; fut_oi_chg_pct: number; price_chg_pct: number
   close_price: number; fut_signal: string; fut_vol: number
@@ -38,9 +37,12 @@ interface EODData {
   iv_data: Record<string, IVData>
   participant_flow: Record<string, ParticipantFlow>
   top_signals: Mover[]
+  cash_flow?: {
+    FII?: { buy: number; sell: number; net: number }
+    DII?: { buy: number; sell: number; net: number }
+  }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n: number, dec = 2) {
   return n >= 0 ? `+${n.toFixed(dec)}%` : `${n.toFixed(dec)}%`
 }
@@ -59,21 +61,11 @@ function fmtL(n: number) {
   return n.toLocaleString()
 }
 
-// ── Signal colors ─────────────────────────────────────────────────────────────
 const SIG_COLOR: Record<string, string> = {
-  LONG_BUILDUP:   '#10b981',
-  SHORT_BUILDUP:  '#ef4444',
-  SHORT_COVERING: '#06b6d4',
-  LONG_UNWINDING: '#f59e0b',
-}
-const SIG_LABEL: Record<string, string> = {
-  LONG_BUILDUP:   'Long Buildup',
-  SHORT_BUILDUP:  'Short Buildup',
-  SHORT_COVERING: 'Short Covering',
-  LONG_UNWINDING: 'Long Unwinding',
+  LONG_BUILDUP: '#10b981', SHORT_BUILDUP: '#ef4444',
+  SHORT_COVERING: '#06b6d4', LONG_UNWINDING: '#f59e0b',
 }
 
-// ── Custom Tooltip for Bar Charts ─────────────────────────────────────────────
 function CustomBarTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
@@ -86,7 +78,6 @@ function CustomBarTooltip({ active, payload, label }: any) {
   )
 }
 
-// ── Section wrapper ───────────────────────────────────────────────────────────
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="mb-8">
@@ -99,15 +90,11 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
   )
 }
 
-// ── Mover Row ─────────────────────────────────────────────────────────────────
 function MoverRow({ m, rank }: { m: Mover; rank: number }) {
-  const isLong = m.fut_signal === 'LONG_BUILDUP' || m.fut_signal === 'SHORT_COVERING'
   const barColor = SIG_COLOR[m.fut_signal] || '#6b7280'
-  const maxOI = 20
-  const barW = Math.min(Math.abs(m.fut_oi_chg_pct) / maxOI * 100, 100)
-
+  const barW = Math.min(Math.abs(m.fut_oi_chg_pct) / 20 * 100, 100)
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-gray-800/60 last:border-0 group hover:bg-gray-900/30 px-3 -mx-3 rounded-lg transition-colors">
+    <div className="flex items-center gap-3 py-2.5 border-b border-gray-800/60 last:border-0 hover:bg-gray-900/30 px-3 -mx-3 rounded-lg transition-colors">
       <span className="text-xs text-gray-600 font-mono w-4">{rank}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
@@ -118,9 +105,7 @@ function MoverRow({ m, rank }: { m: Mover; rank: number }) {
           <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${barW}%`, backgroundColor: barColor }} />
           </div>
-          <span className="text-xs font-bold" style={{ color: barColor }}>
-            {fmt(m.fut_oi_chg_pct)} OI
-          </span>
+          <span className="text-xs font-bold" style={{ color: barColor }}>{fmt(m.fut_oi_chg_pct)} OI</span>
         </div>
       </div>
       <span className={`text-sm font-semibold ${m.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -130,7 +115,6 @@ function MoverRow({ m, rank }: { m: Mover; rank: number }) {
   )
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function EODReport() {
   const [data, setData] = useState<EODData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -141,9 +125,7 @@ export default function EODReport() {
     setLoading(true)
     setError(null)
     try {
-      const url = date
-        ? `${API}/eod-report?date=${date}`
-        : `${API}/eod-report`
+      const url = date ? `${API}/eod-report?date=${date}` : `${API}/eod-report`
       const res = await fetch(url)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
@@ -159,7 +141,7 @@ export default function EODReport() {
 
   if (loading) return (
     <div className="min-h-screen bg-[#07070e] text-white">
-      <Navbar active="/eod" />
+      <Navbar active="/eod-report" />
       <div className="max-w-7xl mx-auto px-6 py-10 space-y-6">
         {[1,2,3,4].map(i => <div key={i} className="h-40 bg-gray-900/40 rounded-2xl animate-pulse" />)}
       </div>
@@ -175,9 +157,8 @@ export default function EODReport() {
     </div>
   )
 
-  const { market_breadth: mb, fut_movers: fm, stealth_buildup, iv_data, participant_flow: pf } = data
+  const { market_breadth: mb, fut_movers: fm, stealth_buildup, iv_data, participant_flow: pf, cash_flow } = data
 
-  // ── Breadth donut data ────────────────────────────────────────────────────
   const breadthPie = [
     { name: 'Long Buildup',   value: mb.long_buildup,   color: '#10b981' },
     { name: 'Short Buildup',  value: mb.short_buildup,  color: '#ef4444' },
@@ -186,29 +167,24 @@ export default function EODReport() {
     { name: 'Neutral',        value: mb.neutral,        color: '#374151' },
   ].filter(d => d.value > 0)
 
-  // ── Participant flow bar data ──────────────────────────────────────────────
   const pfBar = ['FII', 'DII', 'CLIENT', 'PRO'].map(p => ({
     name: p,
     'Idx Fut Net': pf[p]?.fut_idx_net || 0,
     'Put-Call Net': (pf[p]?.opt_idx_put_net || 0) - (pf[p]?.opt_idx_call_net || 0),
   }))
 
-  // ── Overall market bias ───────────────────────────────────────────────────
   const biasScore = mb.bullish - mb.bearish
   const biasLabel = biasScore > 5 ? '🟢 Bullish' : biasScore < -5 ? '🔴 Bearish' : '🟡 Neutral'
   const biasColor = biasScore > 5 ? 'text-emerald-400' : biasScore < -5 ? 'text-red-400' : 'text-amber-400'
-
-  // ── FII index net position ────────────────────────────────────────────────
   const fiiIdxNet = pf['FII']?.fut_idx_net || 0
   const fiiStkNet = pf['FII']?.fut_stk_net || 0
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
-      <Navbar active="/eod" />
-
+      <Navbar active="/eod-report" />
       <div className="max-w-7xl mx-auto px-6 py-8">
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
+        {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -216,29 +192,21 @@ export default function EODReport() {
                 Intelligence Report
               </span>
             </div>
-            <h1 className="text-3xl font-black tracking-tight text-white mb-1">
-              EOD Market Report
-            </h1>
-            <p className="text-gray-500 text-sm">
-              F&O Positioning · Participant Flow · Stealth Signals · {fmtDate(data.date)}
-            </p>
+            <h1 className="text-3xl font-black tracking-tight text-white mb-1">EOD Market Report</h1>
+            <p className="text-gray-500 text-sm">F&O Positioning · Participant Flow · Stealth Signals · {fmtDate(data.date)}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedDate}
-              onChange={e => { setSelectedDate(e.target.value); fetchData(e.target.value) }}
-              className="bg-gray-900 border border-gray-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 cursor-pointer"
-            >
-              {data.available_dates.map(d => (
-                <option key={d} value={d} className="bg-gray-900">
-                  {fmtDate(d)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={selectedDate}
+            onChange={e => { setSelectedDate(e.target.value); fetchData(e.target.value) }}
+            className="bg-gray-900 border border-gray-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 cursor-pointer"
+          >
+            {data.available_dates.map(d => (
+              <option key={d} value={d} className="bg-gray-900">{fmtDate(d)}</option>
+            ))}
+          </select>
         </div>
 
-        {/* ── Market Bias Banner ──────────────────────────────────────────── */}
+        {/* Market Bias Banner */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="col-span-2 md:col-span-1 bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
             <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Market Bias</p>
@@ -265,7 +233,7 @@ export default function EODReport() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
 
-          {/* ── Market Breadth ────────────────────────────────────────────── */}
+          {/* Market Breadth */}
           <Section title="Market Breadth" subtitle={`${mb.total} F&O symbols`}>
             <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-5">
               <div className="flex items-center gap-6 mb-4">
@@ -274,9 +242,9 @@ export default function EODReport() {
                   <p className="text-xs text-gray-500">Bullish</p>
                 </div>
                 <div className="flex-1 h-3 bg-gray-800 rounded-full overflow-hidden flex">
-                  <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(mb.bullish/mb.total)*100}%` }} />
-                  <div className="h-full bg-red-500 transition-all" style={{ width: `${(mb.bearish/mb.total)*100}%` }} />
-                  <div className="h-full bg-gray-700 transition-all" style={{ width: `${(mb.neutral/mb.total)*100}%` }} />
+                  <div className="h-full bg-emerald-500" style={{ width: `${(mb.bullish/mb.total)*100}%` }} />
+                  <div className="h-full bg-red-500" style={{ width: `${(mb.bearish/mb.total)*100}%` }} />
+                  <div className="h-full bg-gray-700" style={{ width: `${(mb.neutral/mb.total)*100}%` }} />
                 </div>
                 <div className="text-center">
                   <p className="text-3xl font-black text-red-400">{mb.bearish}</p>
@@ -286,20 +254,11 @@ export default function EODReport() {
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={breadthPie} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
-                      dataKey="value" paddingAngle={2}>
-                      {breadthPie.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} stroke="transparent" />
-                      ))}
+                    <Pie data={breadthPie} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={2}>
+                      {breadthPie.map((entry, i) => <Cell key={i} fill={entry.color} stroke="transparent" />)}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
-                      labelStyle={{ color: '#fff' }}
-                      itemStyle={{ color: '#9ca3af' }}
-                    />
-                    <Legend
-                      formatter={(value) => <span style={{ color: '#9ca3af', fontSize: 11 }}>{value}</span>}
-                    />
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} itemStyle={{ color: '#9ca3af' }} />
+                    <Legend formatter={(value) => <span style={{ color: '#9ca3af', fontSize: 11 }}>{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -319,10 +278,10 @@ export default function EODReport() {
             </div>
           </Section>
 
-          {/* ── Participant Flow ──────────────────────────────────────────── */}
+          {/* Participant Flow */}
           <Section title="Participant Flow" subtitle="Index futures net positions">
             <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-5">
-              {/* FII Summary */}
+              {/* FII Summary box */}
               <div className="flex items-center gap-4 mb-4 p-3 rounded-xl bg-gray-900/60 border border-gray-700/50 flex-wrap">
                 <div>
                   <p className="text-xs text-gray-500 mb-0.5">FII Index Fut</p>
@@ -338,19 +297,19 @@ export default function EODReport() {
                   </p>
                 </div>
                 <div className="w-px h-10 bg-gray-700" />
-                {(data as any).cash_flow?.FII ? (
+                {cash_flow?.FII ? (
                   <>
                     <div>
                       <p className="text-xs text-gray-500 mb-0.5">FII Cash</p>
-                      <p className={`text-lg font-black ${(data as any).cash_flow.FII.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {(data as any).cash_flow.FII.net >= 0 ? '+' : ''}₹{(data as any).cash_flow.FII.net.toFixed(0)}Cr
+                      <p className={`text-lg font-black ${cash_flow.FII.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {cash_flow.FII.net >= 0 ? '+' : ''}₹{cash_flow.FII.net.toFixed(0)}Cr
                       </p>
                     </div>
                     <div className="w-px h-10 bg-gray-700" />
                     <div>
                       <p className="text-xs text-gray-500 mb-0.5">DII Cash</p>
-                      <p className={`text-lg font-black ${((data as any).cash_flow?.DII?.net ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {((data as any).cash_flow?.DII?.net ?? 0) >= 0 ? '+' : ''}₹{((data as any).cash_flow?.DII?.net ?? 0).toFixed(0)}Cr
+                      <p className={`text-lg font-black ${(cash_flow?.DII?.net ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {(cash_flow?.DII?.net ?? 0) >= 0 ? '+' : ''}₹{(cash_flow?.DII?.net ?? 0).toFixed(0)}Cr
                       </p>
                     </div>
                     <div className="w-px h-10 bg-gray-700" />
@@ -383,37 +342,34 @@ export default function EODReport() {
                 </ResponsiveContainer>
               </div>
               <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-600">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>Idx Fut Net</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"/>Put-Call Net</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Idx Fut Net</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />Put-Call Net</span>
               </div>
             </div>
           </Section>
         </div>
 
-        {/* ── FUT OI Movers ────────────────────────────────────────────────── */}
+        {/* FUT OI Movers */}
         <Section title="FUT OI Movers" subtitle="Significant open interest changes today">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Long Buildup */}
             <div className="bg-emerald-950/20 border border-emerald-800/30 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-800/50 text-emerald-400">🐂 Long Buildup</span>
                 <span className="text-xs text-gray-600">OI ↑ + Price ↑</span>
               </div>
-              {fm.long_buildup.length === 0 ? (
-                <p className="text-gray-600 text-sm">No long buildup signals today</p>
-              ) : (
-                fm.long_buildup.map((m, i) => <MoverRow key={m.symbol} m={m} rank={i+1} />)
-              )}
+              {fm.long_buildup.length === 0
+                ? <p className="text-gray-600 text-sm">No long buildup signals today</p>
+                : fm.long_buildup.map((m, i) => <MoverRow key={m.symbol} m={m} rank={i+1} />)}
             </div>
-            {/* Short Buildup */}
             <div className="bg-red-950/20 border border-red-800/30 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-950/60 border border-red-800/50 text-red-400">🐻 Short Buildup</span>
                 <span className="text-xs text-gray-600">OI ↑ + Price ↓</span>
               </div>
-              {fm.short_buildup.map((m, i) => <MoverRow key={m.symbol} m={m} rank={i+1} />)}
+              {fm.short_buildup.length === 0
+                ? <p className="text-gray-600 text-sm">No short buildup signals today</p>
+                : fm.short_buildup.map((m, i) => <MoverRow key={m.symbol} m={m} rank={i+1} />)}
             </div>
-            {/* Short Covering */}
             {fm.short_covering.length > 0 && (
               <div className="bg-cyan-950/20 border border-cyan-800/30 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-4">
@@ -423,7 +379,6 @@ export default function EODReport() {
                 {fm.short_covering.map((m, i) => <MoverRow key={m.symbol} m={m} rank={i+1} />)}
               </div>
             )}
-            {/* Long Unwinding */}
             {fm.long_unwinding.length > 0 && (
               <div className="bg-amber-950/20 border border-amber-800/30 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-4">
@@ -436,21 +391,17 @@ export default function EODReport() {
           </div>
         </Section>
 
-        {/* ── Stealth Buildup ──────────────────────────────────────────────── */}
+        {/* Stealth Buildup */}
         {stealth_buildup.length > 0 && (
           <Section title="Stealth Buildup" subtitle="High OI accumulation with minimal price move — quiet institutional activity">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {stealth_buildup.map(s => {
                 const isElite = s.tier === 'ELITE'
                 return (
-                  <div key={s.symbol} className={`rounded-xl border p-4 ${isElite
-                    ? 'bg-amber-950/20 border-amber-800/40'
-                    : 'bg-emerald-950/20 border-emerald-800/40'}`}>
+                  <div key={s.symbol} className={`rounded-xl border p-4 ${isElite ? 'bg-amber-950/20 border-amber-800/40' : 'bg-emerald-950/20 border-emerald-800/40'}`}>
                     <div className="flex items-start justify-between mb-2">
                       <p className="text-sm font-black text-white">{s.symbol}</p>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isElite
-                        ? 'text-amber-400 border-amber-700/50 bg-amber-950/40'
-                        : 'text-emerald-400 border-emerald-700/50 bg-emerald-950/40'}`}>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isElite ? 'text-amber-400 border-amber-700/50 bg-amber-950/40' : 'text-emerald-400 border-emerald-700/50 bg-emerald-950/40'}`}>
                         {s.tier}
                       </span>
                     </div>
@@ -462,9 +413,7 @@ export default function EODReport() {
                       </div>
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">Price</span>
-                        <span className={`font-bold ${s.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {fmt(s.price_chg_pct)}
-                        </span>
+                        <span className={`font-bold ${s.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(s.price_chg_pct)}</span>
                       </div>
                     </div>
                   </div>
@@ -474,7 +423,7 @@ export default function EODReport() {
           </Section>
         )}
 
-        {/* ── Participant Flow Detail Table ─────────────────────────────────── */}
+        {/* Participant Flow Detail Table */}
         <Section title="Participant Flow Detail" subtitle="Net positions across all segments">
           <div className="bg-gray-900/40 border border-gray-800 rounded-2xl overflow-hidden">
             <table className="w-full">
@@ -509,7 +458,7 @@ export default function EODReport() {
           </div>
         </Section>
 
-        {/* ── Footer ───────────────────────────────────────────────────────── */}
+        {/* Footer */}
         <div className="border-t border-gray-800 pt-6 text-center">
           <p className="text-xs text-gray-600">
             GreekNova · EOD Intelligence Report · {fmtDate(data.date)} ·

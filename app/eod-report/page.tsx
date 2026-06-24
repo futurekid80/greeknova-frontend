@@ -338,8 +338,18 @@ export default function EODReport() {
                   </p>
                 </div>
                 <div className="w-px h-10 bg-gray-700" />
-              {(data as any).cash_flow?.FII && (
+              {(data as any).cash_flow?.FII ? (
                 <>
+                  ) : (
+                <>
+                  <div className="w-px h-10 bg-gray-700" />
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">FII/DII Cash</p>
+                    <p className="text-xs text-gray-600 mt-1">Available after 7:30 PM</p>
+                  </div>
+                  <div className="w-px h-10 bg-gray-700" />
+                </>
+              )}
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">FII Cash</p>
                     <p className={`text-lg font-black ${(data as any).cash_flow.FII.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>

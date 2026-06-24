@@ -335,7 +335,7 @@ export default function EODReport() {
                   <BarChart data={pfBar} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                     <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tickFormatter={v => fmtL(v)} tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} width={50} domain={['auto', 'auto']} />
-                    <Tooltip content={<CustomBarTooltip />} />
+                    <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                     <Bar dataKey="Idx Fut Net" fill="#10b981" radius={[3,3,0,0]} maxBarSize={30} />
                     <Bar dataKey="Put-Call Net" fill="#6366f1" radius={[3,3,0,0]} maxBarSize={30} />
                   </BarChart>

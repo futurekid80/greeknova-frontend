@@ -21,6 +21,7 @@ const NAV_GROUPS = [
       { href: '/charts',     label: 'OI Charts' },
       { href: '/oihistory',  label: 'OI History' },
       { href: '/eod',        label: 'EOD Analysis' },
+      { href: '/eod-report', label: '📋 EOD Report' },
       { href: '/pcr',        label: 'PCR Trend' },
       { href: '/oiprofile',  label: '📊 OI Profile' },
       { href: '/oiheatmap',  label: '🌡️ OI Heatmap' },

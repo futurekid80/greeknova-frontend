@@ -30,6 +30,7 @@ interface PIStock {
   cpr_width_emoji: string | null
   cpr_trend: string | null
   total_days: number
+  delivery_pct: number | null
   signal: string
   consec_days?: number
   consistency_pct: number
@@ -45,6 +46,7 @@ interface StealthStock {
   today_oi_chg: number
   price_chg: number
   net_delta: number | null
+  delivery_pct: number | null
   rank: number
 }
 
@@ -216,9 +218,18 @@ function ConvictionCard({ s, rank, onSymbolClick }: { s: PIStock; rank: number; 
             </span>
           )}
         </div>
-        <span className="text-gray-300">
-          <span className="text-white font-semibold">{s.consistency_pct}%</span> consistent
-        </span>
+        <div className="flex items-center gap-3">
+          {s.delivery_pct !== null && s.delivery_pct !== undefined && (
+            <span className="text-gray-500 text-xs">
+              Del: <span className={`font-semibold ${s.delivery_pct >= 60 ? 'text-emerald-400' : 'text-gray-400'}`}>
+                {s.delivery_pct.toFixed(1)}%
+              </span>
+            </span>
+          )}
+          <span className="text-gray-300">
+            <span className="text-white font-semibold">{s.consistency_pct}%</span> consistent
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -316,7 +327,7 @@ function StealthCard({ s }: { s: StealthStock }) {
           {s.tier}
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-4 gap-2 text-center">
         <div>
           <p className="text-[10px] text-gray-400">OI Chg</p>
           <p className="text-sm font-bold text-emerald-400">+{(s.today_oi_chg ?? 0).toFixed(2)}%</p>
@@ -326,6 +337,16 @@ function StealthCard({ s }: { s: StealthStock }) {
           <p className={`text-sm font-bold ${s.price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {fmt(s.price_chg)}
           </p>
+        </div>
+        <div>
+          <p className="text-[10px] text-gray-400">Delivery</p>
+          {s.delivery_pct !== null && s.delivery_pct !== undefined ? (
+            <p className={`text-sm font-bold ${s.delivery_pct >= 60 ? 'text-emerald-400' : s.delivery_pct >= 45 ? 'text-amber-400' : 'text-gray-400'}`}>
+              {s.delivery_pct.toFixed(1)}%
+            </p>
+          ) : (
+            <p className="text-sm font-bold text-gray-600">—</p>
+          )}
         </div>
         <div>
           <p className="text-[10px] text-gray-400 flex items-center gap-1">

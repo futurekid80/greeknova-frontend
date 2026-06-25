@@ -14,7 +14,7 @@ interface Mover {
 }
 interface StealthStock {
   symbol: string; fut_oi_chg_pct: number; price_chg_pct: number
-  close_price: number; tier: string
+  close_price: number; tier: string; delivery_pct?: number | null
 }
 interface IVData {
   symbol: string; atm_iv: number; atm_ce_iv: number; atm_pe_iv: number; dte: number
@@ -37,6 +37,10 @@ interface EODData {
   iv_data: Record<string, IVData>
   participant_flow: Record<string, ParticipantFlow>
   top_signals: Mover[]
+  delivery?: {
+    high_delivery: { symbol: string; delivery_pct: number; deliverable_L: number }[]
+    avg_delivery_pct: number | null
+  }
   cash_flow?: {
     FII?: { buy: number; sell: number; net: number }
     DII?: { buy: number; sell: number; net: number }
@@ -415,10 +419,40 @@ export default function EODReport() {
                         <span className="text-gray-500">Price</span>
                         <span className={`font-bold ${s.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(s.price_chg_pct)}</span>
                       </div>
+                      {s.delivery_pct !== null && s.delivery_pct !== undefined && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Delivery</span>
+                          <span className={`font-bold ${s.delivery_pct >= 60 ? 'text-emerald-400' : s.delivery_pct >= 45 ? 'text-amber-400' : 'text-gray-400'}`}>
+                            📦 {s.delivery_pct.toFixed(1)}%
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
               })}
+            </div>
+          </Section>
+        )}
+
+        {/* High Delivery Stocks */}
+        {data.delivery?.high_delivery && data.delivery.high_delivery.length > 0 && (
+          <Section title="High Delivery Stocks" subtitle={`≥60% delivery today · Avg market delivery: ${data.delivery.avg_delivery_pct ?? '—'}%`}>
+            <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-5">
+              <p className="text-xs text-gray-500 mb-3">
+                High delivery % = more investors holding overnight vs squaring off intraday. Combined with FUT signal = stronger conviction.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {data.delivery.high_delivery.map(s => (
+                  <div key={s.symbol} className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <span className="text-white font-bold text-sm">{s.symbol}</span>
+                    <span className={`text-xs font-bold ${s.delivery_pct >= 70 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {s.delivery_pct.toFixed(1)}%
+                    </span>
+                    <span className="text-gray-600 text-xs">{s.deliverable_L}L</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </Section>
         )}

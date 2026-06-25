@@ -34,7 +34,7 @@ function HolidayBanner() {
         <p className="text-xs text-amber-400">
           ⚠️ <strong>Market Holiday Tomorrow:</strong> {status.tomorrow_holiday}
           {status.long_weekend
-            ? ` · ${status.days_to_next_trading}-day break · Next trading: ${new Date(status.next_trading_day + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}`
+            ? ` · ${status.days_to_next_trading - 1}-day break · Next trading: ${new Date(status.next_trading_day + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}`
             : ''}
         </p>
       </div>

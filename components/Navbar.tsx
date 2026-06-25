@@ -47,6 +47,7 @@ const NAV_GROUPS = [
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
       { href: '/signals/wall-migration', label: '🧱 Wall Migration' },
       { href: '/rollover', label: '🔄 Rollover Tracker' },
+      { href: '/delivery-confluence', label: '📦 Delivery Confluence' }
     ]
   },
 ]

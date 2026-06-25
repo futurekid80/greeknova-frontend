@@ -37,13 +37,13 @@ interface EODData {
   iv_data: Record<string, IVData>
   participant_flow: Record<string, ParticipantFlow>
   top_signals: Mover[]
-  delivery?: {
-    high_delivery: { symbol: string; delivery_pct: number; deliverable_L: number }[]
-    avg_delivery_pct: number | null
-  }
   cash_flow?: {
     FII?: { buy: number; sell: number; net: number }
     DII?: { buy: number; sell: number; net: number }
+  }
+  delivery?: {
+    high_delivery: { symbol: string; delivery_pct: number; deliverable_L: number }[]
+    avg_delivery_pct: number | null
   }
 }
 
@@ -285,7 +285,6 @@ export default function EODReport() {
           {/* Participant Flow */}
           <Section title="Participant Flow" subtitle="Index futures net positions">
             <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-5">
-              {/* FII Summary box */}
               <div className="flex items-center gap-4 mb-4 p-3 rounded-xl bg-gray-900/60 border border-gray-700/50 flex-wrap">
                 <div>
                   <p className="text-xs text-gray-500 mb-0.5">FII Index Fut</p>

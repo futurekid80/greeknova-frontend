@@ -245,7 +245,7 @@ export default function DeliveryConfluence() {
 
   const filtered = data.results.filter(r => {
     if (filter === 'bullish' && !r.confluence_type.includes('BULLISH')) return false
-    if (filter === 'bearish' && !r.confluence_type.includes('BEARISH')) return false
+    if (filter === 'bearish' && !r.confluence_type.includes('BEARISH') && r.confluence_type !== 'STEALTH') return false
     if (minGrade === 'A+' && r.grade !== 'A+') return false
     if (minGrade === 'A' && !['A+', 'A'].includes(r.grade)) return false
     if (minGrade === 'B' && !['A+', 'A', 'B'].includes(r.grade)) return false

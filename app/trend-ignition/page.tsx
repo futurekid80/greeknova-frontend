@@ -53,6 +53,11 @@ interface Signal {
   trade_signal_icon: string;
   trade_signal_note: string;
   trade_signal_action: string;
+  stealth_tier: string | null;
+  stealth_phase: string | null;
+  stealth_consecutive_scans: number;
+  stealth_cum_oi_pct: number;
+  stealth_hourly_rate: number;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -470,6 +475,62 @@ function ExpiryBadge({ expiryDate }: { expiryDate: string }) {
   );
 }
 
+
+function StealthBadge({ signal }: { signal: Signal }) {
+  const tier = signal.stealth_tier;
+  if (!tier) return null;
+  const cfg: Record<string, { bg: string; border: string; text: string; icon: string; label: string }> = {
+    Elite:  { bg: "rgba(220,38,38,0.12)",  border: "#DC2626", text: "#F87171", icon: "🔴", label: "ELITE STEALTH"  },
+    Strong: { bg: "rgba(234,88,12,0.12)",  border: "#EA580C", text: "#FB923C", icon: "🟠", label: "STRONG STEALTH" },
+    Watch:  { bg: "rgba(202,138,4,0.12)",  border: "#CA8A04", text: "#FCD34D", icon: "🟡", label: "STEALTH WATCH"  },
+  };
+  const c = cfg[tier] || cfg["Watch"];
+  const phaseLabel: Record<string, string> = {
+    early: "Early session · OI seeding",
+    build: "Build phase · Smart money loading",
+    late:  "Late session · Coiled spring",
+  };
+  const rateSlowing = signal.stealth_hourly_rate < 0.3 && signal.stealth_cum_oi_pct > 15;
+  return (
+    <div style={{ marginTop: 10, padding: "10px 12px", background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 13 }}>{c.icon}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: c.text, letterSpacing: "0.05em" }}>{c.label}</span>
+        </div>
+        {rateSlowing && (
+          <span style={{ fontSize: 10, fontWeight: 600, background: "rgba(16,185,129,0.15)", color: "#10B981", border: "1px solid #10B981", borderRadius: 4, padding: "1px 6px" }}>
+            ⚡ COILING
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 6 }}>{phaseLabel[signal.stealth_phase || ""] || signal.stealth_phase}</div>
+      <div style={{ display: "flex", gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Session OI</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>+{signal.stealth_cum_oi_pct}%</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Consecutive</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>{signal.stealth_consecutive_scans} scans</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Hourly rate</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: rateSlowing ? "#10B981" : c.text }}>
+            {signal.stealth_hourly_rate > 0 ? "+" : ""}{signal.stealth_hourly_rate}%{rateSlowing ? " ↓" : ""}
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", borderTop: "1px solid var(--color-border-tertiary)", paddingTop: 6, marginTop: 8 }}>
+        {tier === "Elite" && rateSlowing ? "⚠️ OI loaded + rate slowing — breakout or breakdown imminent"
+          : tier === "Elite" ? "Smart money heavily positioned — watch for price reaction"
+          : tier === "Strong" ? "Significant OI building — monitor for price to follow"
+          : "Early accumulation — watch for confirmation"}
+      </div>
+    </div>
+  );
+}
+
 function SignalCard({ signal }: { signal: Signal }) {
   const meta    = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";
@@ -554,6 +615,7 @@ function SignalCard({ signal }: { signal: Signal }) {
         note={signal.trade_signal_note || ""}
         action={signal.trade_signal_action || ""}
       />
+      <StealthBadge signal={signal} />
 
       {(isFired || isWatch) && (
         <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10, marginTop: 8 }}>

@@ -431,13 +431,13 @@ export default function OIMapPage() {
           </div>
 
           {/* OI Accumulation bars — only show when data exists */}
-          {data.oi_history.length > 0 && (
+          {(data?.oi_history ?? []).length > 0 && (
             <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 12, padding: "1rem 1.1rem" }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 10 }}>
                 Session OI accumulation
                 <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-tertiary)", marginLeft: 8 }}>each bar = 5-min scan</span>
               </div>
-              <AccumulationBars history={data.oi_history} commodity={selected} />
+              <AccumulationBars history={data?.oi_history ?? []} commodity={selected} />
             </div>
           )}
         </>

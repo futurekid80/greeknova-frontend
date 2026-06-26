@@ -161,7 +161,7 @@ function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: numb
             {bull ? <TrendingUp size={11}/> : bear ? <TrendingDown size={11}/> : <Minus size={11}/>}{a.posture}
           </span>
         </div>
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="grid grid-cols-3 gap-1 mb-3">
           {[
             { label: 'PCR', value: a.pcr.toFixed(2), colored: true },
             { label: 'Max Pain', value: a.maxPain.toLocaleString(), colored: false },
@@ -245,7 +245,7 @@ function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[
   ]
   if (!topOIBuilder && !narrowestCPR) return null
   return (
-    <div className="grid grid-cols-3 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       {cards.map(c => (
         <div key={c.label} className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
           <p className="text-xs text-gray-500 mb-2">{c.label}</p>
@@ -285,7 +285,7 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
     : []
   if (!isMarketData && putWriters.length === 0 && callWriters.length === 0) return null
   return (
-    <div className="grid grid-cols-4 gap-3 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
       <div className="bg-emerald-950/20 border border-emerald-800/30 rounded-xl p-4">
         <p className="text-xs text-gray-500 mb-3">🔝 Day High Breakouts</p>
         {dayHighBreakouts.length > 0 ? (
@@ -678,8 +678,8 @@ function ExtendedView({ stocks }: { stocks: PulseStock[] }) {
           {rows.length === 0 ? (
             <p className="text-center text-gray-600 text-sm py-6">No intraday data — market may be closed</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {rows.map((s, i) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {rows.map((s, i) => (
                 <div key={s.symbol} className="flex items-center justify-between bg-gray-900/30 border border-gray-800/50 rounded-lg px-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-600 w-4">{i+1}</span>
@@ -946,14 +946,14 @@ export default function MarketPulse() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-end justify-between mb-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-3">
           <div>
             <h1 className="text-3xl font-black text-white tracking-tight mb-1">Market Pulse</h1>
             <p className="text-gray-500 text-sm">Live OI flow · CPR context · War zone detection</p>
           </div>
-          <div className="flex items-center gap-3">
-            {lastUpdate && (
+          <div className="flex items-center gap-2 flex-wrap">
+              {lastUpdate && (
               <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
                 <Clock size={11}/>📸 {lastUpdate}
               </div>
@@ -998,7 +998,7 @@ export default function MarketPulse() {
 
         {/* Index cards */}
         {loading && analyses.length === 0 ? (
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {[1,2,3].map(i => (
               <div key={i} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-5 animate-pulse space-y-4">
                 <div className="flex justify-between"><div className="h-5 w-24 bg-gray-800 rounded"/><div className="h-6 w-20 bg-gray-800 rounded-full"/></div>
@@ -1007,7 +1007,7 @@ export default function MarketPulse() {
             ))}
           </div>
         ) : analyses.length > 0 ? (
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {analyses.map(a => (
               <div key={a.symbol} onClick={() => setSearchedSymbol(a.symbol)} className="cursor-pointer">
                 <IndexCard a={a} cpr={cprMap[a.symbol]} cmp={cmps[a.symbol]}/>
@@ -1065,7 +1065,7 @@ export default function MarketPulse() {
             <p className="text-xs font-bold text-white">{activeSector} — {sectorStocks.length} stocks</p>
             <button onClick={() => setActiveSector(null)} className="text-gray-600 hover:text-white text-xs">✕ close</button>
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {sectorStocks.map(s => (
               <button key={s.symbol}
                 onClick={() => { setSearchedSymbol(s.symbol); setSearchQuery(s.symbol) }}
@@ -1149,7 +1149,7 @@ export default function MarketPulse() {
                     <p className={`text-xs font-bold ${titleColor}`}>{title} · {filtered.length} stocks</p>
                     <button onClick={() => setActiveBreadth(null)} className="text-gray-600 hover:text-white text-xs">✕</button>
                   </div>
-                  <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-64 overflow-y-auto pr-1">
                     {filtered.map(s => (
                       <button key={s.symbol}
                         onClick={() => { setSearchedSymbol(s.symbol); setSearchQuery(s.symbol) }}

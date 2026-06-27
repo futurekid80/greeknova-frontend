@@ -141,7 +141,7 @@ function ExpiryCountdown() {
 }
 
 // ── Index Card ────────────────────────────────────────────────────────────────
-function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: number }) {
+function IndexCard({ a, cpr, cmp, iv }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: number; iv?: {atm_iv:number, iv_min:number, iv_max:number} }) {
   const bull = a.posture === 'BULLISH', bear = a.posture === 'BEARISH'
   const ceP = Math.round((a.totalCEOI / (a.totalCEOI + a.totalPEOI)) * 100)
   const cprTrendColor: Record<string,string> = { ASCENDING:'text-emerald-400', DESCENDING:'text-red-400', SIDEWAYS:'text-gray-400', UNKNOWN:'text-gray-600' }
@@ -193,6 +193,21 @@ function IndexCard({ a, cpr, cmp }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: numb
             <span className="text-xs font-bold text-emerald-400">{a.topPEStrike.toLocaleString()}</span>
           </div>
         </div>
+        {iv && (() => {
+          const range = iv.iv_max - iv.iv_min
+          const pct = range > 0 ? (iv.atm_iv - iv.iv_min) / range : 0.5
+          const tag = pct >= 0.75 ? { label: 'Elevated', color: 'text-red-400' } : pct <= 0.25 ? { label: 'Depressed', color: 'text-emerald-400' } : { label: 'Normal', color: 'text-amber-400' }
+          return (
+            <div className="flex items-center justify-between bg-gray-800/30 border border-gray-700/30 rounded-lg px-3 py-2 mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">ATM IV</span>
+                <span className="text-xs font-bold text-white">{iv.atm_iv.toFixed(1)}%</span>
+                <span className={`text-[10px] font-bold ${tag.color}`}>{tag.label}</span>
+              </div>
+              <span className="text-[10px] text-gray-600">{iv.iv_min.toFixed(1)}–{iv.iv_max.toFixed(1)}%</span>
+            </div>
+          )
+        })()}
         {cpr && (
           <div className="flex items-center justify-between bg-gray-800/30 border border-gray-700/30 rounded-lg px-3 py-2">
             <div className="flex items-center gap-2">
@@ -819,6 +834,7 @@ export default function MarketPulse() {
   const [uoaSignals, setUoaSignals]   = useState<any[]>([])
   const [activeSector, setActiveSector] = useState<string|null>(null)
   const [activeBreadth, setActiveBreadth] = useState<'bullish'|'bearish'|'neutral'|null>(null)
+  const [ivData, setIvData] = useState<Record<string, {atm_iv:number, iv_min:number, iv_max:number}>>({})
 
   useEffect(() => {
     async function checkAuth() {
@@ -908,7 +924,28 @@ export default function MarketPulse() {
   }
 
   const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    fetchData()
+    // Fetch IV range for index cards
+    supabase.from('iv_history')
+      .select('symbol, atm_iv, trade_date')
+      .in('symbol', ['NIFTY','BANKNIFTY','FINNIFTY'])
+      .order('trade_date', { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (!data) return
+        const grouped: Record<string, number[]> = {}
+        data.forEach((r: any) => {
+          if (!grouped[r.symbol]) grouped[r.symbol] = []
+          grouped[r.symbol].push(parseFloat(r.atm_iv))
+        })
+        const result: Record<string, {atm_iv:number, iv_min:number, iv_max:number}> = {}
+        Object.entries(grouped).forEach(([sym, vals]) => {
+          result[sym] = { atm_iv: vals[0], iv_min: Math.min(...vals), iv_max: Math.max(...vals) }
+        })
+        setIvData(result)
+      })
+  }, [])
 
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))
   const warZoneCount = pulseStocks.filter(s => (s.width_pct||1)<0.3 && s.has_oi_signal).length
@@ -1026,7 +1063,7 @@ export default function MarketPulse() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {analyses.map(a => (
               <div key={a.symbol} onClick={() => setSearchedSymbol(a.symbol)} className="cursor-pointer">
-                <IndexCard a={a} cpr={cprMap[a.symbol]} cmp={cmps[a.symbol]}/>
+                <IndexCard a={a} cpr={cprMap[a.symbol]} cmp={cmps[a.symbol]} iv={ivData[a.symbol]}/>
               </div>
             ))}
           </div>

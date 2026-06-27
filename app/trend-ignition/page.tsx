@@ -58,6 +58,10 @@ interface Signal {
   stealth_consecutive_scans: number;
   stealth_cum_oi_pct: number;
   stealth_hourly_rate: number;
+  pe_writing_count: number;
+  ce_writing_count: number;
+  pe_buying_count: number;
+  ce_buying_count: number;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -491,6 +495,9 @@ function StealthBadge({ signal }: { signal: Signal }) {
     late:  "Late session · Coiled spring",
   };
   const rateSlowing = signal.stealth_hourly_rate < 0.3 && signal.stealth_cum_oi_pct > 15;
+  const peW = signal.pe_writing_count || 0;
+  const ceW = signal.ce_writing_count || 0;
+  const writerBias = peW > ceW ? "Bull writers dominant" : ceW > peW ? "Bear writers dominant" : peW === 0 && ceW === 0 ? "" : "Mixed writing";
   return (
     <div style={{ marginTop: 10, padding: "10px 12px", background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
@@ -504,7 +511,10 @@ function StealthBadge({ signal }: { signal: Signal }) {
           </span>
         )}
       </div>
-      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 6 }}>{phaseLabel[signal.stealth_phase || ""] || signal.stealth_phase}</div>
+      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 6 }}>
+        {phaseLabel[signal.stealth_phase || ""] || signal.stealth_phase}
+        {writerBias ? <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: peW > ceW ? "#1D9E75" : ceW > peW ? "#E24B4A" : "var(--color-text-secondary)" }}>· {writerBias}</span> : null}
+      </div>
       <div style={{ display: "flex", gap: 16 }}>
         <div>
           <div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Session OI</div>

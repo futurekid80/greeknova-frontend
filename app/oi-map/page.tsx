@@ -96,15 +96,15 @@ function AccumulationBars({ history, commodity }: { history: HistoryRow[]; commo
   );
 }
 
-function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[]; currentPrice: number }) {
-  if (!strikes.length) return (
+function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[] | undefined; currentPrice: number }) {
+  if (!strikes?.length) return (
     <div style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-tertiary)", fontSize: 13 }}>
       No strike data yet — run seed first
     </div>
   );
 
   // Sort ascending for left-to-right display, filter out zero/invalid strikes
-  const sorted = [...strikes].filter(s => s.strike > 0).sort((a, b) => a.strike - b.strike);
+  const sorted = [...(strikes || [])].filter(s => s.strike > 0).sort((a, b) => a.strike - b.strike);
   const maxOI = Math.max(...sorted.flatMap(s => [s.ce_oi, s.pe_oi]), 1);
   const BAR_W = 34;
   const GAP = 4;

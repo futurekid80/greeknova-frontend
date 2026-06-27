@@ -923,6 +923,22 @@ export default function MarketPulse() {
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/"/>
+      {(() => {
+        const now = new Date()
+        const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+        const h = ist.getHours(), m = ist.getMinutes(), day = ist.getDay()
+        const isPreOpen = day !== 0 && day !== 6 && (h < 9 || (h === 9 && m < 15))
+        if (!isPreOpen) return null
+        return (
+          <a href="/premarket" className="flex items-center justify-between px-4 py-2.5 bg-amber-950/60 border-b border-amber-700/50 hover:bg-amber-950/80 transition-colors group">
+            <div className="flex items-center gap-3">
+              <span className="text-amber-400 text-sm font-black animate-pulse">⚡ PRE-OPEN</span>
+              <span className="text-amber-200/80 text-xs">Market opens at 9:15 AM · View CPR setups, OI buildup &amp; confluence picks</span>
+            </div>
+            <span className="text-amber-400 text-xs font-bold group-hover:translate-x-1 transition-transform">View Report →</span>
+          </a>
+        )
+      })()}
       <div className="bg-gray-950 border-b border-gray-800/50 overflow-hidden">
         <div className="flex items-center h-9">
           <div className="flex-shrink-0 bg-emerald-950 border-r border-emerald-800/50 px-3 h-full flex items-center">

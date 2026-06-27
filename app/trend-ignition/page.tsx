@@ -58,10 +58,6 @@ interface Signal {
   stealth_consecutive_scans: number;
   stealth_cum_oi_pct: number;
   stealth_hourly_rate: number;
-  pe_writing_count: number;
-  ce_writing_count: number;
-  pe_buying_count: number;
-  ce_buying_count: number;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {

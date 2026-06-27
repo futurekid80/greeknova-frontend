@@ -18,7 +18,6 @@ const NAV_GROUPS = [
   {
     label: 'OI Analysis',
     links: [
-      { href: '/charts',     label: 'OI Charts' },
       { href: '/oihistory',  label: 'OI History' },
       { href: '/eod',        label: 'EOD Analysis' },
       { href: '/eod-report', label: '📋 EOD Report' },

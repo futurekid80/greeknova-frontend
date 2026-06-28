@@ -898,22 +898,17 @@ export default function MarketPulse() {
           sessionStorage.setItem('gn_breadth_stocks', JSON.stringify(pulseItems))
         } catch {}
       }
-      const { data: latest } = await supabase.from('oi_snapshots').select('timestamp').eq('symbol','NIFTY').eq('option_type','FUT')
-        .gte('timestamp', new Date(Date.now()-2*24*60*60*1000).toISOString().slice(0,10)+'T00:00:00+00:00')
-        .order('timestamp',{ascending:false}).limit(1)
-      if (latest?.length) {
-        const ts = latest[0].timestamp
+      const indexRes = await fetch(`${API}/index-data`)
+      const indexJson = await indexRes.json()
+      if (indexJson?.timestamp) {
+        const ts = indexJson.timestamp
         setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))
-        const [cmpResult, ...indexBatches] = await Promise.all([
-          supabase.from('cmp_prices').select('symbol,cmp').order('timestamp',{ascending:false}).limit(200),
-          supabase.from('oi_snapshots').select('symbol,strike,option_type,oi,volume,last_price,expiry').eq('timestamp',ts).in('symbol',['NIFTY','BANKNIFTY','FINNIFTY']).range(0,999),
-          supabase.from('oi_snapshots').select('symbol,strike,option_type,oi,volume,last_price,expiry').eq('timestamp',ts).in('symbol',['NIFTY','BANKNIFTY','FINNIFTY']).range(1000,1999),
-        ])
         const cmpMap2: Record<string,number> = {}
         const seen = new Set<string>()
-        cmpResult.data?.forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
+        ;(indexJson.cmps || []).forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
         setCmps(cmpMap2)
-        const indexData = indexBatches.flatMap(b => b.data || [])
+        const indexBatches = [{ data: indexJson.rows }]
+        const indexData = indexJson.rows || []
         const results = ['NIFTY','BANKNIFTY','FINNIFTY']
           .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
           .filter(Boolean) as IndexAnalysis[]

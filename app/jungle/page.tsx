@@ -155,9 +155,26 @@ export default function OptionsJungle() {
     .filter(s => interpFilter === 'all' || s.interpretation === interpFilter)
     .filter(s => typeFilter === 'all' || s.option_type === typeFilter)
     .sort((a, b) => {
-      const av = sortBy === 'oi_pct' ? Math.abs(a.oi_pct) : sortBy === 'ltp_chg_pct' ? Math.abs(a.ltp_chg_pct) : sortBy === 'volume' ? a.volume : a.last_price
-      const bv = sortBy === 'oi_pct' ? Math.abs(b.oi_pct) : sortBy === 'ltp_chg_pct' ? Math.abs(b.ltp_chg_pct) : sortBy === 'volume' ? b.volume : b.last_price
-      return (bv - av) * sortDir
+      const getVal = (x: any) => {
+        switch(sortBy) {
+          case 'oi_pct':        return Math.abs(x.oi_pct)
+          case 'ltp_chg_pct':   return Math.abs(x.ltp_chg_pct)
+          case 'volume':        return x.volume || 0
+          case 'last_price':    return x.last_price || 0
+          case 'snapshot_count': return x.snapshot_count || 0
+          case 'otm_pct':       return x.otm_pct || 0
+          case 'strike':        return x.strike || 0
+          case 'first_seen':    return x.first_seen || ''
+          case 'symbol':        return x.symbol || ''
+          case 'interpretation': return x.interpretation || ''
+          case 'option_type':   return x.option_type || ''
+          default:              return 0
+        }
+      }
+      const av = getVal(a)
+      const bv = getVal(b)
+      if (typeof av === 'string') return av.localeCompare(bv as string) * sortDir
+      return ((bv as number) - (av as number)) * sortDir
     })
 
   const volFiltered = (data?.vol_spikes || [])
@@ -556,7 +573,7 @@ export default function OptionsJungle() {
                 <thead>
                   <tr className="bg-gray-900/60 border-b border-gray-800">
                     {['Symbol','Strike','Type','Signal','Since','Persist','OI Δ%','LTP Δ%','Old OI','New OI','Vol Δ%','% Away','LTP'].map((h,i)=>{
-                      const colMap: Record<string,string> = {'Symbol':'symbol','Strike':'strike','Type':'option_type','Signal':'interpretation','Since':'first_seen','Persist':'snapshot_count','OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Vol Δ%':'volume','% Away':'otm_pct','LTP':'last_price'}
+                      const colMap: Record<string,string> = {'Symbol':'symbol','Strike':'strike','Type':'option_type','Signal':'interpretation','Since':'first_seen','Persist':'snapshot_count','OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Old OI':'old_oi','New OI':'new_oi','Vol Δ%':'volume','% Away':'otm_pct','LTP':'last_price'}
                       const col = colMap[h]
                       return col ? (
                         <th key={h} onClick={() => sortToggle(col)} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 cursor-pointer hover:text-white transition-colors select-none ${i<=3?'text-left':i===5?'text-center':'text-right'} ${i===0?'pl-5':''} ${i===12?'pr-5':''}`}>

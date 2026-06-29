@@ -555,8 +555,8 @@ export default function OptionsJungle() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-900/60 border-b border-gray-800">
-                    {['Symbol','Strike','Type','Signal','Since','Seen','OI Δ%','LTP Δ%','Old OI','New OI','Vol Δ%','% Away','LTP'].map((h,i)=>{
-                      const colMap: Record<string,string> = {'Symbol':'symbol','Strike':'strike','Type':'option_type','Signal':'interpretation','Since':'first_seen','Seen':'snapshot_count','OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Vol Δ%':'volume','% Away':'otm_pct','LTP':'last_price'}
+                    {['Symbol','Strike','Type','Signal','Since','Persist','OI Δ%','LTP Δ%','Old OI','New OI','Vol Δ%','% Away','LTP'].map((h,i)=>{
+                      const colMap: Record<string,string> = {'Symbol':'symbol','Strike':'strike','Type':'option_type','Signal':'interpretation','Since':'first_seen','Persist':'snapshot_count','OI Δ%':'oi_pct','LTP Δ%':'ltp_chg_pct','Vol Δ%':'volume','% Away':'otm_pct','LTP':'last_price'}
                       const col = colMap[h]
                       return col ? (
                         <th key={h} onClick={() => sortToggle(col)} className={`text-xs font-semibold text-gray-500 px-4 py-3.5 cursor-pointer hover:text-white transition-colors select-none ${i<=3?'text-left':i===5?'text-center':'text-right'} ${i===0?'pl-5':''} ${i===12?'pr-5':''}`}>
@@ -598,13 +598,27 @@ export default function OptionsJungle() {
                         <td className="px-4 py-3.5 text-right">
                           <p className="text-xs text-gray-400">{(s as any).first_seen || '—'}</p>
                         </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <span className={`text-xs font-bold ${(s as any).snapshot_count >= 5 ? 'text-emerald-400' : (s as any).snapshot_count >= 3 ? 'text-amber-400' : 'text-gray-500'}`}>
-                            {(s as any).snapshot_count ? `${(s as any).snapshot_count}×` : '—'}
-                            {(s as any).gaps > 0 && (
-                              <span className="text-red-400 font-normal ml-1">· {(s as any).gaps}g</span>
-                            )}
-                          </span>
+                        <td className="px-4 py-3.5">
+                          {(() => {
+                            const snaps = (s as any).snapshot_count || 0
+                            const gaps = (s as any).gaps || 0
+                            const total = snaps + gaps
+                            const pct = total > 0 ? Math.round(snaps / total * 100) : 0
+                            const color = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-gray-600'
+                            const textColor = pct >= 75 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-gray-500'
+                            return (
+                              <div className="min-w-[80px]">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={`text-xs font-bold ${textColor}`}>{pct}%</span>
+                                  <span className="text-[10px] text-gray-600">{snaps} snaps</span>
+                                </div>
+                                <div className="h-1 rounded-full bg-gray-800 overflow-hidden">
+                                  <div className={`h-full rounded-full ${color}`} style={{width:`${pct}%`}}/>
+                                </div>
+                                <p className="text-[10px] text-gray-600 mt-0.5">since {(s as any).first_seen || '—'}</p>
+                              </div>
+                            )
+                          })()}
                         </td>
                         <td className={`px-4 py-3.5 text-right text-sm font-black ${s.oi_pct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           <span className="flex items-center justify-end gap-1"><Zap size={11}/>{s.oi_pct > 0 ? '+' : ''}{s.oi_pct}%</span>

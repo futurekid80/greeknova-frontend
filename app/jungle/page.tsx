@@ -161,7 +161,12 @@ export default function OptionsJungle() {
           case 'ltp_chg_pct':   return Math.abs(x.ltp_chg_pct)
           case 'volume':        return x.volume || 0
           case 'last_price':    return x.last_price || 0
-          case 'snapshot_count': return x.snapshot_count || 0
+          case 'snapshot_count': {
+            const snaps = x.snapshot_count || 0
+            const gaps = x.gaps || 0
+            const total = snaps + gaps
+            return total > 0 ? snaps / total * 100 : 0
+          }
           case 'otm_pct':       return x.otm_pct || 0
           case 'strike':        return x.strike || 0
           case 'first_seen':    return x.first_seen || ''

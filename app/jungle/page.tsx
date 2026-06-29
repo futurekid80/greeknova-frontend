@@ -165,7 +165,10 @@ export default function OptionsJungle() {
             const snaps = x.snapshot_count || 0
             const gaps = x.gaps || 0
             const total = snaps + gaps
-            return total > 0 ? snaps / total * 100 : 0
+            const pct = total > 0 ? snaps / total * 100 : 0
+            // Combined score: penalizes low snap count (min 3 snaps for full weight)
+            const snapWeight = Math.min(snaps / 3, 1)
+            return pct * snapWeight
           }
           case 'otm_pct':       return x.otm_pct || 0
           case 'strike':        return x.strike || 0

@@ -519,7 +519,9 @@ function SignalHistoryPopup({ symbol, onClose }: { symbol: string; onClose: () =
                   <th className="text-left px-3 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Signal</th>
                   <th className="text-right px-3 py-2 text-[10px] text-gray-500 uppercase tracking-wide">FUT OI Chg</th>
                   <th className="text-right px-3 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Price Chg</th>
+                  <th className="text-right px-3 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Volume</th>
                   <th className="text-right px-5 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Close</th>
+                </tr>
                 </tr>
               </thead>
               <tbody>
@@ -550,6 +552,26 @@ function SignalHistoryPopup({ symbol, onClose }: { symbol: string; onClose: () =
                         <span className={`text-xs font-mono font-semibold ${row.price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {fmt(row.price_chg)}
                         </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {(row as any).volume ? (
+                          <div className="flex flex-col items-end">
+                            <span className="text-xs text-gray-300 font-mono">
+                              {(row as any).volume >= 10000000
+                                ? `${((row as any).volume / 10000000).toFixed(1)}Cr`
+                                : `${((row as any).volume / 100000).toFixed(1)}L`}
+                            </span>
+                            {(row as any).vol_ratio !== null && (row as any).vol_ratio !== undefined && (
+                              <span className={`text-[9px] font-semibold ${
+                                (row as any).vol_ratio >= 1.5 ? 'text-emerald-400'
+                                : (row as any).vol_ratio <= 0.5 ? 'text-red-400'
+                                : 'text-gray-500'
+                              }`}>
+                                {(row as any).vol_ratio}x avg
+                              </span>
+                            )}
+                          </div>
+                        ) : <span className="text-xs text-gray-600">—</span>}
                       </td>
                       <td className="px-5 py-2.5 text-right">
                         <span className="text-xs text-gray-300 font-mono">

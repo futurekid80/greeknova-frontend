@@ -522,7 +522,6 @@ function SignalHistoryPopup({ symbol, onClose }: { symbol: string; onClose: () =
                   <th className="text-right px-3 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Volume</th>
                   <th className="text-right px-5 py-2 text-[10px] text-gray-500 uppercase tracking-wide">Close</th>
                 </tr>
-                </tr>
               </thead>
               <tbody>
                 {history.map((row, i) => {

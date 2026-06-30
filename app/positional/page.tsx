@@ -185,7 +185,7 @@ function ConvictionCard({ s, rank, onSymbolClick }: { s: PIStock; rank: number; 
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-4 gap-2 mb-3">
         <div className="bg-black/30 rounded-lg p-2 text-center">
           <p className="text-[10px] text-gray-400 uppercase tracking-wide">FUT OI Chg</p>
           <p className={`text-sm font-bold ${s.latest_fut_oi_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -201,6 +201,16 @@ function ConvictionCard({ s, rank, onSymbolClick }: { s: PIStock; rank: number; 
         <div className="bg-black/30 rounded-lg p-2 text-center">
           <p className="text-[10px] text-gray-400 uppercase tracking-wide">Series OI</p>
           <p className="text-sm font-bold text-amber-400">{(s.series_oi_pct ?? 0) > 0 ? '+' : ''}{(s.series_oi_pct ?? 0).toFixed(1)}%</p>
+        </div>
+        <div className="bg-black/30 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide">Volume</p>
+          {(s as any).vol_ratio !== null && (s as any).vol_ratio !== undefined ? (
+            <p className={`text-sm font-bold ${
+              (s as any).vol_ratio >= 1.5 ? 'text-emerald-400'
+              : (s as any).vol_ratio <= 0.5 ? 'text-red-400'
+              : 'text-gray-300'
+            }`}>{(s as any).vol_ratio}x</p>
+          ) : <p className="text-sm font-bold text-gray-600">—</p>}
         </div>
       </div>
 
@@ -327,7 +337,7 @@ function StealthCard({ s }: { s: StealthStock }) {
           {s.tier}
         </span>
       </div>
-      <div className="grid grid-cols-4 gap-2 text-center">
+      <div className="grid grid-cols-5 gap-2 text-center">
         <div>
           <p className="text-[10px] text-gray-400">OI Chg</p>
           <p className="text-sm font-bold text-emerald-400">+{(s.today_oi_chg ?? 0).toFixed(2)}%</p>
@@ -362,12 +372,22 @@ function StealthCard({ s }: { s: StealthStock }) {
             </p>
           )}
         </div>
+        <div>
+          <p className="text-[10px] text-gray-400">Volume</p>
+          {(s as any).vol_ratio !== null && (s as any).vol_ratio !== undefined ? (
+            <p className={`text-sm font-bold ${
+              (s as any).vol_ratio >= 1.5 ? 'text-emerald-400'
+              : (s as any).vol_ratio <= 0.5 ? 'text-red-400'
+              : 'text-gray-300'
+            }`}>{(s as any).vol_ratio}x</p>
+          ) : <p className="text-sm font-bold text-gray-600">—</p>}
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Vol Breakout Card ─────────────────────────────────────────────────────────
+// ── Vol Breakout Card
 function VolCard({ s }: { s: VolStock }) {
   const isLong = s.signal_type?.includes('LONG') || s.signal_type?.includes('BULLISH')
   return (

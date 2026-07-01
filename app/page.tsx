@@ -811,7 +811,8 @@ export default function MarketPulse() {
       if (cached && dateCached) {
         const today = new Date().toISOString().slice(0, 10)
         const meta = JSON.parse(dateCached)
-        if (meta.date === today) return JSON.parse(cached)
+        const ageMs = Date.now() - (meta.savedAt || 0)
+        if (meta.date === today && ageMs < 10 * 60 * 1000) return JSON.parse(cached)
       }
     } catch {}
     return []
@@ -822,7 +823,8 @@ export default function MarketPulse() {
       if (cached) {
         const parsed = JSON.parse(cached)
         const today = new Date().toISOString().slice(0, 10)
-        if (parsed.date === today) return { bullish: parsed.bullish, bearish: parsed.bearish, neutral: parsed.neutral, total: parsed.total }
+        const ageMs = Date.now() - (parsed.savedAt || 0)
+        if (parsed.date === today && ageMs < 10 * 60 * 1000) return { bullish: parsed.bullish, bearish: parsed.bearish, neutral: parsed.neutral, total: parsed.total }
       }
     } catch {}
     return { bullish:0, bearish:0, neutral:0, total:0 }
@@ -894,7 +896,7 @@ export default function MarketPulse() {
       if (pulseItems.length > 0) {
         try {
           const today = new Date().toISOString().slice(0, 10)
-          sessionStorage.setItem('gn_breadth_cache', JSON.stringify({ ...newBreadth, date: today }))
+          sessionStorage.setItem('gn_breadth_cache', JSON.stringify({ ...newBreadth, date: today, savedAt: Date.now() }))
           sessionStorage.setItem('gn_breadth_stocks', JSON.stringify(pulseItems))
         } catch {}
       }

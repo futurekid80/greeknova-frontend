@@ -353,7 +353,7 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
         ) : <p className="text-xs text-gray-600">No call writing signals</p>}
       </div>
       <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-3">⚡ Vol Surge Leaders</p>
+        <p className="text-xs text-gray-500 mb-3">⚡ OI Surge Leaders</p>
         {volSurge.length > 0 ? (
           <div className="space-y-2">
             {volSurge.map(s => (

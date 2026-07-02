@@ -295,8 +295,10 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
     .map(s => ({ ...s, otm_distance_pct: (() => { const c = cmpMap[s.symbol] || 0; return c > 0 ? Math.round(Math.abs(s.strike - c) / c * 1000) / 10 : null })() }))
     .sort((a,b) => { const dA = a.otm_distance_pct ?? 99; const dB = b.otm_distance_pct ?? 99; return dA !== dB ? dA - dB : b.score - a.score })
     .slice(0,3)
-  const volSurge = isMarketData
-    ? [...stocksOnly].filter(s => s.vol_surge || Math.abs(s.oi_chg_pct||0) > 5).sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0)).slice(0,3)
+  const volSurge = [...stocksOnly]
+    .filter(s => (s as any).vol_ratio && (s as any).vol_ratio >= 1.5)
+    .sort((a,b) => ((b as any).vol_ratio||0) - ((a as any).vol_ratio||0))
+    .slice(0,3)
     : []
   if (!isMarketData && putWriters.length === 0 && callWriters.length === 0) return null
   return (
@@ -353,13 +355,13 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
         ) : <p className="text-xs text-gray-600">No call writing signals</p>}
       </div>
       <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-3">⚡ OI Surge Leaders</p>
+        <p className="text-xs text-gray-500 mb-3">⚡ Vol Surge Leaders</p>
         {volSurge.length > 0 ? (
           <div className="space-y-2">
             {volSurge.map(s => (
               <button key={s.symbol} onClick={() => onSymbolClick(s.symbol)} className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
                 <span className="text-xs font-bold text-white">{s.symbol}</span>
-                <span className="text-xs font-bold text-amber-400">{(s.oi_chg_pct||0) > 0 ? '+' : ''}{s.oi_chg_pct?.toFixed(1)}% OI</span>
+                <span className="text-xs font-bold text-amber-400">{(s as any).vol_ratio?.toFixed(1)}x vol</span>
               </button>
             ))}
           </div>

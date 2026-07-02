@@ -29,15 +29,15 @@ interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_p
 
 // ── Sector Performance ────────────────────────────────────────────────────────
 const SECTOR_MAP: Record<string, string[]> = {
-  "Banking":      ["HDFCBANK","ICICIBANK","SBIN","AXISBANK","KOTAKBANK","INDUSINDBK","BANKBARODA","CANBK"],
-  "IT":           ["TCS","INFY","WIPRO","HCLTECH","TECHM","LTIM","COFORGE"],
+  "Banking":      ["HDFCBANK","ICICIBANK","SBIN","KOTAKBANK","AXISBANK","INDUSINDBK","BANKBARODA","CANBK","FEDERALBNK"],
+  "Finance/NBFC": ["BAJFINANCE","BAJAJFINSV","CHOLAFIN","SHRIRAMFIN","HDFCLIFE","SBILIFE","JIOFIN","PFC","RECLTD"],
+  "IT":           ["TCS","INFY","WIPRO","HCLTECH","TECHM","LTIM","COFORGE","PERSISTENT"],
   "Auto":         ["MARUTI","BAJAJ-AUTO","EICHERMOT","HEROMOTOCO","M&M","TMPV"],
-  "Metals":       ["TATASTEEL","JSWSTEEL","HINDALCO","SAIL","VEDL"],
   "Energy":       ["RELIANCE","ONGC","BPCL","GAIL","COALINDIA","TATAPOWER","POWERGRID","NTPC","OIL"],
-  "Finance/NBFC": ["BAJFINANCE","BAJAJFINSV","SHRIRAMFIN","CHOLAFIN","HDFCLIFE","SBILIFE","JIOFIN","PFC","RECLTD"],
   "Pharma":       ["SUNPHARMA","CIPLA","DRREDDY","APOLLOHOSP","DIVISLAB"],
-  "Infra/Capital":["LT","HAL","BEL","ADANIPORTS","ADANIENT","DLF","INDIGO"],
-  "Consumer":     ["ITC","HINDUNILVR","NESTLEIND","BRITANNIA","TATACONSUM","TITAN","ASIANPAINT","HAVELLS"],
+  "Consumer":     ["HINDUNILVR","ITC","BRITANNIA","NESTLEIND","TATACONSUM","TITAN","HAVELLS","DIXON","NYKAA","PAYTM"],
+  "Metals":       ["TATASTEEL","JSWSTEEL","HINDALCO","SAIL","VEDL"],
+  "Infra/Capital":["LT","ADANIENT","ADANIPORTS","GRASIM","ULTRACEMCO","DLF","HAL","BEL","INDIGO"],
   "Cement":       ["ULTRACEMCO","GRASIM"],
   "Telecom":      ["BHARTIARTL"],
   "Textile":      ["TRENT"],

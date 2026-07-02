@@ -299,7 +299,6 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
     .filter(s => (s as any).vol_ratio && (s as any).vol_ratio >= 1.5)
     .sort((a,b) => ((b as any).vol_ratio||0) - ((a as any).vol_ratio||0))
     .slice(0,3)
-    : []
   if (!isMarketData && putWriters.length === 0 && callWriters.length === 0) return null
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

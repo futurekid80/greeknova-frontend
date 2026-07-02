@@ -37,7 +37,7 @@ const SECTOR_MAP: Record<string, string[]> = {
   "Pharma":       ["SUNPHARMA","CIPLA","DRREDDY","APOLLOHOSP","DIVISLAB"],
   "Consumer":     ["HINDUNILVR","ITC","BRITANNIA","NESTLEIND","TATACONSUM","TITAN","HAVELLS","DIXON","NYKAA","PAYTM"],
   "Metals":       ["TATASTEEL","JSWSTEEL","HINDALCO","SAIL","VEDL"],
-  "Infra/Capital":["LT","ADANIENT","ADANIPORTS","GRASIM","ULTRACEMCO","DLF","HAL","BEL","INDIGO"],
+  "Infra/Capital":["LT","ADANIENT","ADANIPORTS","DLF","HAL","BEL","INDIGO"],
   "Cement":       ["ULTRACEMCO","GRASIM"],
   "Telecom":      ["BHARTIARTL"],
   "Textile":      ["TRENT"],

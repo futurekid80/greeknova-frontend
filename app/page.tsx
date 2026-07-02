@@ -42,7 +42,7 @@ const SECTOR_MAP: Record<string, string[]> = {
   "Telecom":      ["BHARTIARTL"],
   "Textile":      ["TRENT"],
   "Exchange/Fin": ["BSE","MCX","ANGELONE","CDSL"],
-  "Realty":       ["DLF","GODREJPROP"],
+  "Realty":       ["GODREJPROP"],
 }
 
 function getSectorPerf(stocks: PulseStock[]) {

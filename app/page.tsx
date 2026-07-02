@@ -19,6 +19,7 @@ const ALL_SYMBOLS = [
   'BANKBARODA','BEL','CANBK','CHOLAFIN','DLF','GAIL','HAVELLS','HAL','INDIGO','PFC',
   'RECLTD','SAIL','TATAPOWER','VEDL',
   'DIXON','NYKAA','PAYTM','PERSISTENT',
+  'BSE','MCX','TMPV','LTIM','GODREJPROP','DIVISLAB','COFORGE','ANGELONE','CDSL','OIL',
 ]
 
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
@@ -29,17 +30,19 @@ interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_p
 // ── Sector Performance ────────────────────────────────────────────────────────
 const SECTOR_MAP: Record<string, string[]> = {
   "Banking":      ["HDFCBANK","ICICIBANK","SBIN","AXISBANK","KOTAKBANK","INDUSINDBK","BANKBARODA","CANBK"],
-  "IT":           ["TCS","INFY","WIPRO","HCLTECH","TECHM"],
-  "Auto":         ["MARUTI","BAJAJ-AUTO","EICHERMOT","HEROMOTOCO","M&M"],
+  "IT":           ["TCS","INFY","WIPRO","HCLTECH","TECHM","LTIM","COFORGE"],
+  "Auto":         ["MARUTI","BAJAJ-AUTO","EICHERMOT","HEROMOTOCO","M&M","TMPV"],
   "Metals":       ["TATASTEEL","JSWSTEEL","HINDALCO","SAIL","VEDL"],
-  "Energy":       ["RELIANCE","ONGC","BPCL","GAIL","COALINDIA","TATAPOWER","POWERGRID","NTPC"],
+  "Energy":       ["RELIANCE","ONGC","BPCL","GAIL","COALINDIA","TATAPOWER","POWERGRID","NTPC","OIL"],
   "Finance/NBFC": ["BAJFINANCE","BAJAJFINSV","SHRIRAMFIN","CHOLAFIN","HDFCLIFE","SBILIFE","JIOFIN","PFC","RECLTD"],
-  "Pharma":       ["SUNPHARMA","CIPLA","DRREDDY","APOLLOHOSP"],
+  "Pharma":       ["SUNPHARMA","CIPLA","DRREDDY","APOLLOHOSP","DIVISLAB"],
   "Infra/Capital":["LT","HAL","BEL","ADANIPORTS","ADANIENT","DLF","INDIGO"],
   "Consumer":     ["ITC","HINDUNILVR","NESTLEIND","BRITANNIA","TATACONSUM","TITAN","ASIANPAINT","HAVELLS"],
   "Cement":       ["ULTRACEMCO","GRASIM"],
   "Telecom":      ["BHARTIARTL"],
   "Textile":      ["TRENT"],
+  "Exchange/Fin": ["BSE","MCX","ANGELONE","CDSL"],
+  "Realty":       ["DLF","GODREJPROP"],
 }
 
 function getSectorPerf(stocks: PulseStock[]) {

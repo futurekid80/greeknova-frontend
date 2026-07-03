@@ -321,13 +321,13 @@ function SeriesRow({ s, i, onSymbolClick }: { s: PIStock; i: number; onSymbolCli
 }
 
 // ── Stealth Card ──────────────────────────────────────────────────────────────
-function StealthCard({ s }: { s: StealthStock }) {
+function StealthCard({ s, onSymbolClick }: { s: StealthStock; onSymbolClick: (sym: string) => void }) {
   const tierColor = s.tier === 'ELITE' ? 'text-amber-400 border-amber-700/50 bg-amber-950/20'
     : s.tier === 'STRONG' ? 'text-emerald-400 border-emerald-700/50 bg-emerald-950/20'
     : 'text-sky-400 border-sky-700/50 bg-sky-950/20'
 
   return (
-    <div className={`rounded-xl border p-4 ${tierColor}`}>
+    <div className={`rounded-xl border p-4 ${tierColor} cursor-pointer hover:opacity-80 transition-opacity`} onClick={() => onSymbolClick(s.symbol)}>
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-lg font-bold text-white">{s.symbol}</p>
@@ -963,7 +963,7 @@ export default function PositionalIntelligence() {
                 <>
                   <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Stealth Buildup</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {data.stealth_buildup.map(s => <StealthCard key={s.symbol} s={s} />)}
+                    {data.stealth_buildup.map(s => <StealthCard key={s.symbol} s={s} onSymbolClick={setHistorySymbol} />)}
                   </div>
                 </>
               )}

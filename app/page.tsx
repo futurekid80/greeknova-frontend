@@ -762,54 +762,49 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
         </div>
         <button onClick={onClose} className="text-gray-600 hover:text-white p-1"><X size={16}/></button>
       </div>
-      {loading ? (
-        <div className="flex items-center justify-center py-12"><RefreshCw size={20} className="text-gray-600 animate-spin"/><span className="ml-3 text-gray-500 text-sm">Loading…</span></div>
-      ) : (
-        <div className="p-5 grid grid-cols-2 gap-4">
-          <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-2">🎯 Max Pain</p>
-            {(data?.mpItem || data?.max_pain) ? (
+      {loading && <div className="p-6 text-center text-gray-500 text-sm">Loading...</div>}
+      {data && (
+        <div className="grid grid-cols-2 gap-3 p-4">
+          <div className="bg-red-950/20 border border-red-800/30 rounded-xl p-4">
+            <p className="text-xs text-red-400 font-bold mb-1">🎯 Max Pain</p>
+            {data?.mpItem ? (<>
               <p className="text-2xl font-black text-white">₹{data.mpItem.max_pain?.toLocaleString()}</p>
               <p className={`text-xs mt-1 font-bold ${data.mpItem.direction === 'BELOW' ? 'text-emerald-400' : 'text-orange-400'}`}>
                 CMP {data.mpItem.direction === 'ABOVE' ? `↑ ${data.mpItem.dist_from_mp?.toFixed(1)}% above` : `↓ ${Math.abs(data.mpItem.dist_from_mp??0).toFixed(1)}% below`} Max Pain
               </p>
             </>) : <p className="text-gray-600 text-sm">No data</p>}
           </div>
-          <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-2">📊 PCR</p>
-            <p className={`text-2xl font-black ${data?.pcr && data.pcr > 1 ? 'text-emerald-400' : 'text-red-400'}`}>{data?.pcr?.toFixed(2)??'—'}</p>
-            <p className="text-xs text-gray-600 mt-1">{data?.pcr && data.pcr > 1 ? 'PE OI > CE OI' : 'CE OI > PE OI'}</p>
+          <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl p-4">
+            <p className="text-xs text-blue-400 font-bold mb-1">📊 PCR</p>
+            {data.pcr !== null ? (<>
+              <p className={`text-2xl font-black ${data.pcr < 0.8 ? 'text-red-400' : data.pcr > 1.2 ? 'text-emerald-400' : 'text-amber-400'}`}>{data.pcr}</p>
+              <p className="text-xs text-gray-500 mt-1">{data.pcr < 0.8 ? 'CE OI > PE OI' : data.pcr > 1.2 ? 'PE OI > CE OI' : 'Balanced'}</p>
+            </>) : <p className="text-gray-600 text-sm">No data</p>}
           </div>
-          <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-red-400 font-bold mb-2">🔴 CE Strikes</p>
-            <div className="space-y-1">{data?.topCEStrikes?.slice(0,3).map((r: any) => (
-              <div key={r.strike} className="flex justify-between text-xs"><span className="text-white font-bold">{r.strike.toLocaleString()}</span><span className="text-red-400">{fmtOI(r.ce_a)}</span></div>
-            ))}</div>
-          </div>
-          <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-emerald-400 font-bold mb-2">🟢 PE Strikes</p>
-            <div className="space-y-1">{data?.topPEStrikes?.slice(0,3).map((r: any) => (
-              <div key={r.strike} className="flex justify-between text-xs"><span className="text-white font-bold">{r.strike.toLocaleString()}</span><span className="text-emerald-400">{fmtOI(r.pe_a)}</span></div>
-            ))}</div>
-          </div>
-          {/* Put/Call Writing from Jungle */}
-            <div className="col-span-2 bg-yellow-950/20 border border-yellow-800/30 rounded-xl p-4">
-              <p className="text-xs text-yellow-400 font-bold mb-2">🐋 Unusual Options Activity</p>
-              <div className="space-y-1">{data.uoaItems.slice(0,3).map((u: any, i: number) => (
-                <div key={i} className="flex justify-between text-xs"><span className="text-white">{u.tradingsymbol} · {u.signal_desc}</span><span className="text-yellow-400">Score {u.score}/5</span></div>
+          {data.topCEStrikes?.length > 0 && (
+            <div className="bg-red-950/10 border border-red-900/30 rounded-xl p-4">
+              <p className="text-xs text-red-400 font-bold mb-2">🔴 CE Strikes</p>
+              <div className="space-y-1">{data.topCEStrikes.slice(0,3).map((r: any, i: number) => (
+                <div key={i} className="flex justify-between text-xs"><span className="text-white">{r.strike}</span><span className="text-red-300">{r.ce_a >= 10000000 ? `${(r.ce_a/10000000).toFixed(1)}Cr` : `${(r.ce_a/100000).toFixed(1)}L`}</span></div>
               ))}</div>
             </div>
-         )}
-
-          {/* FUT Signal */}
+          )}
+          {data.topPEStrikes?.length > 0 && (
+            <div className="bg-emerald-950/10 border border-emerald-900/30 rounded-xl p-4">
+              <p className="text-xs text-emerald-400 font-bold mb-2">🟢 PE Strikes</p>
+              <div className="space-y-1">{data.topPEStrikes.slice(0,3).map((r: any, i: number) => (
+                <div key={i} className="flex justify-between text-xs"><span className="text-white">{r.strike}</span><span className="text-emerald-300">{r.pe_a >= 10000000 ? `${(r.pe_a/10000000).toFixed(1)}Cr` : `${(r.pe_a/100000).toFixed(1)}L`}</span></div>
+              ))}</div>
+            </div>
+          )}
           {data?.fut_signal && (
             <div className="col-span-2 bg-blue-950/20 border border-blue-800/30 rounded-xl p-4">
               <p className="text-xs text-blue-400 font-bold mb-2">📊 FUT Signal · {data.fut_signal.trade_date}</p>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center">
                   <p className="text-[10px] text-gray-500">Signal</p>
-                  <p className={`text-xs font-bold ${data.fut_signal.fut_signal === 'LONG_BUILDUP' ? 'text-emerald-400' : data.fut_signal.fut_signal === 'SHORT_BUILDUP' ? 'text-red-400' : data.fut_signal.fut_signal === 'SHORT_COVERING' ? 'text-cyan-400' : data.fut_signal.fut_signal === 'LONG_UNWINDING' ? 'text-orange-400' : 'text-gray-500'}`}>
-                    {(data.fut_signal.fut_signal || 'NEUTRAL').replace(/_/g,' ')}
+                  <p className={`text-xs font-bold ${data.fut_signal.fut_signal==='LONG_BUILDUP'?'text-emerald-400':data.fut_signal.fut_signal==='SHORT_BUILDUP'?'text-red-400':data.fut_signal.fut_signal==='SHORT_COVERING'?'text-cyan-400':data.fut_signal.fut_signal==='LONG_UNWINDING'?'text-orange-400':'text-gray-500'}`}>
+                    {(data.fut_signal.fut_signal||'NEUTRAL').replace(/_/g,' ')}
                   </p>
                 </div>
                 <div className="text-center">
@@ -823,8 +818,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
               </div>
             </div>
           )}
-
-          {/* Delivery */}
           {data?.delivery?.length > 0 && (
             <div className="bg-purple-950/20 border border-purple-800/30 rounded-xl p-4">
               <p className="text-xs text-purple-400 font-bold mb-2">🚚 Delivery</p>
@@ -838,16 +831,10 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
               </div>
             </div>
           )}
-
-          {/* CPR */}
           {data?.cpr && (
             <div className="bg-orange-950/20 border border-orange-800/30 rounded-xl p-4">
               <p className="text-xs text-orange-400 font-bold mb-2">📐 CPR · {data.cpr.trade_date}</p>
               <div className="grid grid-cols-3 gap-1">
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500">Position</p>
-                  <p className="text-[10px] font-bold text-white">{(data.cpr.cpr_status||'—').replace(/_/g,' ')}</p>
-                </div>
                 <div className="text-center">
                   <p className="text-[10px] text-gray-500">Width</p>
                   <p className="text-xs font-bold text-amber-400">{Number(data.cpr.width_pct||0).toFixed(3)}%</p>
@@ -856,11 +843,21 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
                   <p className="text-[10px] text-gray-500">Trend</p>
                   <p className="text-[10px] font-bold text-white">{data.cpr.cpr_trend||'—'}</p>
                 </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500">TC/BC</p>
+                  <p className="text-[10px] font-bold text-white">{Number(data.cpr.tc||0).toFixed(1)}/{Number(data.cpr.bc||0).toFixed(1)}</p>
+                </div>
               </div>
             </div>
           )}
-
-          {/* Signal History */}
+          {data?.uoaItems?.length > 0 && (
+            <div className="col-span-2 bg-yellow-950/20 border border-yellow-800/30 rounded-xl p-4">
+              <p className="text-xs text-yellow-400 font-bold mb-2">🐋 Unusual Options Activity</p>
+              <div className="space-y-1">{data.uoaItems.slice(0,3).map((u: any, i: number) => (
+                <div key={i} className="flex justify-between text-xs"><span className="text-white">{u.tradingsymbol} · {u.signal_desc}</span><span className="text-yellow-400">Score {u.score}/5</span></div>
+              ))}</div>
+            </div>
+          )}
           {data?.signal_history?.length > 0 && (
             <div className="col-span-2 bg-gray-900/40 border border-gray-800/30 rounded-xl p-4">
               <p className="text-xs text-gray-400 font-bold mb-2">📈 Signal History · last {data.signal_history.length} days</p>
@@ -871,7 +868,6 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
               </div>
             </div>
           )}
-
         </div>
       )}
     </div>

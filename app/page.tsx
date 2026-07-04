@@ -734,17 +734,18 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
     async function load() {
       setLoading(true)
       try {
-        const [mpRes, oiRes, uoaRes] = await Promise.all([fetch(`${API}/max-pain`), fetch(`${API}/oi-history/${symbol}`), fetch(`${API}/uoa`)])
-        const [mp, oi, uoa] = await Promise.all([mpRes.json(), oiRes.json(), uoaRes.json()])
-        const mpItem = mp.symbols?.find((i: any) => i.symbol === symbol)
-        const uoaItems = uoa.signals?.filter((i: any) => i.symbol === symbol) || []
+        const [intelRes, oiRes] = await Promise.all([
+          fetch(`${API}/stock-intel/${symbol}`),
+          fetch(`${API}/oi-history/${symbol}`)
+        ])
+        const [intel, oi] = await Promise.all([intelRes.json(), oiRes.json()])
         const rows = oi.rows || []
         const totalCE = rows.reduce((s: number, r: any) => s + (r.ce_a || 0), 0)
         const totalPE = rows.reduce((s: number, r: any) => s + (r.pe_a || 0), 0)
         const pcr = totalCE > 0 ? Math.round((totalPE/totalCE)*100)/100 : null
         const topCEStrikes = [...rows].sort((a: any, b: any) => b.ce_a - a.ce_a).slice(0,5)
         const topPEStrikes = [...rows].sort((a: any, b: any) => b.pe_a - a.pe_a).slice(0,5)
-        setData({ mpItem, oi, pcr, topCEStrikes, topPEStrikes, uoaItems })
+        setData({ ...intel, oi, pcr, topCEStrikes, topPEStrikes })
       } catch(e) { console.error(e) }
       setLoading(false)
     }
@@ -796,7 +797,79 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
                 <div key={i} className="flex justify-between text-xs"><span className="text-white">{u.tradingsymbol} · {u.signal_desc}</span><span className="text-yellow-400">Score {u.score}/5</span></div>
               ))}</div>
             </div>
+         )}
+
+          {/* FUT Signal */}
+          {data?.fut_signal && (
+            <div className="col-span-2 bg-blue-950/20 border border-blue-800/30 rounded-xl p-4">
+              <p className="text-xs text-blue-400 font-bold mb-2">📊 FUT Signal · {data.fut_signal.trade_date}</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500">Signal</p>
+                  <p className={`text-xs font-bold ${data.fut_signal.fut_signal === 'LONG_BUILDUP' ? 'text-emerald-400' : data.fut_signal.fut_signal === 'SHORT_BUILDUP' ? 'text-red-400' : data.fut_signal.fut_signal === 'SHORT_COVERING' ? 'text-cyan-400' : data.fut_signal.fut_signal === 'LONG_UNWINDING' ? 'text-orange-400' : 'text-gray-500'}`}>
+                    {(data.fut_signal.fut_signal || 'NEUTRAL').replace(/_/g,' ')}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500">FUT OI</p>
+                  <p className={`text-xs font-bold ${(data.fut_signal.fut_oi_chg_pct||0)>=0?'text-emerald-400':'text-red-400'}`}>{(data.fut_signal.fut_oi_chg_pct||0)>0?'+':''}{Number(data.fut_signal.fut_oi_chg_pct||0).toFixed(2)}%</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500">Price</p>
+                  <p className={`text-xs font-bold ${(data.fut_signal.price_chg_pct||0)>=0?'text-emerald-400':'text-red-400'}`}>{(data.fut_signal.price_chg_pct||0)>0?'+':''}{Number(data.fut_signal.price_chg_pct||0).toFixed(2)}%</p>
+                </div>
+              </div>
+            </div>
           )}
+
+          {/* Delivery */}
+          {data?.delivery?.length > 0 && (
+            <div className="bg-purple-950/20 border border-purple-800/30 rounded-xl p-4">
+              <p className="text-xs text-purple-400 font-bold mb-2">🚚 Delivery</p>
+              <div className="flex gap-2">
+                {data.delivery.slice(0,3).map((d: any, i: number) => (
+                  <div key={i} className="text-center flex-1">
+                    <p className="text-[10px] text-gray-500">{d.trade_date?.slice(5)}</p>
+                    <p className="text-xs font-bold text-white">{Number(d.delivery_pct).toFixed(1)}%</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* CPR */}
+          {data?.cpr && (
+            <div className="bg-orange-950/20 border border-orange-800/30 rounded-xl p-4">
+              <p className="text-xs text-orange-400 font-bold mb-2">📐 CPR · {data.cpr.trade_date}</p>
+              <div className="grid grid-cols-3 gap-1">
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500">Position</p>
+                  <p className="text-[10px] font-bold text-white">{(data.cpr.cpr_status||'—').replace(/_/g,' ')}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500">Width</p>
+                  <p className="text-xs font-bold text-amber-400">{Number(data.cpr.width_pct||0).toFixed(3)}%</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500">Trend</p>
+                  <p className="text-[10px] font-bold text-white">{data.cpr.cpr_trend||'—'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Signal History */}
+          {data?.signal_history?.length > 0 && (
+            <div className="col-span-2 bg-gray-900/40 border border-gray-800/30 rounded-xl p-4">
+              <p className="text-xs text-gray-400 font-bold mb-2">📈 Signal History · last {data.signal_history.length} days</p>
+              <div className="flex gap-1 flex-wrap">
+                {[...data.signal_history].reverse().map((h: any, i: number) => (
+                  <div key={i} title={`${h.date}: ${h.signal?.replace(/_/g,' ')}`} className={`w-5 h-5 rounded-sm ${h.signal==='LONG_BUILDUP'?'bg-emerald-500':h.signal==='SHORT_BUILDUP'?'bg-red-500':h.signal==='SHORT_COVERING'?'bg-cyan-500':h.signal==='LONG_UNWINDING'?'bg-orange-500':'bg-gray-700'}`}/>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       )}
     </div>

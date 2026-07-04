@@ -756,7 +756,7 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-gray-900/80">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-black text-white">{symbol}</h2>
-          <a href={`/stock/${symbol}`} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 px-2 py-1 rounded-lg">Full Page →</a>
+          <a href={`/oi-profile?symbol=${symbol}`} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 px-2 py-1 rounded-lg">OI Profile →</a>
         </div>
         <button onClick={onClose} className="text-gray-600 hover:text-white p-1"><X size={16}/></button>
       </div>
@@ -766,7 +766,7 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
         <div className="p-5 grid grid-cols-2 gap-4">
           <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-2">🎯 Max Pain</p>
-            {data?.mpItem ? (<>
+            {(data?.mpItem || data?.max_pain) ? (
               <p className="text-2xl font-black text-white">₹{data.mpItem.max_pain?.toLocaleString()}</p>
               <p className={`text-xs mt-1 font-bold ${data.mpItem.direction === 'BELOW' ? 'text-emerald-400' : 'text-orange-400'}`}>
                 CMP {data.mpItem.direction === 'ABOVE' ? `↑ ${data.mpItem.dist_from_mp?.toFixed(1)}% above` : `↓ ${Math.abs(data.mpItem.dist_from_mp??0).toFixed(1)}% below`} Max Pain
@@ -790,6 +790,26 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
               <div key={r.strike} className="flex justify-between text-xs"><span className="text-white font-bold">{r.strike.toLocaleString()}</span><span className="text-emerald-400">{fmtOI(r.pe_a)}</span></div>
             ))}</div>
           </div>
+          {/* Put/Call Writing from Jungle */}
+          {(data?.put_writing?.length > 0 || data?.call_writing?.length > 0) && (
+            <div className="col-span-2 bg-emerald-950/20 border border-emerald-800/30 rounded-xl p-4">
+              <p className="text-xs text-emerald-400 font-bold mb-2">✍️ Options Writing Activity</p>
+              <div className="space-y-1">
+                {data.put_writing?.slice(0,2).map((s: any, i: number) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span className="text-white">🟢 PE {s.strike} · {s.persistence_pct || s.snapshot_count}% persist</span>
+                    <span className="text-emerald-400">Put Writing</span>
+                  </div>
+                ))}
+                {data.call_writing?.slice(0,2).map((s: any, i: number) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span className="text-white">🔴 CE {s.strike} · {s.persistence_pct || s.snapshot_count}% persist</span>
+                    <span className="text-red-400">Call Writing</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {data?.uoaItems?.length > 0 && (
             <div className="col-span-2 bg-yellow-950/20 border border-yellow-800/30 rounded-xl p-4">
               <p className="text-xs text-yellow-400 font-bold mb-2">🐋 Unusual Options Activity</p>

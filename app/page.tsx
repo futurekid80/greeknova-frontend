@@ -810,6 +810,25 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
               </div>
             </div>
           )}
+          {(data?.put_writing?.length > 0 || data?.call_writing?.length > 0) && (
+            <div className="col-span-2 bg-emerald-950/20 border border-emerald-800/30 rounded-xl p-4">
+              <p className="text-xs text-emerald-400 font-bold mb-2">✍️ Options Writing Activity</p>
+              <div className="space-y-1">
+                {data.put_writing?.slice(0,2).map((s: any, i: number) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span className="text-white">🟢 PE {s.strike} · {s.snapshot_count}x seen</span>
+                    <span className="text-emerald-400">Put Writing</span>
+                  </div>
+                ))}
+                {data.call_writing?.slice(0,2).map((s: any, i: number) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span className="text-white">🔴 CE {s.strike} · {s.snapshot_count}x seen</span>
+                    <span className="text-red-400">Call Writing</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {data?.uoaItems?.length > 0 && (
             <div className="col-span-2 bg-yellow-950/20 border border-yellow-800/30 rounded-xl p-4">
               <p className="text-xs text-yellow-400 font-bold mb-2">🐋 Unusual Options Activity</p>

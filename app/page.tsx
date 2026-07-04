@@ -739,13 +739,15 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
           fetch(`${API}/oi-history/${symbol}`)
         ])
         const [intel, oi] = await Promise.all([intelRes.json(), oiRes.json()])
+        const mpItem = intel.max_pain || null
+        const uoaItems = intel.uoa || []
         const rows = oi.rows || []
         const totalCE = rows.reduce((s: number, r: any) => s + (r.ce_a || 0), 0)
         const totalPE = rows.reduce((s: number, r: any) => s + (r.pe_a || 0), 0)
         const pcr = totalCE > 0 ? Math.round((totalPE/totalCE)*100)/100 : null
         const topCEStrikes = [...rows].sort((a: any, b: any) => b.ce_a - a.ce_a).slice(0,5)
         const topPEStrikes = [...rows].sort((a: any, b: any) => b.pe_a - a.pe_a).slice(0,5)
-        setData({ ...intel, oi, pcr, topCEStrikes, topPEStrikes })
+        setData({ ...intel, mpItem, oi, pcr, topCEStrikes, topPEStrikes, uoaItems })
       } catch(e) { console.error(e) }
       setLoading(false)
     }

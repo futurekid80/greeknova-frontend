@@ -985,7 +985,7 @@ export default function PositionalIntelligence() {
             emoji="📈"
             title="Series Buildup"
             count={seriesFiltered.length}
-            subtitle={`60%+ signal consistency · minimum 3 signal days · across ${data.total_trading_days} trading days this series`}
+            subtitle={`60%+ signal consistency · minimum 3 signal days · needs 5+ trading days in series · currently ${data.total_trading_days} day${data.total_trading_days === 1 ? '' : 's'} in`}
             color="bg-emerald-900/50 text-emerald-300"
           />
 

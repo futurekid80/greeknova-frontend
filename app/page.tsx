@@ -247,11 +247,17 @@ function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[
       color: 'text-emerald-400', bg: 'bg-emerald-950/20', border: 'border-emerald-800/30',
     },
     {
-      label: isMarketData ? '📉 Highest OI Unwind' : '🔴 Narrowest Below CPR',
+      label: isMarketData
+        ? ((topOIUnwinder?.price_chg_pct||0) >= 0 ? '🔵 Highest Short Covering' : '📉 Highest Long Unwinding')
+        : '🔴 Narrowest Below CPR',
       symbol: topOIUnwinder?.symbol,
       value: topOIUnwinder?.oi_chg_pct !== undefined ? `${topOIUnwinder.oi_chg_pct.toFixed(1)}% OI` : '—',
-      sub: topOIUnwinder?.cmp ? `₹${topOIUnwinder.cmp.toLocaleString()}` : '',
-      color: 'text-red-400', bg: 'bg-red-950/20', border: 'border-red-800/30',
+      sub: topOIUnwinder?.cmp
+        ? `₹${topOIUnwinder.cmp.toLocaleString()}${topOIUnwinder?.price_chg_pct !== undefined ? ` · ${topOIUnwinder.price_chg_pct >= 0 ? '+' : ''}${topOIUnwinder.price_chg_pct.toFixed(1)}% price` : ''}`
+        : '',
+      color: (topOIUnwinder?.price_chg_pct||0) >= 0 ? 'text-cyan-400' : 'text-amber-400',
+      bg: (topOIUnwinder?.price_chg_pct||0) >= 0 ? 'bg-cyan-950/20' : 'bg-amber-950/20',
+      border: (topOIUnwinder?.price_chg_pct||0) >= 0 ? 'border-cyan-800/30' : 'border-amber-800/30',
     },
     {
       label: '⚡ Narrowest CPR',

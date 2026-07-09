@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.4'
+const SW_VERSION = 'v2.0.5'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
@@ -110,6 +110,16 @@ self.addEventListener('message', async (event) => {
     }
   }
 
+  // Previously ignored — the page pings this every few minutes specifically
+  // to keep the worker from being suspended. Now it also triggers a real
+  // check, giving the alert engine a second, independent heartbeat on top
+  // of its own internal timer (which the browser can silently kill).
+  if (type === 'KEEPALIVE') {
+    if (enabled) {
+      event.waitUntil(runChecks())
+    }
+  }
+
   if (type === 'GET_STATUS') {
     event.source?.postMessage({
       type: 'STATUS',
@@ -191,7 +201,7 @@ async function checkOptionsJungle() {
       direction:  spike.direction,
       message:    body,
       url:        '/jungle',
-      receivedAt: new Date().toLocaleTimeString('en-IN'),
+      receivedAt: new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
       oiPct:      spike.oi_pct,
       ltp:        spike.last_price,
     })
@@ -226,7 +236,7 @@ async function checkOptionsJungle() {
       optionType: spike.option_type,
       message:    body,
       url:        '/jungle',
-      receivedAt: new Date().toLocaleTimeString('en-IN'),
+      receivedAt: new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
       volPct:     spike.vol_pct,
       oiPct:      spike.oi_pct,
       ltp:        spike.last_price,
@@ -269,7 +279,7 @@ async function checkUOAWhales() {
       optionType:  sig.option_type,
       message:     body,
       url:         '/uoa',
-      receivedAt:  new Date().toLocaleTimeString('en-IN'),
+      receivedAt:  new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
       score:       sig.score,
       bias:        sig.bias,
       ltp:         sig.ltp,

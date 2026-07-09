@@ -150,7 +150,26 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       }
 
       navigator.serviceWorker.addEventListener('message', handler)
-      return () => navigator.serviceWorker.removeEventListener('message', handler)
+
+      // Service workers get suspended by the browser after idling, which kills
+      // any setTimeout-based self-scheduling loop running inside them — that's
+      // what causes alerts to appear "stuck" then arrive in a sudden batch once
+      // the app is reopened. A foreground page timer is much more reliable, so
+      // as long as any tab is open, nudge the worker to check every 2 minutes
+      // instead of relying solely on its own internal timer.
+      const heartbeat = setInterval(() => {
+        const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
+        if (wasEnabled) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.active?.postMessage({ type: 'CHECK_NOW' })
+          }).catch(() => {})
+        }
+      }, 2 * 60 * 1000)
+
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handler)
+        clearInterval(heartbeat)
+      }
     }
   }, [playSound])
 

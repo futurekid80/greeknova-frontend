@@ -1,6 +1,8 @@
 'use client'
 import './globals.css'
 import DisclaimerModal from '@/components/DisclaimerModal'
+import AlertsSidebar from '@/components/AlertsSidebar'
+import { AlertsProvider } from '@/contexts/AlertsContext'
 import { useEffect, useState } from 'react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
@@ -60,9 +62,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <DisclaimerModal />
-        <HolidayBanner />
-        {children}
+        <AlertsProvider>
+          <DisclaimerModal />
+          <HolidayBanner />
+          <AlertsSidebar />
+          {children}
+        </AlertsProvider>
       </body>
     </html>
   )

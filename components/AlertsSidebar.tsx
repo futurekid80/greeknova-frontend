@@ -72,7 +72,7 @@ export default function AlertsSidebar() {
               {alerts.map(alert => {
                 const m = SIGNAL_META[alert.signal] || DEFAULT_META
                 return (
-                  
+                  <a
                     key={alert.id}
                     href={alert.url}
                     className={`block p-3 rounded-lg border transition-all hover:brightness-110 ${m.bg} ${m.border}`}
@@ -106,7 +106,7 @@ export default function AlertsSidebar() {
         </div>
 
         <div className="border-t border-gray-800 p-3 flex-shrink-0">
-          
+          <a
             href="/alerts"
             className="flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors py-2"
           >

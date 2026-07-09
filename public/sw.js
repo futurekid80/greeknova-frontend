@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.5'
+const SW_VERSION = 'v2.0.6'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
@@ -62,6 +62,54 @@ function scheduleNext() {
     event?.waitUntil?.(checkPromise)
   }, CHECK_INTERVAL_MS)
 }
+
+// ── Real Web Push handler ────────────────────────────────────────────────────
+// The server now sends push events directly (services/push_checker.py on the
+// backend), so this fires reliably even when no tab is open — unlike the
+// local self-scheduling checks above, which the browser can suspend.
+self.addEventListener('push', (event) => {
+  let payload = {}
+  try { payload = event.data ? event.data.json() : {} } catch (e) {}
+
+  const title = payload.title || 'GreekNova Alert'
+  const body  = payload.body  || ''
+  const url   = payload.url   || '/alerts'
+  const alert = payload.alert || {}
+
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag: `push_${alert.symbol || ''}_${Date.now()}`,
+        requireInteraction: false,
+        data: { url },
+      }),
+      self.clients.matchAll({ type: 'window' }).then(clients => {
+        clients.forEach(c => c.postMessage({
+          type: 'NEW_ALERT',
+          id: Date.now() + Math.random(),
+          url,
+          receivedAt: new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
+          ...alert,
+        }))
+      }),
+    ])
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url || '/alerts'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window' }).then(clients => {
+      for (const c of clients) {
+        if (c.url.includes(self.location.origin) && 'focus' in c) return c.focus()
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url)
+    })
+  )
+})
 
 // ── Keep-alive ping ───────────────────────────────────────────────────────────
 self.addEventListener('fetch', (e) => {

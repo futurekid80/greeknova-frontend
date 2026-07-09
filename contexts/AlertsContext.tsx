@@ -8,6 +8,19 @@ export interface Alert {
   oiPct?: number; volPct?: number; ltp?: number; direction?: string
 }
 
+const API = 'https://greeknova-backend-production.up.railway.app'
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray
+}
+
 function isMarketOpen() {
   const now = new Date()
   const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
@@ -183,6 +196,29 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     setEnabled(true)
     const reg = await navigator.serviceWorker.ready
     reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold } })
+
+    // Also subscribe this device to real server-sent push — this is what
+    // makes alerts arrive reliably even when the tab is closed/backgrounded,
+    // unlike the local checks above which browsers can suspend.
+    try {
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (vapidKey && 'PushManager' in window) {
+        let sub = await reg.pushManager.getSubscription()
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidKey),
+          })
+        }
+        await fetch(`${API}/push-subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub.toJSON(), spikeThreshold }),
+        })
+      }
+    } catch (e) {
+      console.error('[Push] Subscribe failed:', e)
+    }
   }
 
   async function disableAlerts() {
@@ -190,6 +226,20 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     setEnabled(false)
     const reg = await navigator.serviceWorker.ready
     reg.active?.postMessage({ type: 'DISABLE' })
+
+    try {
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await fetch(`${API}/push-unsubscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        })
+        await sub.unsubscribe()
+      }
+    } catch (e) {
+      console.error('[Push] Unsubscribe failed:', e)
+    }
   }
 
   async function checkNow() {

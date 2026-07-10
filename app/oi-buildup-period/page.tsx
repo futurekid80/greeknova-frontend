@@ -50,11 +50,32 @@ function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
 }
 
+function getStealthTier(oiPct: number, pricePct: number): { label: string; color: string; bg: string; border: string } | null {
+  const absOi = Math.abs(oiPct)
+  const absPrice = Math.abs(pricePct)
+  if (absOi >= 10 && absPrice <= 1.0) {
+    return { label: 'Elite Stealth', color: 'text-amber-300', bg: 'bg-amber-950/50', border: 'border-amber-700/60' }
+  }
+  if (absOi >= 6 && absPrice <= 2.0) {
+    return { label: 'Strong Stealth', color: 'text-purple-300', bg: 'bg-purple-950/50', border: 'border-purple-700/60' }
+  }
+  if (absOi >= 4 && absPrice <= 3.0) {
+    return { label: 'Watch Stealth', color: 'text-sky-300', bg: 'bg-sky-950/50', border: 'border-sky-700/60' }
+  }
+  return null
+}
+
 function BuildupCard({ r }: { r: BuildupRow }) {
   const m = SIGNAL_META[r.signal_type] || SIGNAL_META.LONG_BUILDUP
+  const stealth = getStealthTier(r.cumulative_oi_pct, r.cumulative_price_pct)
 
   return (
-    <div className={`rounded-xl border ${m.border} ${m.bg} p-4`}>
+    <div className={`rounded-xl border ${stealth ? stealth.border : m.border} ${m.bg} p-4 relative`}>
+      {stealth && (
+        <div className={`absolute -top-2.5 left-4 text-[10px] font-bold px-2 py-0.5 rounded-full border ${stealth.color} ${stealth.bg} ${stealth.border}`}>
+          🕵️ {stealth.label}
+        </div>
+      )}
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-lg font-bold text-white">{r.symbol}</p>

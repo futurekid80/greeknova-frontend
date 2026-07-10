@@ -13,6 +13,7 @@ interface BuildupRow {
   cumulative_price_pct: number
   close_price: number
   avg_daily_fut_vol: number
+  vol_ratio: number | null
   signal_type: string
   signal_label: string
 }
@@ -106,8 +107,17 @@ function BuildupCard({ r, onSymbolClick }: { r: BuildupRow; onSymbolClick: (sym:
           </p>
         </div>
         <div className="bg-black/30 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wide">Avg Vol</p>
-          <p className="text-sm font-bold text-amber-400">{fmtVol(r.avg_daily_fut_vol)}</p>
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide">Vol vs Prev</p>
+          {r.vol_ratio !== null ? (
+            <>
+              <p className={`text-sm font-bold ${r.vol_ratio >= 1.5 ? 'text-emerald-400' : r.vol_ratio <= 0.7 ? 'text-red-400' : 'text-amber-400'}`}>
+                {r.vol_ratio}x
+              </p>
+              <p className="text-[9px] text-gray-500">{fmtVol(r.avg_daily_fut_vol)}</p>
+            </>
+          ) : (
+            <p className="text-sm font-bold text-amber-400">{fmtVol(r.avg_daily_fut_vol)}</p>
+          )}
         </div>
       </div>
     </div>
@@ -118,7 +128,7 @@ export default function OIBuildupPeriod() {
   const [period, setPeriod] = useState<'weekly' | 'monthly'>('weekly')
   const [data, setData]     = useState<BuildupData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP' | 'SHORT_COVERING' | 'LONG_UNWINDING'>('all')
+  const [filter, setFilter] = useState<'all' | 'STEALTH' | 'LONG_BUILDUP' | 'SHORT_BUILDUP' | 'SHORT_COVERING' | 'LONG_UNWINDING'>('all')
   const [historySymbol, setHistorySymbol] = useState<string | null>(null)
 
   const fetchData = useCallback(async (p: string) => {
@@ -135,7 +145,11 @@ export default function OIBuildupPeriod() {
 
   useEffect(() => { fetchData(period) }, [period, fetchData])
 
-  const filtered = (data?.results || []).filter(r => filter === 'all' || r.signal_type === filter)
+  const filtered = (data?.results || []).filter(r => {
+    if (filter === 'all') return true
+    if (filter === 'STEALTH') return getStealthTier(r.cumulative_oi_pct, r.cumulative_price_pct) !== null
+    return r.signal_type === filter
+  })
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -195,7 +209,7 @@ export default function OIBuildupPeriod() {
         )}
 
         <div className="flex items-center gap-2 mb-5 flex-wrap">
-          {(['all', 'LONG_BUILDUP', 'SHORT_BUILDUP', 'SHORT_COVERING', 'LONG_UNWINDING'] as const).map(f => (
+          {(['all', 'STEALTH', 'LONG_BUILDUP', 'SHORT_BUILDUP', 'SHORT_COVERING', 'LONG_UNWINDING'] as const).map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -203,7 +217,7 @@ export default function OIBuildupPeriod() {
                 filter === f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'
               }`}
             >
-              {f === 'all' ? 'All' : (SIGNAL_META[f]?.icon + ' ' + f.replace('_', ' '))}
+              {f === 'all' ? 'All' : f === 'STEALTH' ? '🕵️ Stealth' : (SIGNAL_META[f]?.icon + ' ' + f.replace('_', ' '))}
             </button>
           ))}
         </div>

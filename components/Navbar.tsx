@@ -42,6 +42,7 @@ const NAV_GROUPS = [
       { href: '/uoa',         label: 'UOA' },
       { href: '/jungle',      label: '🌿 Options Jungle' },
       { href: '/positional',  label: '🧠 Positional Intelligence' },
+      { href: '/oi-buildup-period', label: '📊 Weekly/Monthly OI Buildup' },
       { href: '/signals/intraday', label: '📋 Intraday Log' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
       { href: '/signals/wall-migration', label: '🧱 Wall Migration' },

@@ -1,5 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
+import SignalHistoryPopup from '@/components/SignalHistoryPopup'
 import { useState, useEffect, useCallback } from 'react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
@@ -65,7 +66,7 @@ function getStealthTier(oiPct: number, pricePct: number): { label: string; color
   return null
 }
 
-function BuildupCard({ r }: { r: BuildupRow }) {
+function BuildupCard({ r, onSymbolClick }: { r: BuildupRow; onSymbolClick: (sym: string) => void }) {
   const m = SIGNAL_META[r.signal_type] || SIGNAL_META.LONG_BUILDUP
   const stealth = getStealthTier(r.cumulative_oi_pct, r.cumulative_price_pct)
 
@@ -78,7 +79,12 @@ function BuildupCard({ r }: { r: BuildupRow }) {
       )}
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-lg font-bold text-white">{r.symbol}</p>
+          <button
+            onClick={() => onSymbolClick(r.symbol)}
+            className="text-lg font-bold text-white hover:text-emerald-400 transition-colors underline-offset-2 hover:underline text-left"
+          >
+            {r.symbol}
+          </button>
           <p className="text-sm text-gray-300 mt-0.5">₹{fmtCmp(r.close_price)}</p>
         </div>
         <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${m.color} ${m.badgeBg}`}>
@@ -113,6 +119,7 @@ export default function OIBuildupPeriod() {
   const [data, setData]     = useState<BuildupData | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP' | 'SHORT_COVERING' | 'LONG_UNWINDING'>('all')
+  const [historySymbol, setHistorySymbol] = useState<string | null>(null)
 
   const fetchData = useCallback(async (p: string) => {
     setLoading(true)
@@ -133,6 +140,10 @@ export default function OIBuildupPeriod() {
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/oi-buildup-period" />
+
+      {historySymbol && (
+        <SignalHistoryPopup symbol={historySymbol} onClose={() => setHistorySymbol(null)} />
+      )}
 
       <div className="max-w-6xl mx-auto px-6 py-8">
 
@@ -207,7 +218,7 @@ export default function OIBuildupPeriod() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {filtered.map(r => <BuildupCard key={r.symbol} r={r} />)}
+            {filtered.map(r => <BuildupCard key={r.symbol} r={r} onSymbolClick={setHistorySymbol} />)}
           </div>
         )}
 

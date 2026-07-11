@@ -14,6 +14,7 @@ interface BuildupRow {
   close_price: number
   avg_daily_fut_vol: number
   vol_ratio: number | null
+  net_delta: number | null
   signal_type: string
   signal_label: string
 }
@@ -93,7 +94,7 @@ function BuildupCard({ r, onSymbolClick }: { r: BuildupRow; onSymbolClick: (sym:
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <div className="bg-black/30 rounded-lg p-2 text-center">
           <p className="text-[10px] text-gray-400 uppercase tracking-wide">FUT OI Chg</p>
           <p className={`text-sm font-bold ${r.cumulative_oi_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -117,6 +118,20 @@ function BuildupCard({ r, onSymbolClick }: { r: BuildupRow; onSymbolClick: (sym:
             </>
           ) : (
             <p className="text-sm font-bold text-amber-400">{fmtVol(r.avg_daily_fut_vol)}</p>
+          )}
+        </div>
+        <div className="bg-black/30 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide flex items-center justify-center gap-1">
+            Net Delta
+            <span title="PE OI minus CE OI at ATM±5 strikes. Positive = more put writing (bullish bias). Negative = more call writing (bearish bias). Latest snapshot, not averaged across the period."
+              className="cursor-help text-gray-600 hover:text-gray-400 transition-colors">ⓘ</span>
+          </p>
+          {r.net_delta !== null && r.net_delta !== undefined ? (
+            <p className={`text-sm font-bold ${r.net_delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {r.net_delta >= 0 ? '+' : ''}{(r.net_delta / 100000).toFixed(1)}L
+            </p>
+          ) : (
+            <p className="text-sm font-bold text-gray-600">—</p>
           )}
         </div>
       </div>

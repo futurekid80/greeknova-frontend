@@ -473,20 +473,21 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
       )}
 
       {/* Column headers */}
-      <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
+      <div className="grid grid-cols-14 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
         <div className="col-span-2">Symbol</div>
         <div className="col-span-2 text-center">Vol Ratio</div>
         <div className="col-span-2 text-center">OI Chg</div>
         <div className="col-span-2">Signal</div>
         <div className="col-span-3">Price Context</div>
         <div className="col-span-1">CPR</div>
+        <div className="col-span-2 text-center">ADX</div>
       </div>
 
       {/* Rows — top 5 */}
       <div className="space-y-0.5">
         {signals.slice(0, 5).map((s: any) => (
           <div key={s.symbol}
-            className="grid grid-cols-12 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors cursor-pointer"
+            className="grid grid-cols-14 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors cursor-pointer"
             onClick={() => onSymbolClick(s.symbol)}>
             <div className="col-span-2">
               <p className="text-xs font-black text-white hover:underline">{s.symbol}</p>
@@ -529,11 +530,25 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
                 <p className="text-[10px] text-gray-600">{s.cpr_width_emoji}</p>
               )}
             </div>
+            <div className="col-span-2 text-center">
+              {s.adx !== null && s.adx !== undefined ? (
+                <>
+                  <p className={`text-xs font-bold ${s.adx_trending ? 'text-emerald-400' : s.adx_watch ? 'text-amber-400' : 'text-gray-500'}`}>
+                    {s.adx}
+                  </p>
+                  <p className={`text-[10px] font-medium ${s.adx_trending ? 'text-emerald-500' : s.adx_watch ? 'text-amber-500' : 'text-gray-600'}`}>
+                    {s.adx_trending ? '🔥 Trending' : s.adx_watch ? '👀 Watch' : '〰️ Choppy'}
+                  </p>
+                </>
+              ) : (
+                <span className="text-gray-700 text-[10px]">Building history</span>
+              )}
+            </div>
           </div>
         ))}
       </div>
       <p className="text-[10px] text-gray-700 mt-3 px-1">
-        Vol ratio = today's volume ÷ 5-day avg · Price context shows where CMP sits in today's range · Informational only
+        Vol ratio = today's volume ÷ 5-day avg · Price context shows where CMP sits in today's range · ADX(14) ≥25 = genuine trend, 20-25 = watch, below = choppy · Informational only
       </p>
     </div>
   )

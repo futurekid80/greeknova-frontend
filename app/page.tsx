@@ -227,7 +227,7 @@ function IndexCard({ a, cpr, cmp, iv }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: 
 }
 
 // ── Today's Spotlight ─────────────────────────────────────────────────────────
-function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
+function Spotlight({ stocks, cprData, adxData }: { stocks: PulseStock[]; cprData: CPRRow[]; adxData: Record<string, {adx:number, trending:boolean, watch:boolean, source:string}> }) {
   const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
   const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
   const topOIBuilder  = isMarketData
@@ -238,6 +238,10 @@ function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[
     : [...stocksOnly].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
   const usedSymbols = new Set([topOIBuilder?.symbol, topOIUnwinder?.symbol])
   const narrowestCPR = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(c.symbol) && !usedSymbols.has(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
+  usedSymbols.add(narrowestCPR?.symbol)
+  const strongestTrend = Object.entries(adxData)
+    .filter(([sym]) => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(sym) && !usedSymbols.has(sym))
+    .sort((a,b) => b[1].adx - a[1].adx)[0]
   const cards = [
     {
       label: isMarketData ? '🔥 Highest OI Buildup' : '🟢 Narrowest Above CPR',
@@ -266,10 +270,17 @@ function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[
       sub: narrowestCPR?.width_pts !== undefined ? `${narrowestCPR.width_pts.toFixed(1)} pts` : '',
       color: 'text-orange-400', bg: 'bg-orange-950/20', border: 'border-orange-800/30',
     },
+    {
+      label: '📈 Strongest Trend',
+      symbol: strongestTrend?.[0],
+      value: strongestTrend ? `ADX ${strongestTrend[1].adx}` : '—',
+      sub: strongestTrend ? `${strongestTrend[1].source === 'hourly' ? 'Hourly' : 'Daily'} · Building momentum` : '',
+      color: 'text-purple-400', bg: 'bg-purple-950/20', border: 'border-purple-800/30',
+    },
   ]
   if (!topOIBuilder && !narrowestCPR) return null
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       {cards.map(c => (
         <div key={c.label} className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
           <p className="text-xs text-gray-500 mb-2">{c.label}</p>
@@ -933,6 +944,7 @@ export default function MarketPulse() {
   const [activeSector, setActiveSector] = useState<string|null>(null)
   const [activeBreadth, setActiveBreadth] = useState<'bullish'|'bearish'|'neutral'|null>(null)
   const [ivData, setIvData] = useState<Record<string, {atm_iv:number, iv_min:number, iv_max:number}>>({})
+  const [adxData, setAdxData] = useState<Record<string, {adx:number, trending:boolean, watch:boolean, source:string}>>({})
 
   useEffect(() => {
     async function checkAuth() {
@@ -951,13 +963,15 @@ export default function MarketPulse() {
       if (cached && cacheAge < 5 * 60 * 1000) { setCprData(JSON.parse(cached)); setLoading(false) }
     } catch {}
     try {
-      const [cprRes, pulseRes, uoaRes] = await Promise.all([
+      const [cprRes, pulseRes, uoaRes, adxRes] = await Promise.all([
         fetch(`${API}/cpr-scanner`),
         fetch(`${API}/oi-pulse`),
-        fetch(`${API}/uoa`)
+        fetch(`${API}/uoa`),
+        fetch(`${API}/adx-map`)
       ])
-      const [cprJson, pulseJson, uoaJson] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json()])
+      const [cprJson, pulseJson, uoaJson, adxJson] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json(), adxRes.json()])
       setUoaSignals(uoaJson?.signals || [])
+      setAdxData(adxJson?.data || {})
       const cprRows: CPRRow[] = cprJson?.data || []
       setCprData(cprRows)
       try {
@@ -1233,7 +1247,7 @@ export default function MarketPulse() {
 })()}
 
         {/* Spotlight */}
-        {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}
+        {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData} adxData={adxData}/>}
 
         {/* Activity Leaders */}
         {feedStocks.length > 0 && (

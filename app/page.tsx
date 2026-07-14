@@ -227,7 +227,7 @@ function IndexCard({ a, cpr, cmp, iv }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: 
 }
 
 // ── Today's Spotlight ─────────────────────────────────────────────────────────
-function Spotlight({ stocks, cprData, adxData }: { stocks: PulseStock[]; cprData: CPRRow[]; adxData: Record<string, {adx:number, trending:boolean, watch:boolean, source:string}> }) {
+function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
   const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(s.symbol))
   const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
   const topOIBuilder  = isMarketData
@@ -238,10 +238,6 @@ function Spotlight({ stocks, cprData, adxData }: { stocks: PulseStock[]; cprData
     : [...stocksOnly].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
   const usedSymbols = new Set([topOIBuilder?.symbol, topOIUnwinder?.symbol])
   const narrowestCPR = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(c.symbol) && !usedSymbols.has(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
-  usedSymbols.add(narrowestCPR?.symbol)
-  const strongestTrend = Object.entries(adxData)
-    .filter(([sym]) => !['NIFTY','BANKNIFTY','FINNIFTY'].includes(sym) && !usedSymbols.has(sym))
-    .sort((a,b) => b[1].adx - a[1].adx)[0]
   const cards = [
     {
       label: isMarketData ? '🔥 Highest OI Buildup' : '🟢 Narrowest Above CPR',
@@ -270,17 +266,10 @@ function Spotlight({ stocks, cprData, adxData }: { stocks: PulseStock[]; cprData
       sub: narrowestCPR?.width_pts !== undefined ? `${narrowestCPR.width_pts.toFixed(1)} pts` : '',
       color: 'text-orange-400', bg: 'bg-orange-950/20', border: 'border-orange-800/30',
     },
-    {
-      label: '📈 Strongest Trend',
-      symbol: strongestTrend?.[0],
-      value: strongestTrend ? `ADX ${strongestTrend[1].adx}` : '—',
-      sub: strongestTrend ? `${strongestTrend[1].source === 'hourly' ? 'Hourly' : 'Daily'} · Building momentum` : '',
-      color: 'text-purple-400', bg: 'bg-purple-950/20', border: 'border-purple-800/30',
-    },
   ]
   if (!topOIBuilder && !narrowestCPR) return null
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       {cards.map(c => (
         <div key={c.label} className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
           <p className="text-xs text-gray-500 mb-2">{c.label}</p>
@@ -489,9 +478,8 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
         <div className="col-span-2 text-center">Vol Ratio</div>
         <div className="col-span-2 text-center">OI Chg</div>
         <div className="col-span-2">Signal</div>
-        <div className="col-span-2">Price Context</div>
+        <div className="col-span-3">Price Context</div>
         <div className="col-span-1">CPR</div>
-        <div className="col-span-1 text-center">ADX</div>
       </div>
 
       {/* Rows — top 5 */}
@@ -523,7 +511,7 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
                 {VOL_SIGNAL_ICONS[s.signal_type]} {s.signal_label}
               </span>
             </div>
-            <div className="col-span-2">
+            <div className="col-span-3">
               <p className={`text-[10px] font-bold ${VOL_CTX_COLORS[s.price_ctx_color] || 'text-gray-400'}`}>
                 {s.price_context}
               </p>
@@ -541,25 +529,11 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
                 <p className="text-[10px] text-gray-600">{s.cpr_width_emoji}</p>
               )}
             </div>
-            <div className="col-span-1 text-center">
-              {s.adx !== null && s.adx !== undefined ? (
-                <>
-                  <p className={`text-xs font-bold ${s.adx_trending ? 'text-emerald-400' : s.adx_watch ? 'text-amber-400' : 'text-gray-500'}`}>
-                    {s.adx}
-                  </p>
-                  <p className={`text-[9px] font-medium leading-tight ${s.adx_trending ? 'text-emerald-500' : s.adx_watch ? 'text-amber-500' : 'text-gray-600'}`}>
-                    {s.adx_trending ? '🔥' : s.adx_watch ? '👀' : '〰️'}
-                  </p>
-                </>
-              ) : (
-                <span className="text-gray-700 text-[9px]">—</span>
-              )}
-            </div>
           </div>
         ))}
       </div>
       <p className="text-[10px] text-gray-700 mt-3 px-1">
-        Vol ratio = today's volume ÷ 5-day avg · Price context shows where CMP sits in today's range · ADX(14) ≥25 = genuine trend, 20-25 = watch, below = choppy · Informational only
+        Vol ratio = today's volume ÷ 5-day avg · Price context shows where CMP sits in today's range · Informational only
       </p>
     </div>
   )
@@ -1247,7 +1221,7 @@ export default function MarketPulse() {
 })()}
 
         {/* Spotlight */}
-        {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData} adxData={adxData}/>}
+        {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}
 
         {/* Activity Leaders */}
         {feedStocks.length > 0 && (

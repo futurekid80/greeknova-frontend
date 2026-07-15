@@ -258,6 +258,19 @@ export default function OptionsJungle() {
       <Navbar active="/jungle" />
       <div className="max-w-7xl mx-auto px-6 py-8">
 
+        {/* Per-signal alert toggles — same vocabulary as UOA, controls both pages */}
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+          <span className="text-xs text-gray-600 mr-1">Alerts:</span>
+          <AlertToggle signals={['OI_SPIKE']} label="OI Spikes" />
+          <AlertToggle signals={['FRESH_BUILD']} label="Fresh Builds" />
+          <AlertToggle signals={['CALL_WRITING']} label="Call Writing" />
+          <AlertToggle signals={['PUT_WRITING']} label="Put Writing" />
+          <AlertToggle signals={['LONG_BUILDUP']} label="Long Buildup" />
+          <AlertToggle signals={['SHORT_BUILDUP']} label="Short Buildup" />
+          <AlertToggle signals={['SHORT_COVERING']} label="Short Covering" />
+          <AlertToggle signals={['LONG_UNWINDING']} label="Long Unwinding" />
+        </div>
+
         {/* Header */}
         <div className="flex items-end justify-between mb-6">
           <div>
@@ -265,7 +278,6 @@ export default function OptionsJungle() {
             <p className="text-gray-500 text-sm">Where the wild money flows · OI Spikes + Volume Surges · 5-min snapshot comparison</p>
           </div>
           <div className="flex items-center gap-3">
-            <AlertToggle signals={['OI_SPIKE', 'FRESH_BUILD']} label="Jungle Alerts" />
             {availDates.length > 0 && (
               <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-500">Date:</span>

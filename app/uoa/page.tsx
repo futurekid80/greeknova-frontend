@@ -1,5 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
+import AlertToggle from '@/components/AlertToggle'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, AlertTriangle, Search, X, MoonStar } from 'lucide-react'
 
@@ -228,15 +229,23 @@ export default function UOA() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
 
+        {/* Per-signal alert toggles — each one independently on/off for this device */}
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+          <span className="text-xs text-gray-600 mr-1">Alerts:</span>
+          {Object.entries(SIGNAL_META).map(([sig, meta]) => (
+            <AlertToggle key={sig} signals={[sig]} label={meta.label} />
+          ))}
+        </div>
+
         {/* Header */}
-        <div className="flex items-end justify-between mb-6">
+        <div className="flex items-end justify-between mb-3">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1 flex items-center gap-3">
               <span>🐋</span> Unusual Options Activity
             </h1>
             <p className="text-gray-500 text-sm">Observational tool · OI momentum (30-min) + price from open · Informational only</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {availDates.length > 0 && (
               <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-500">Date:</span>

@@ -1,6 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import AlertToggle from '@/components/AlertToggle'
+import { usePushPreferences } from '@/hooks/usePushPreferences'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, AlertTriangle, Search, X, MoonStar } from 'lucide-react'
 
@@ -114,6 +115,7 @@ function StockAtHighBadge({ atDayHigh, pct }: { atDayHigh: boolean; pct: number 
 }
 
 export default function UOA() {
+  const { enabledSignals, toggleSignal } = usePushPreferences()
   const [data, setData] = useState<UOAData | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all'|'index'|'stocks'>('all')
@@ -233,7 +235,7 @@ export default function UOA() {
         <div className="flex items-center gap-2 flex-wrap mb-6">
           <span className="text-xs text-gray-600 mr-1">Alerts:</span>
           {Object.entries(SIGNAL_META).map(([sig, meta]) => (
-            <AlertToggle key={sig} signals={[sig]} label={meta.label} />
+            <AlertToggle key={sig} signals={[sig]} label={meta.label} enabledSignals={enabledSignals} onToggle={toggleSignal} />
           ))}
         </div>
 

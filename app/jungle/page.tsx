@@ -1,6 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import AlertToggle from '@/components/AlertToggle'
+import { usePushPreferences } from '@/hooks/usePushPreferences'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, Zap, Search, X } from 'lucide-react'
 
@@ -59,6 +60,7 @@ function fmtOI(n: number) {
 }
 
 export default function OptionsJungle() {
+  const { enabledSignals, toggleSignal } = usePushPreferences()
   const [data, setData]             = useState<JungleData | null>(null)
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState<'oi' | 'vol'>('oi')
@@ -261,14 +263,14 @@ export default function OptionsJungle() {
         {/* Per-signal alert toggles — same vocabulary as UOA, controls both pages */}
         <div className="flex items-center gap-2 flex-wrap mb-6">
           <span className="text-xs text-gray-600 mr-1">Alerts:</span>
-          <AlertToggle signals={['OI_SPIKE']} label="OI Spikes" />
-          <AlertToggle signals={['FRESH_BUILD']} label="Fresh Builds" />
-          <AlertToggle signals={['CALL_WRITING']} label="Call Writing" />
-          <AlertToggle signals={['PUT_WRITING']} label="Put Writing" />
-          <AlertToggle signals={['LONG_BUILDUP']} label="Long Buildup" />
-          <AlertToggle signals={['SHORT_BUILDUP']} label="Short Buildup" />
-          <AlertToggle signals={['SHORT_COVERING']} label="Short Covering" />
-          <AlertToggle signals={['LONG_UNWINDING']} label="Long Unwinding" />
+          <AlertToggle signals={['OI_SPIKE']} label="OI Spikes" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['FRESH_BUILD']} label="Fresh Builds" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['CALL_WRITING']} label="Call Writing" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['PUT_WRITING']} label="Put Writing" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['LONG_BUILDUP']} label="Long Buildup" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['SHORT_BUILDUP']} label="Short Buildup" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['SHORT_COVERING']} label="Short Covering" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['LONG_UNWINDING']} label="Long Unwinding" enabledSignals={enabledSignals} onToggle={toggleSignal} />
         </div>
 
         {/* Header */}

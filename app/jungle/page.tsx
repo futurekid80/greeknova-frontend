@@ -1,5 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
+import AlertToggle from '@/components/AlertToggle'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, Zap, Search, X } from 'lucide-react'
 
@@ -264,6 +265,7 @@ export default function OptionsJungle() {
             <p className="text-gray-500 text-sm">Where the wild money flows · OI Spikes + Volume Surges · 5-min snapshot comparison</p>
           </div>
           <div className="flex items-center gap-3">
+            <AlertToggle signals={['OI_SPIKE', 'FRESH_BUILD']} label="Jungle Alerts" />
             {availDates.length > 0 && (
               <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-500">Date:</span>

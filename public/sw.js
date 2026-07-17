@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.6'
+const SW_VERSION = 'v2.0.7'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
@@ -86,6 +86,15 @@ self.addEventListener('push', (event) => {
         data: { url },
       }),
       self.clients.matchAll({ type: 'window' }).then(clients => {
+        // BUG FIX (Jul 17): real server-pushed alerts never triggered our
+        // custom sound — only the OLD client-side polling checks did, via
+        // this same PLAY_SOUND postMessage. The OS's own default notification
+        // sound was never reliably firing for GreekNova specifically (Chrome
+        // played sound fine for other sites on the same Mac), so real pushes
+        // were silently arriving without any audio. This only plays sound
+        // when a tab is actually open to receive the message — same
+        // limitation the old polling checks always had.
+        clients.forEach(c => c.postMessage({ type: 'PLAY_SOUND' }))
         clients.forEach(c => c.postMessage({
           type: 'NEW_ALERT',
           id: Date.now() + Math.random(),

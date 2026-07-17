@@ -6,6 +6,8 @@ const API = 'https://greeknova-backend-production.up.railway.app'
 export function usePushPreferences() {
   const [endpoint, setEndpoint] = useState<string | null>(null)
   const [enabledSignals, setEnabledSignals] = useState<string[] | null>(null)
+  const [spikeThreshold, setSpikeThreshold] = useState<number>(10)
+  const [volThreshold, setVolThreshold] = useState<number>(20)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -24,6 +26,8 @@ export function usePushPreferences() {
         if (cancelled) return
         if (!prefs.error) {
           setEnabledSignals(prefs.enabled_signals || [])
+          if (prefs.spike_threshold != null) setSpikeThreshold(Number(prefs.spike_threshold))
+          if (prefs.vol_threshold != null) setVolThreshold(Number(prefs.vol_threshold))
         }
       } catch (e) {
         console.error('Failed to load push preferences', e)
@@ -52,5 +56,20 @@ export function usePushPreferences() {
     }
   }, [endpoint, enabledSignals])
 
-  return { endpoint, enabledSignals, loading, toggleSignal }
+  const saveThresholds = useCallback(async (oi: number, vol: number) => {
+    if (!endpoint || enabledSignals === null) return
+    setSpikeThreshold(oi)
+    setVolThreshold(vol)
+    try {
+      await fetch(`${API}/push-preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint, enabled_signals: enabledSignals, spike_threshold: oi, vol_threshold: vol }),
+      })
+    } catch (e) {
+      console.error('Failed to save thresholds', e)
+    }
+  }, [endpoint, enabledSignals])
+
+  return { endpoint, enabledSignals, spikeThreshold, volThreshold, loading, toggleSignal, saveThresholds }
 }

@@ -2,6 +2,7 @@
 import Navbar from '@/components/Navbar'
 import AlertToggle from '@/components/AlertToggle'
 import { usePushPreferences } from '@/hooks/usePushPreferences'
+import AlertThresholds from '@/components/AlertThresholds'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, AlertTriangle, Search, X, MoonStar } from 'lucide-react'
 
@@ -115,7 +116,7 @@ function StockAtHighBadge({ atDayHigh, pct }: { atDayHigh: boolean; pct: number 
 }
 
 export default function UOA() {
-  const { enabledSignals, toggleSignal } = usePushPreferences()
+  const { enabledSignals, toggleSignal, spikeThreshold, volThreshold, saveThresholds } = usePushPreferences()
   const [data, setData] = useState<UOAData | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all'|'index'|'stocks'>('all')
@@ -237,6 +238,7 @@ export default function UOA() {
           {Object.entries(SIGNAL_META).map(([sig, meta]) => (
             <AlertToggle key={sig} signals={[sig]} label={meta.label} enabledSignals={enabledSignals} onToggle={toggleSignal} />
           ))}
+          <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} onSave={saveThresholds} />
         </div>
 
         {/* Header */}

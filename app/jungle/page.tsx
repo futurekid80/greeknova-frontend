@@ -2,6 +2,7 @@
 import Navbar from '@/components/Navbar'
 import AlertToggle from '@/components/AlertToggle'
 import { usePushPreferences } from '@/hooks/usePushPreferences'
+import AlertThresholds from '@/components/AlertThresholds'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, Zap, Search, X } from 'lucide-react'
 
@@ -60,7 +61,7 @@ function fmtOI(n: number) {
 }
 
 export default function OptionsJungle() {
-  const { enabledSignals, toggleSignal } = usePushPreferences()
+  const { enabledSignals, toggleSignal, spikeThreshold, volThreshold, saveThresholds } = usePushPreferences()
   const [data, setData]             = useState<JungleData | null>(null)
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState<'oi' | 'vol'>('oi')
@@ -271,6 +272,7 @@ export default function OptionsJungle() {
           <AlertToggle signals={['SHORT_BUILDUP']} label="Short Buildup" enabledSignals={enabledSignals} onToggle={toggleSignal} />
           <AlertToggle signals={['SHORT_COVERING']} label="Short Covering" enabledSignals={enabledSignals} onToggle={toggleSignal} />
           <AlertToggle signals={['LONG_UNWINDING']} label="Long Unwinding" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} onSave={saveThresholds} />
         </div>
 
         {/* Header */}

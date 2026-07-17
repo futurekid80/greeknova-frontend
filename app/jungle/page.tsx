@@ -61,7 +61,7 @@ function fmtOI(n: number) {
 }
 
 export default function OptionsJungle() {
-  const { enabledSignals, toggleSignal, spikeThreshold, volThreshold, saveThresholds } = usePushPreferences()
+  const { enabledSignals, toggleSignal, spikeThreshold: pushSpikeThreshold, volThreshold: pushVolThreshold, saveThresholds } = usePushPreferences()
   const [data, setData]             = useState<JungleData | null>(null)
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState<'oi' | 'vol'>('oi')
@@ -272,7 +272,7 @@ export default function OptionsJungle() {
           <AlertToggle signals={['SHORT_BUILDUP']} label="Short Buildup" enabledSignals={enabledSignals} onToggle={toggleSignal} />
           <AlertToggle signals={['SHORT_COVERING']} label="Short Covering" enabledSignals={enabledSignals} onToggle={toggleSignal} />
           <AlertToggle signals={['LONG_UNWINDING']} label="Long Unwinding" enabledSignals={enabledSignals} onToggle={toggleSignal} />
-          <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} onSave={saveThresholds} />
+          <AlertThresholds spikeThreshold={pushSpikeThreshold} volThreshold={pushVolThreshold} onSave={saveThresholds} />
         </div>
 
         {/* Header */}

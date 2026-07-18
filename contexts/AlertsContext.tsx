@@ -130,6 +130,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
         if (e.data.type === 'STATUS') setEnabled(e.data.enabled)
 
         if (e.data.type === 'NEW_ALERT') {
+          console.log('[AlertsContext] NEW_ALERT received:', e.data)
           const newAlert: Alert = {
             id:         e.data.id || Date.now(),
             signal:     e.data.signal,

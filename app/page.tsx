@@ -25,7 +25,7 @@ const ALL_SYMBOLS = [
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
 interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }
 interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
-interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean }
+interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean; vol_ratio?:number }
 
 // ── Sector Performance ────────────────────────────────────────────────────────
 const SECTOR_MAP: Record<string, string[]> = {
@@ -305,8 +305,8 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
     .sort((a,b) => { const dA = a.otm_distance_pct ?? 99; const dB = b.otm_distance_pct ?? 99; return dA !== dB ? dA - dB : b.score - a.score })
     .slice(0,3)
   const volSurge = [...stocksOnly]
-    .filter(s => (s as any).vol_ratio && (s as any).vol_ratio >= 1.5)
-    .sort((a,b) => ((b as any).vol_ratio||0) - ((a as any).vol_ratio||0))
+    .filter(s => s.vol_ratio && s.vol_ratio >= 1.5)
+    .sort((a,b) => (b.vol_ratio||0) - (a.vol_ratio||0))
     .slice(0,3)
   if (!isMarketData && putWriters.length === 0 && callWriters.length === 0) return null
   return (
@@ -369,7 +369,7 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
             {volSurge.map(s => (
               <button key={s.symbol} onClick={() => onSymbolClick(s.symbol)} className="w-full flex items-center justify-between hover:opacity-80 transition-opacity">
                 <span className="text-xs font-bold text-white">{s.symbol}</span>
-                <span className="text-xs font-bold text-amber-400">{(s as any).vol_ratio?.toFixed(1)}x vol</span>
+                <span className="text-xs font-bold text-amber-400">{s.vol_ratio?.toFixed(1)}x vol</span>
               </button>
             ))}
           </div>
@@ -958,7 +958,7 @@ export default function MarketPulse() {
         symbol: p.symbol, cmp: p.ltp || p.cmp || 0,
         oi_chg_pct: p.oi_chg_pct || 0, price_chg_pct: p.price_chg_pct || 0,
         signal: p.signal || 'NEUTRAL', label: p.label || '—',
-        oi_now: p.oi_now, oi_prev: p.oi_prev, vol_surge: p.vol_surge || false,
+        oi_now: p.oi_now, oi_prev: p.oi_prev, vol_surge: p.vol_surge || false, vol_ratio: p.vol_ratio,
         has_oi_signal: (cprMap[p.symbol] as CPRRow)?.has_oi_signal || false,
         width_pct: (cprMap[p.symbol] as CPRRow)?.width_pct,
         width_pts: (cprMap[p.symbol] as CPRRow)?.width_pts,

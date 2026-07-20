@@ -19,7 +19,10 @@ const ALL_SYMBOLS = [
   'BANKBARODA','BEL','CANBK','CHOLAFIN','DLF','GAIL','HAVELLS','HAL','INDIGO','PFC',
   'RECLTD','SAIL','TATAPOWER','VEDL',
   'DIXON','NYKAA','PAYTM','PERSISTENT',
-  'BSE','MCX','TMPV','LTIM','GODREJPROP','DIVISLAB','COFORGE','ANGELONE','CDSL','OIL',
+  'BSE','MCX','TMPV','GODREJPROP','DIVISLAB','COFORGE','ANGELONE','CDSL','OIL',
+  'TVSMOTOR','BHARATFORG','MOTHERSON','LUPIN','TORNTPHARM','AUROPHARMA',
+  'GODREJCP','MARICO','DABUR','PIDILITIND','MUTHOOTFIN','SBICARD','ICICIPRULI',
+  'IDFCFIRSTB','FEDERALBNK','ETERNAL','POLYCAB','VOLTAS','IEX','ASTRAL',
 ]
 
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
@@ -31,7 +34,7 @@ interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_p
 const SECTOR_MAP: Record<string, string[]> = {
   "Banking":      ["HDFCBANK","ICICIBANK","SBIN","KOTAKBANK","AXISBANK","INDUSINDBK","BANKBARODA","CANBK","FEDERALBNK"],
   "Finance/NBFC": ["BAJFINANCE","BAJAJFINSV","CHOLAFIN","SHRIRAMFIN","HDFCLIFE","SBILIFE","JIOFIN","PFC","RECLTD"],
-  "IT":           ["TCS","INFY","WIPRO","HCLTECH","TECHM","LTIM","COFORGE","PERSISTENT"],
+  "IT":           ["TCS","INFY","WIPRO","HCLTECH","TECHM","COFORGE","PERSISTENT"],
   "Auto":         ["MARUTI","BAJAJ-AUTO","EICHERMOT","HEROMOTOCO","M&M","TMPV"],
   "Energy":       ["RELIANCE","ONGC","BPCL","GAIL","COALINDIA","TATAPOWER","POWERGRID","NTPC","OIL"],
   "Pharma":       ["SUNPHARMA","CIPLA","DRREDDY","APOLLOHOSP","DIVISLAB"],

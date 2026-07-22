@@ -56,7 +56,7 @@ export default function HistoricalChain() {
 
   useEffect(() => {
     if (!selectedDate) return
-    setSnapshots([]); setSelectedSnap(''); setData(null)
+    setSnapshots([]); setSelectedSnap(''); setData(null); setExpiry('')
     fetch(`${API}/historical-chain/snapshots/${symbol}?date=${selectedDate}`)
       .then(r => r.json())
       .then(json => {

@@ -1,4 +1,3 @@
-import { supabase } from '@/lib/supabase'
 "use client";
 
 import { useEffect, useState, useRef } from "react";

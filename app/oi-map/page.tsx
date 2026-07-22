@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase'
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -278,6 +279,15 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[] | undefine
 }
 
 export default function OIMapPage() {
+
+  // Auth gate — redirect to login if no session
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) window.location.href = '/login'
+    }
+    checkAuth()
+  }, [])
 
   if (!MCX_ENABLED) {
     return <div style={{ padding: "4rem 2rem", textAlign: "center", color: "var(--color-text-secondary)" }}><h2>404 — Page not found</h2></div>;

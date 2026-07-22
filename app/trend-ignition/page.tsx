@@ -477,6 +477,128 @@ function ExpiryBadge({ expiryDate }: { expiryDate: string }) {
 }
 
 
+
+function GoldZoneBadge({ signal }: { signal: Signal }) {
+  const lean = signal.gold_zone_lean || "neutral";
+  
+  // Parse covering arrays from string representation
+  let ceCovering: {strike: number, delta: number}[] = [];
+  let peCovering: {strike: number, delta: number}[] = [];
+  try {
+    ceCovering = JSON.parse((signal.gold_zone_ce_covering || "[]").replace(/'/g, '"'));
+    peCovering = JSON.parse((signal.gold_zone_pe_covering || "[]").replace(/'/g, '"'));
+  } catch { return null; }
+
+  if (!ceCovering.length && !peCovering.length) return null;
+
+  const leanColor = lean === "bullish" ? "#1D9E75" : lean === "bearish" ? "#E24B4A" : "#888";
+  const leanIcon = lean === "bullish" ? "▲" : lean === "bearish" ? "▼" : "→";
+  const leanLabel = lean === "bullish" ? "Bullish lean" : lean === "bearish" ? "Bearish lean" : "Neutral";
+
+  const fmt = (n: number) => n >= 1000 ? `${(n/1000).toFixed(0)}K` : `${n}`;
+
+  return (
+    <div style={{ marginTop: 8, padding: "10px 12px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.05em" }}>
+          🎯 GOLD ZONE COVERING
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: leanColor }}>
+          {leanIcon} {leanLabel}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {ceCovering.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, color: "#1D9E75", fontWeight: 600, marginBottom: 4 }}>
+              CE covering ← bears exiting
+            </div>
+            {ceCovering.map((r, i) => (
+              <div key={i} style={{ fontSize: 12, color: "var(--color-text-primary)" }}>
+                ₹{fmt(r.strike)} <span style={{ color: "#1D9E75" }}>({r.delta})</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {peCovering.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, color: "#E24B4A", fontWeight: 600, marginBottom: 4 }}>
+              PE covering ← bulls exiting
+            </div>
+            {peCovering.map((r, i) => (
+              <div key={i} style={{ fontSize: 12, color: "var(--color-text-primary)" }}>
+                ₹{fmt(r.strike)} <span style={{ color: "#E24B4A" }}>({r.delta})</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function GoldZoneBadge({ signal }: { signal: Signal }) {
+  const lean = signal.gold_zone_lean || "neutral";
+  
+  // Parse covering arrays from string representation
+  let ceCovering: {strike: number, delta: number}[] = [];
+  let peCovering: {strike: number, delta: number}[] = [];
+  try {
+    ceCovering = JSON.parse((signal.gold_zone_ce_covering || "[]").replace(/'/g, '"'));
+    peCovering = JSON.parse((signal.gold_zone_pe_covering || "[]").replace(/'/g, '"'));
+  } catch { return null; }
+
+  if (!ceCovering.length && !peCovering.length) return null;
+
+  const leanColor = lean === "bullish" ? "#1D9E75" : lean === "bearish" ? "#E24B4A" : "#888";
+  const leanIcon = lean === "bullish" ? "▲" : lean === "bearish" ? "▼" : "→";
+  const leanLabel = lean === "bullish" ? "Bullish lean" : lean === "bearish" ? "Bearish lean" : "Neutral";
+
+  const fmt = (n: number) => n >= 1000 ? `${(n/1000).toFixed(0)}K` : `${n}`;
+
+  return (
+    <div style={{ marginTop: 8, padding: "10px 12px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.05em" }}>
+          🎯 GOLD ZONE COVERING
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: leanColor }}>
+          {leanIcon} {leanLabel}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {ceCovering.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, color: "#1D9E75", fontWeight: 600, marginBottom: 4 }}>
+              CE covering ← bears exiting
+            </div>
+            {ceCovering.map((r, i) => (
+              <div key={i} style={{ fontSize: 12, color: "var(--color-text-primary)" }}>
+                ₹{fmt(r.strike)} <span style={{ color: "#1D9E75" }}>({r.delta})</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {peCovering.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, color: "#E24B4A", fontWeight: 600, marginBottom: 4 }}>
+              PE covering ← bulls exiting
+            </div>
+            {peCovering.map((r, i) => (
+              <div key={i} style={{ fontSize: 12, color: "var(--color-text-primary)" }}>
+                ₹{fmt(r.strike)} <span style={{ color: "#E24B4A" }}>({r.delta})</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StealthBadge({ signal }: { signal: Signal }) {
   const tier = signal.stealth_tier;
   if (!tier) return null;
@@ -623,6 +745,8 @@ function SignalCard({ signal }: { signal: Signal }) {
         action={signal.trade_signal_action || ""}
       />
       <StealthBadge signal={signal} />
+      <GoldZoneBadge signal={signal} />
+      <GoldZoneBadge signal={signal} />
 
       {(isFired || isWatch) && (
         <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10, marginTop: 8 }}>

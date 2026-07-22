@@ -31,6 +31,7 @@ const NAV_GROUPS = [
     label: 'Greeks',
     links: [
       { href: '/optionchain', label: 'Option Chain' },
+      { href: '/historicalchain', label: '🕰️ Historical Chain' },
       { href: '/maxpain',     label: 'Max Pain' },
       { href: '/iv',          label: 'IV Analysis' },
     ]

@@ -59,6 +59,9 @@ interface Signal {
   stealth_consecutive_scans: number;
   stealth_cum_oi_pct: number;
   stealth_hourly_rate: number;
+  gold_zone_lean: string;
+  gold_zone_ce_covering: string;
+  gold_zone_pe_covering: string;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {

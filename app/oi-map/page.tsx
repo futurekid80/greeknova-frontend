@@ -1,5 +1,6 @@
 "use client";
 
+import { supabase } from '@/lib/supabase'
 import { useEffect, useState, useRef } from "react";
 
 const MCX_ENABLED = process.env.NEXT_PUBLIC_MCX_ENABLED === "true";

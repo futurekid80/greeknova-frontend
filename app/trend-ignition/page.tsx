@@ -504,7 +504,7 @@ function GoldZoneBadge({ signal }: { signal: Signal }) {
     <div style={{ marginTop: 8, padding: "10px 12px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.05em" }}>
-          🎯 GOLD ZONE COVERING
+          🎯 ATM ZONE COVERING
         </span>
         <span style={{ fontSize: 12, fontWeight: 700, color: leanColor }}>
           {leanIcon} {leanLabel}

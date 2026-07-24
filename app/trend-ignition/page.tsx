@@ -62,6 +62,7 @@ interface Signal {
   gold_zone_lean: string;
   gold_zone_ce_covering: string;
   gold_zone_pe_covering: string;
+  session_open_oi: number;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {
@@ -658,6 +659,7 @@ function OIActivityBadge({ signal }: { signal: Signal }) {
       {tier && (
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           <div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Session OI</div><div style={{ fontSize: 13, fontWeight: 600, color: cfg.color }}>+{cumOI}%</div></div>
+          <div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Open OI</div><div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{signal.session_open_oi ? signal.session_open_oi.toLocaleString("en-IN") : "—"}</div></div>
           <div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Consecutive</div><div style={{ fontSize: 13, fontWeight: 600, color: cfg.color }}>{consecutive} scans</div></div>
           <div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Hourly rate</div><div style={{ fontSize: 13, fontWeight: 600, color: rateSlowing ? "#10B981" : cfg.color }}>{hourlyRate > 0 ? "+" : ""}{hourlyRate}%{rateSlowing ? " ↓" : ""}</div></div>
         </div>

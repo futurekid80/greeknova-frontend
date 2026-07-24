@@ -180,9 +180,30 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
         }
       }, 2 * 60 * 1000)
 
+      // BUG FIX (Jul 24 2026): the 2-min heartbeat above lives inside this
+      // page's own JS, which Chrome ALSO throttles when the tab is
+      // backgrounded -- so during long stretches with the tab inactive
+      // (e.g. working in another app), neither the SW's internal timer nor
+      // this heartbeat actually run, and alerts silently stop updating
+      // until a manual reload. Reloading works because it re-sends ENABLE,
+      // which clears dedup state and runs an immediate check. Doing the
+      // same automatically the instant the tab regains focus means no
+      // manual reload is needed to catch up.
+      const onVisible = () => {
+        if (document.visibilityState !== 'visible') return
+        const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
+        if (wasEnabled) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.active?.postMessage({ type: 'CHECK_NOW' })
+          }).catch(() => {})
+        }
+      }
+      document.addEventListener('visibilitychange', onVisible)
+
       return () => {
         navigator.serviceWorker.removeEventListener('message', handler)
         clearInterval(heartbeat)
+        document.removeEventListener('visibilitychange', onVisible)
       }
     }
   }, [playSound])

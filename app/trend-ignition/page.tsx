@@ -629,7 +629,19 @@ function OIActivityBadge({ signal }: { signal: Signal }) {
   const cfg = tier ? tierCfg[tier] : { bg: "var(--color-background-secondary)", border: "var(--color-border-secondary)", color: "var(--color-text-secondary)", icon: "📊", label: "OI Activity" };
   const phaseLabel: Record<string, string> = { early: "Early session", build: "Build phase", late: "Late session" };
   const fmt = (n: number) => Math.abs(n) >= 10000 ? `${(Math.abs(n)/1000).toFixed(0)}K` : `${Math.abs(n).toLocaleString('en-IN')}`;
-  const writerLabel = ceWriting > peWriting ? `CE side active · ${ceWriting} strikes writing` : peWriting > ceWriting ? `PE side active · ${peWriting} strikes writing` : ceWriting === 0 && peWriting === 0 ? "" : "Both sides active";
+  // Use scan delta to determine dominant activity
+  const ceDelta = signal.ce_oi_delta || 0;
+  const peDelta = signal.pe_oi_delta || 0;
+  const writerLabel = (() => {
+    if (ceWriting > peWriting && ceWriting > 0) return `CE side active · ${ceWriting} strikes writing`;
+    if (peWriting > ceWriting && peWriting > 0) return `PE side active · ${peWriting} strikes writing`;
+    if (ceDelta < -50 && Math.abs(ceDelta) > Math.abs(peDelta) * 2) return `CE OI unwinding (−${Math.abs(ceDelta)} lots)`;
+    if (peDelta < -50 && Math.abs(peDelta) > Math.abs(ceDelta) * 2) return `PE OI unwinding (−${Math.abs(peDelta)} lots)`;
+    if (ceDelta > 50 && ceDelta > peDelta * 2) return `CE OI building (+${ceDelta} lots)`;
+    if (peDelta > 50 && peDelta > ceDelta * 2) return `PE OI building (+${peDelta} lots)`;
+    if (ceWriting === 0 && peWriting === 0 && ceDelta === 0 && peDelta === 0) return "";
+    return "Mixed OI activity";
+  })();
   const ceTotal = ceCovering.reduce((a, r) => a + Math.abs(r.delta), 0);
   const peTotal = peCovering.reduce((a, r) => a + Math.abs(r.delta), 0);
   const atmLabel = !ceCovering.length && !peCovering.length ? "" : ceTotal > peTotal * 1.3 ? "CE OI reducing near ATM" : peTotal > ceTotal * 1.3 ? "PE OI reducing near ATM" : "Both CE & PE OI reducing near ATM";

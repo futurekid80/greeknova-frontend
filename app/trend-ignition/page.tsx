@@ -62,7 +62,6 @@ interface Signal {
   gold_zone_lean: string;
   gold_zone_ce_covering: string;
   gold_zone_pe_covering: string;
-  session_open_oi: number;
 }
 
 const COMMODITY_META: Record<string, { label: string }> = {

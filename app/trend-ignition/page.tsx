@@ -603,6 +603,76 @@ function StealthBadge({ signal }: { signal: Signal }) {
   );
 }
 
+function OIActivityBadge({ signal }: { signal: Signal }) {
+  const tier = signal.stealth_tier;
+  const cumOI = signal.stealth_cum_oi_pct || 0;
+  const consecutive = signal.stealth_consecutive_scans || 0;
+  const phase = signal.stealth_phase || "";
+  const hourlyRate = signal.stealth_hourly_rate || 0;
+  const rateSlowing = hourlyRate < 0.3 && cumOI > 15;
+  const ceWriting = signal.ce_writing_count || 0;
+  const peWriting = signal.pe_writing_count || 0;
+  const ceBuying = signal.ce_buying_count || 0;
+  const peBuying = signal.pe_buying_count || 0;
+  let ceCovering: { strike: number; delta: number }[] = [];
+  let peCovering: { strike: number; delta: number }[] = [];
+  try {
+    ceCovering = JSON.parse((signal.gold_zone_ce_covering || "[]").replace(/'/g, '"'));
+    peCovering = JSON.parse((signal.gold_zone_pe_covering || "[]").replace(/'/g, '"'));
+  } catch {}
+  if (!tier && !ceCovering.length && !peCovering.length && cumOI < 5) return null;
+  const tierCfg: Record<string, { bg: string; border: string; color: string; icon: string; label: string }> = {
+    Elite:  { bg: "rgba(220,38,38,0.08)",  border: "#DC2626", color: "#F87171", icon: "🔴", label: "Elite OI Buildup"  },
+    Strong: { bg: "rgba(234,88,12,0.08)",  border: "#EA580C", color: "#FB923C", icon: "🟠", label: "Strong OI Buildup" },
+    Watch:  { bg: "rgba(202,138,4,0.08)",  border: "#CA8A04", color: "#FCD34D", icon: "🟡", label: "OI Watch"          },
+  };
+  const cfg = tier ? tierCfg[tier] : { bg: "var(--color-background-secondary)", border: "var(--color-border-secondary)", color: "var(--color-text-secondary)", icon: "📊", label: "OI Activity" };
+  const phaseLabel: Record<string, string> = { early: "Early session", build: "Build phase", late: "Late session" };
+  const fmt = (n: number) => Math.abs(n) >= 1000 ? `${(Math.abs(n)/1000).toFixed(1)}K` : `${Math.abs(n)}`;
+  const writerLabel = ceWriting > peWriting ? `CE side active · ${ceWriting} strikes writing` : peWriting > ceWriting ? `PE side active · ${peWriting} strikes writing` : ceWriting === 0 && peWriting === 0 ? "" : "Both sides active";
+  const ceTotal = ceCovering.reduce((a, r) => a + Math.abs(r.delta), 0);
+  const peTotal = peCovering.reduce((a, r) => a + Math.abs(r.delta), 0);
+  const atmLabel = !ceCovering.length && !peCovering.length ? "" : ceTotal > peTotal * 1.3 ? "CE OI reducing near ATM" : peTotal > ceTotal * 1.3 ? "PE OI reducing near ATM" : "Both CE & PE OI reducing near ATM";
+  return (
+    <div style={{ marginTop: 10, padding: "12px 14px", background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 13 }}>{cfg.icon}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: cfg.color, letterSpacing: "0.04em" }}>{cfg.label}</span>
+          {rateSlowing && tier && (<span style={{ fontSize: 10, fontWeight: 600, background: "rgba(16,185,129,0.15)", color: "#10B981", border: "1px solid #10B981", borderRadius: 4, padding: "1px 5px", marginLeft: 4 }}>⚡ COILING</span>)}
+        </div>
+        {tier && (<span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{phaseLabel[phase] || phase}</span>)}
+      </div>
+      {tier && (
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Session OI</div><div style={{ fontSize: 13, fontWeight: 600, color: cfg.color }}>+{cumOI}%</div></div>
+          <div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Consecutive</div><div style={{ fontSize: 13, fontWeight: 600, color: cfg.color }}>{consecutive} scans</div></div>
+          <div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>Hourly rate</div><div style={{ fontSize: 13, fontWeight: 600, color: rateSlowing ? "#10B981" : cfg.color }}>{hourlyRate > 0 ? "+" : ""}{hourlyRate}%{rateSlowing ? " ↓" : ""}</div></div>
+        </div>
+      )}
+      {writerLabel !== "" && (
+        <div style={{ fontSize: 11, color: "var(--color-text-secondary)", borderTop: tier ? "1px solid var(--color-border-tertiary)" : "none", paddingTop: tier ? 6 : 0 }}>
+          📝 <strong>Writer activity:</strong> {writerLabel}
+          {(ceBuying > 0 || peBuying > 0) && (<span style={{ marginLeft: 8, color: "var(--color-text-tertiary)" }}>· Buying: CE {ceBuying} · PE {peBuying} strikes</span>)}
+        </div>
+      )}
+      {(ceCovering.length > 0 || peCovering.length > 0) && (
+        <div style={{ borderTop: "1px solid var(--color-border-tertiary)", paddingTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", fontWeight: 600, letterSpacing: "0.04em" }}>ATM ZONE OI CHANGE</div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {ceCovering.length > 0 && (<div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginBottom: 2 }}>CE OI reducing</div>{ceCovering.map((r, i) => (<div key={i} style={{ fontSize: 12, color: "var(--color-text-primary)" }}>₹{fmt(r.strike)} <span style={{ color: "#888" }}>−{fmt(r.delta)}</span></div>))}</div>)}
+            {peCovering.length > 0 && (<div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginBottom: 2 }}>PE OI reducing</div>{peCovering.map((r, i) => (<div key={i} style={{ fontSize: 12, color: "var(--color-text-primary)" }}>₹{fmt(r.strike)} <span style={{ color: "#888" }}>−{fmt(r.delta)}</span></div>))}</div>)}
+          </div>
+          {atmLabel && (<div style={{ fontSize: 11, color: "var(--color-text-tertiary)", fontStyle: "italic" }}>{atmLabel}</div>)}
+        </div>
+      )}
+      <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", borderTop: "1px solid var(--color-border-tertiary)", paddingTop: 6, fontStyle: "italic" }}>
+        OI data is observational only · Not a trade recommendation · Consult a SEBI-registered advisor
+      </div>
+    </div>
+  );
+}
+
 function SignalCard({ signal }: { signal: Signal }) {
   const meta    = COMMODITY_META[signal.commodity] || { label: signal.commodity };
   const isFired = signal.status === "fired";
@@ -687,8 +757,7 @@ function SignalCard({ signal }: { signal: Signal }) {
         note={signal.trade_signal_note || ""}
         action={signal.trade_signal_action || ""}
       />
-      <StealthBadge signal={signal} />
-      <GoldZoneBadge signal={signal} />
+      <OIActivityBadge signal={signal} />
 
       {(isFired || isWatch) && (
         <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10, marginTop: 8 }}>

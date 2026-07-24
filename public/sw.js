@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.7'
+const SW_VERSION = 'v2.0.8'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
@@ -52,14 +52,20 @@ function scheduleNext() {
     // Extend SW lifetime by doing a fetch
     const keepAlivePromise = fetch(`${API}/health`).catch(() => {})
 
-    const checkPromise = Promise.all([keepAlivePromise, runChecks()]).then(() => {
+    Promise.all([keepAlivePromise, runChecks()]).then(() => {
       scheduleNext()
     }).catch(e => {
       console.error('[SW] Check failed:', e)
       scheduleNext()
     })
-
-    event?.waitUntil?.(checkPromise)
+    // BUG FIX (Jul 24 2026): this used to end with
+    // `event?.waitUntil?.(checkPromise)` -- but `event` was never defined
+    // in this scope (waitUntil only exists on real dispatched events like
+    // push/install/periodicsync, not inside a plain setTimeout callback).
+    // That line threw an uncaught ReferenceError on every single cycle,
+    // silently failing the one thing it was meant to do: extend the SW's
+    // lifetime so the browser wouldn't kill it mid-check. Removed -- the
+    // Promise chain above still runs to completion on its own regardless.
   }, CHECK_INTERVAL_MS)
 }
 

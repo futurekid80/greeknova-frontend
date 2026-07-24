@@ -628,7 +628,7 @@ function OIActivityBadge({ signal }: { signal: Signal }) {
   };
   const cfg = tier ? tierCfg[tier] : { bg: "var(--color-background-secondary)", border: "var(--color-border-secondary)", color: "var(--color-text-secondary)", icon: "📊", label: "OI Activity" };
   const phaseLabel: Record<string, string> = { early: "Early session", build: "Build phase", late: "Late session" };
-  const fmt = (n: number) => Math.abs(n) >= 1000 ? `${(Math.abs(n)/1000).toFixed(1)}K` : `${Math.abs(n)}`;
+  const fmt = (n: number) => Math.abs(n) >= 10000 ? `${(Math.abs(n)/1000).toFixed(0)}K` : `${Math.abs(n).toLocaleString('en-IN')}`;
   const writerLabel = ceWriting > peWriting ? `CE side active · ${ceWriting} strikes writing` : peWriting > ceWriting ? `PE side active · ${peWriting} strikes writing` : ceWriting === 0 && peWriting === 0 ? "" : "Both sides active";
   const ceTotal = ceCovering.reduce((a, r) => a + Math.abs(r.delta), 0);
   const peTotal = peCovering.reduce((a, r) => a + Math.abs(r.delta), 0);
@@ -747,10 +747,7 @@ function SignalCard({ signal }: { signal: Signal }) {
         resistance={signal.resistance_strike || 0}
         price={signal.current_price || 0}
       />
-      <CEPEDelta
-        ceDelta={signal.ce_oi_delta || 0}
-        peDelta={signal.pe_oi_delta || 0}
-      />
+
       <TradeSignalBadge
         signal={signal.trade_signal || "neutral"}
         icon={signal.trade_signal_icon || ""}

@@ -665,7 +665,7 @@ function OIActivityBadge({ signal }: { signal: Signal }) {
       {writerLabel !== "" && (
         <div style={{ fontSize: 11, color: "var(--color-text-secondary)", borderTop: tier ? "1px solid var(--color-border-tertiary)" : "none", paddingTop: tier ? 6 : 0 }}>
           📝 <strong>Writer activity:</strong> {writerLabel}
-          {(ceBuying > 0 || peBuying > 0) && (<span style={{ marginLeft: 8, color: "var(--color-text-tertiary)" }}>· Buying: CE {ceBuying} · PE {peBuying} strikes</span>)}
+
         </div>
       )}
       {(ceCovering.length > 0 || peCovering.length > 0) && (

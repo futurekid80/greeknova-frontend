@@ -10,9 +10,11 @@ interface ScanRow {
   state: 'breakout' | 'bursting' | 'pausing'
   burst_date: string
   burst_high: number
+  burst_low: number | null
   burst_ratio: number
   baseline_used: string
   burst_is_green: boolean | null
+  avg_pause_vol_ratio: number | null
   pause_days: number
   breakout_date?: string
   breakout_vol_ratio?: number
@@ -196,7 +198,20 @@ export default function SpotVolumeScanner() {
                           ? `${fmtDate(r.breakout_date || '')} · ${r.breakout_vol_ratio}x`
                           : r.state === 'bursting'
                           ? 'Live — forming now'
-                          : `${r.pause_days} day${r.pause_days === 1 ? '' : 's'}`}
+                          : (
+                            <>
+                              {r.pause_days} day{r.pause_days === 1 ? '' : 's'}
+                              {r.avg_pause_vol_ratio != null && (
+                                <span
+                                  className={`ml-1.5 text-xs ${r.avg_pause_vol_ratio < 0.8 ? 'text-cyan-500' : 'text-gray-600'}`}
+                                  title={r.avg_pause_vol_ratio < 0.8
+                                    ? 'Volume has genuinely gone quiet during the pause — a real dull consolidation'
+                                    : 'Volume during the pause is close to or above average — not a clean, quiet coil'}>
+                                  · vol {r.avg_pause_vol_ratio}x avg
+                                </span>
+                              )}
+                            </>
+                          )}
                       </td>
                     </tr>
                   )
@@ -213,6 +228,8 @@ export default function SpotVolumeScanner() {
           <span><span className="text-emerald-400">Breakout</span> — price broke out with volume confirmation</span>
           <span><span className="text-red-400">⚠️</span> — spot and futures volume ratios diverge notably, often a rollover-week artifact on the futures side</span>
           <span>🟢/🔴 next to Burst Day — burst candle closed green (accumulation) or red (capitulation/selling climax)</span>
+          <span><span className="text-cyan-500">vol Xx avg</span> next to Pausing days — average volume during the pause vs its normal baseline; under 0.8x means it's genuinely gone quiet, a real dull consolidation rather than noisy chop</span>
+          <span>A pause disappears from this list entirely if price closes below the burst day's low — that's a failed setup, not a healthy hold, so it's dropped rather than shown as if nothing happened</span>
         </div>
       </div>
     </div>

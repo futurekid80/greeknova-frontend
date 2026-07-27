@@ -12,6 +12,7 @@ interface ScanRow {
   burst_high: number
   burst_ratio: number
   baseline_used: string
+  burst_is_green: boolean | null
   pause_days: number
   breakout_date?: string
   breakout_vol_ratio?: number
@@ -168,7 +169,18 @@ export default function SpotVolumeScanner() {
                         {futRatio != null ? `${futRatio}x` : '—'}
                         {divergent && <span className="ml-1 text-[10px]" title="Spot and futures volume diverge — possible rollover distortion">⚠️</span>}
                       </td>
-                      <td className="py-3 px-3 text-gray-400">{fmtDate(r.burst_date)}</td>
+                      <td className="py-3 px-3 text-gray-400">
+                        {fmtDate(r.burst_date)}
+                        {r.burst_is_green != null && (
+                          <span
+                            className="ml-1.5"
+                            title={r.burst_is_green
+                              ? 'Burst day closed green — buyers stepped in (like a clean coil-then-breakout setup)'
+                              : 'Burst day closed red — often a capitulation/selling climax rather than accumulation'}>
+                            {r.burst_is_green ? '🟢' : '🔴'}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-3 text-right text-gray-400">{r.burst_high?.toLocaleString()}</td>
                       <td className="py-3 px-3 text-gray-400">
                         {r.state === 'breakout'
@@ -188,6 +200,7 @@ export default function SpotVolumeScanner() {
           <span><span className="text-amber-400">Breakout (vol pending)</span> — price broke out, volume confirmation still building intraday</span>
           <span><span className="text-emerald-400">Breakout</span> — price broke out with volume confirmation</span>
           <span><span className="text-red-400">⚠️</span> — spot and futures volume ratios diverge notably, often a rollover-week artifact on the futures side</span>
+          <span>🟢/🔴 next to Burst Day — burst candle closed green (accumulation) or red (capitulation/selling climax)</span>
         </div>
       </div>
     </div>

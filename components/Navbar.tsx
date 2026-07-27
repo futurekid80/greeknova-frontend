@@ -48,6 +48,7 @@ const NAV_GROUPS = [
       { href: '/signals/intraday', label: '📋 Intraday Log' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
       { href: '/signals/wall-migration', label: '🧱 Wall Migration' },
+      { href: '/spotvolume', label: '⚡ Spot Volume Breakout' },
       { href: '/rollover', label: '🔄 Rollover Tracker' },
       { href: '/delivery-confluence', label: '📦 Delivery Confluence' }
     ]

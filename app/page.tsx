@@ -921,7 +921,10 @@ export default function MarketPulse() {
   const [activeSector, setActiveSector] = useState<string|null>(null)
   const [activeBreadth, setActiveBreadth] = useState<'bullish'|'bearish'|'neutral'|null>(null)
   const [ivData, setIvData] = useState<Record<string, {atm_iv:number, iv_min:number, iv_max:number}>>({})
-  const [adxData, setAdxData] = useState<Record<string, {adx:number, trending:boolean, watch:boolean, source:string}>>({})
+  // ADX map fetch removed (Jul 27 2026) — built and shipped, but results
+  // weren't giving the desired signal quality, so it's turned off for now
+  // rather than kept running (it was also the single slowest fetch on this
+  // page by a wide margin — 12+s vs under 1.5s for everything else).
 
   useEffect(() => {
     async function checkAuth() {
@@ -940,15 +943,13 @@ export default function MarketPulse() {
       if (cached && cacheAge < 5 * 60 * 1000) { setCprData(JSON.parse(cached)); setLoading(false) }
     } catch {}
     try {
-      const [cprRes, pulseRes, uoaRes, adxRes] = await Promise.all([
+      const [cprRes, pulseRes, uoaRes] = await Promise.all([
         fetch(`${API}/cpr-scanner`),
         fetch(`${API}/oi-pulse`),
-        fetch(`${API}/uoa`),
-        fetch(`${API}/adx-map`)
+        fetch(`${API}/uoa`)
       ])
-      const [cprJson, pulseJson, uoaJson, adxJson] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json(), adxRes.json()])
+      const [cprJson, pulseJson, uoaJson] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json()])
       setUoaSignals(uoaJson?.signals || [])
-      setAdxData(adxJson?.data || {})
       const cprRows: CPRRow[] = cprJson?.data || []
       setCprData(cprRows)
       try {

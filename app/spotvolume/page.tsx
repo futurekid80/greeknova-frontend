@@ -1,13 +1,13 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, TrendingUp, Clock, Zap } from 'lucide-react'
+import { RefreshCw, TrendingUp, Clock, Zap, Flame } from 'lucide-react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
 interface ScanRow {
   symbol: string
-  state: 'breakout' | 'pausing'
+  state: 'breakout' | 'bursting' | 'pausing'
   burst_date: string
   burst_high: number
   burst_ratio: number
@@ -29,7 +29,7 @@ export default function SpotVolumeScanner() {
   const [rows, setRows] = useState<ScanRow[]>([])
   const [futMap, setFutMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState<'all' | 'breakout' | 'pausing'>('all')
+  const [filter, setFilter] = useState<'all' | 'breakout' | 'bursting' | 'pausing'>('all')
   const [scanned, setScanned] = useState(0)
   const [generatedAt, setGeneratedAt] = useState<string>('')
 
@@ -64,6 +64,7 @@ export default function SpotVolumeScanner() {
   })
 
   const breakoutCount = rows.filter(r => r.state === 'breakout').length
+  const burstingCount = rows.filter(r => r.state === 'bursting').length
   const pausingCount = rows.filter(r => r.state === 'pausing').length
   const confirmedCount = rows.filter(r => r.state === 'breakout' && r.confirmed).length
 
@@ -85,7 +86,7 @@ export default function SpotVolumeScanner() {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-4 gap-3 mb-6">
           <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">Breakout Confirmed</p>
             <p className="text-2xl font-black text-emerald-400">{confirmedCount}</p>
@@ -94,6 +95,10 @@ export default function SpotVolumeScanner() {
             <p className="text-xs text-gray-500 mb-1">Breakout (vol pending)</p>
             <p className="text-2xl font-black text-amber-400">{breakoutCount - confirmedCount}</p>
           </div>
+          <div className="bg-orange-950/20 border border-orange-800/40 rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">Bursting Now</p>
+            <p className="text-2xl font-black text-orange-400">{burstingCount}</p>
+          </div>
           <div className="bg-cyan-950/20 border border-cyan-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">Pausing (watching)</p>
             <p className="text-2xl font-black text-cyan-400">{pausingCount}</p>
@@ -101,10 +106,10 @@ export default function SpotVolumeScanner() {
         </div>
 
         <div className="flex items-center gap-2 mb-4">
-          {(['all', 'breakout', 'pausing'] as const).map(f => (
+          {(['all', 'breakout', 'bursting', 'pausing'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
               className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${filter === f ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
-              {f === 'all' ? 'All' : f === 'breakout' ? 'Breakout' : 'Pausing'}
+              {f === 'all' ? 'All' : f === 'breakout' ? 'Breakout' : f === 'bursting' ? 'Bursting' : 'Pausing'}
             </button>
           ))}
           <button onClick={load} disabled={loading}
@@ -155,6 +160,10 @@ export default function SpotVolumeScanner() {
                               <Zap size={13}/> Breakout (vol pending)
                             </span>
                           )
+                        ) : r.state === 'bursting' ? (
+                          <span className="flex items-center gap-1 text-orange-400 text-xs font-bold">
+                            <Flame size={13}/> Bursting Now
+                          </span>
                         ) : (
                           <span className="flex items-center gap-1 text-cyan-400 text-xs font-bold">
                             <Clock size={13}/> Pausing
@@ -185,6 +194,8 @@ export default function SpotVolumeScanner() {
                       <td className="py-3 px-3 text-gray-400">
                         {r.state === 'breakout'
                           ? `${fmtDate(r.breakout_date || '')} · ${r.breakout_vol_ratio}x`
+                          : r.state === 'bursting'
+                          ? 'Live — forming now'
                           : `${r.pause_days} day${r.pause_days === 1 ? '' : 's'}`}
                       </td>
                     </tr>
@@ -196,7 +207,8 @@ export default function SpotVolumeScanner() {
         )}
 
         <div className="flex flex-wrap items-center gap-6 mt-4 text-xs text-gray-600">
-          <span><span className="text-cyan-400">Pausing</span> — burst happened, price hasn't broken the burst-day high yet</span>
+          <span><span className="text-orange-400">Bursting Now</span> — volume burst happening today, still live — its high is still forming, so there's nothing to break out above yet</span>
+          <span><span className="text-cyan-400">Pausing</span> — burst happened on an earlier day, price hasn't broken that day's high yet</span>
           <span><span className="text-amber-400">Breakout (vol pending)</span> — price broke out, volume confirmation still building intraday</span>
           <span><span className="text-emerald-400">Breakout</span> — price broke out with volume confirmation</span>
           <span><span className="text-red-400">⚠️</span> — spot and futures volume ratios diverge notably, often a rollover-week artifact on the futures side</span>

@@ -2,7 +2,6 @@
 import './globals.css'
 import DisclaimerModal from '@/components/DisclaimerModal'
 import AlertsSidebar from '@/components/AlertsSidebar'
-import { usePathname } from 'next/navigation'
 import { AlertsProvider } from '@/contexts/AlertsContext'
 import { useEffect, useState } from 'react'
 
@@ -47,13 +46,6 @@ function HolidayBanner() {
   return null
 }
 
-function AlertsSidebarWrapper() {
-  const pathname = usePathname()
-  const mcxPages = ['/trend-ignition', '/oi-map', '/how-to-read']
-  if (mcxPages.some(p => pathname.startsWith(p))) return null
-  return <AlertsSidebar />
-}
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -73,7 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AlertsProvider>
           <DisclaimerModal />
           <HolidayBanner />
-          <AlertsSidebarWrapper />
+          <AlertsSidebar />
           {children}
         </AlertsProvider>
       </body>

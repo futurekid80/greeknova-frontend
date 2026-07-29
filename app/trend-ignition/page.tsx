@@ -793,6 +793,15 @@ export default function TrendIgnitionPage() {
   const [authChecked, setAuthChecked] = useState(false)
 
   // Auth gate — redirect to login if no session
+  const [signals, setSignals]           = useState<Signal[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate]     = useState<Date | null>(null);
+  const [countdown, setCountdown]       = useState(REFRESH_INTERVAL);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [alertsOn, setAlertsOn]         = useState(false);
+  const [alertPermission, setAlertPermission] = useState<string>("default");
+
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession()
@@ -804,20 +813,6 @@ export default function TrendIgnitionPage() {
     }
     checkAuth()
   }, [])
-
-  if (!authChecked) return null
-  if (!MCX_ENABLED) {
-    return <div style={{ padding: "4rem 2rem", textAlign: "center", color: "var(--color-text-secondary)" }}><h2>404 — Page not found</h2></div>;
-  }
-
-  const [signals, setSignals]           = useState<Signal[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState<string | null>(null);
-  const [lastUpdate, setLastUpdate]     = useState<Date | null>(null);
-  const [countdown, setCountdown]       = useState(REFRESH_INTERVAL);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [alertsOn, setAlertsOn]         = useState(false);
-  const [alertPermission, setAlertPermission] = useState<string>("default");
 
   // Use ref so interval always calls the latest version of fetch
   const fetchRef = useRef<(silent?: boolean) => Promise<void>>(() => Promise.resolve());
@@ -893,6 +888,11 @@ export default function TrendIgnitionPage() {
         setAlertsOn(p === "granted");
       });
     }
+  }
+
+  if (!authChecked) return null;
+  if (!MCX_ENABLED) {
+    return <div style={{ padding: "4rem 2rem", textAlign: "center", color: "var(--color-text-secondary)" }}><h2>404 — Page not found</h2></div>;
   }
 
   const firedCount  = signals.filter(s => s.status === "fired").length;

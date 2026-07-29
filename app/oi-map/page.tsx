@@ -284,7 +284,7 @@ export default function OIMapPage() {
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) window.location.href = '/login'
+      if (!session) window.location.href = '/login?returnTo=' + window.location.pathname
     }
     checkAuth()
   }, [])

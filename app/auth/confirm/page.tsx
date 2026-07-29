@@ -40,7 +40,9 @@ function ConfirmHandler() {
           setStatus(`Verify: ${error ? error.message : 'SUCCESS user=' + data.session?.user?.email}`)
           await new Promise(r => setTimeout(r, 3000))
           if (error) throw error
-          router.push('/')
+          const rp = new URLSearchParams(window.location.search)
+          const returnTo = rp.get('returnTo') || '/'
+          router.push(returnTo)
           return
         }
 
@@ -51,7 +53,9 @@ function ConfirmHandler() {
         await new Promise(r => setTimeout(r, 3000))
 
         if (session) {
-          router.push('/')
+          const rp2 = new URLSearchParams(window.location.search)
+          const returnTo2 = rp2.get('returnTo') || '/'
+          router.push(returnTo2)
           return
         }
 

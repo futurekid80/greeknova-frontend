@@ -62,8 +62,6 @@ function AccumulationBars({ history, commodity }: { history: HistoryRow[]; commo
   // Show every nth label to avoid crowding
   const showEvery = history.length > 20 ? 4 : history.length > 10 ? 2 : 1;
 
-  if (!authChecked) return null
-
   return (
     <div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: BAR_MAX_H + 8, paddingBottom: 4, borderBottom: "0.5px solid var(--color-border-tertiary)", overflowX: "auto" }}>
@@ -281,7 +279,6 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[] | undefine
 }
 
 export default function OIMapPage() {
-
   const [authChecked, setAuthChecked] = useState(false)
 
   // Auth gate — redirect to login if no session

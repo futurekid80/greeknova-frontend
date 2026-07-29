@@ -294,10 +294,6 @@ export default function OIMapPage() {
     checkAuth()
   }, [])
 
-  if (!MCX_ENABLED) {
-    return <div style={{ padding: "4rem 2rem", textAlign: "center", color: "var(--color-text-secondary)" }}><h2>404 — Page not found</h2></div>;
-  }
-
   const [selected, setSelected]   = useState("CRUDEOIL");
   const [data, setData]           = useState<OIMapData | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -349,6 +345,11 @@ export default function OIMapPage() {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
+
+  if (!authChecked) return null;
+  if (!MCX_ENABLED) {
+    return <div style={{ padding: "4rem 2rem", textAlign: "center", color: "var(--color-text-secondary)" }}><h2>404 — Page not found</h2></div>;
+  }
 
   const meta = COMMODITIES.find(c => c.key === selected)!;
   const summary = data?.session_summary;

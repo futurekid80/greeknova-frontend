@@ -57,7 +57,7 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
-    window.location.href = '/'
+    const rTo = new URLSearchParams(window.location.search).get('returnTo') || '/'; window.location.href = rTo
   }
 
   return (

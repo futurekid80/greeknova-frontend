@@ -790,14 +790,22 @@ function SignalCard({ signal }: { signal: Signal }) {
 
 export default function TrendIgnitionPage() {
 
+  const [authChecked, setAuthChecked] = useState(false)
+
   // Auth gate — redirect to login if no session
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) window.location.href = '/login?returnTo=' + window.location.pathname
+      if (!session) {
+        window.location.href = '/login?returnTo=' + window.location.pathname
+      } else {
+        setAuthChecked(true)
+      }
     }
     checkAuth()
   }, [])
+
+  if (!authChecked) return null
   if (!MCX_ENABLED) {
     return <div style={{ padding: "4rem 2rem", textAlign: "center", color: "var(--color-text-secondary)" }}><h2>404 — Page not found</h2></div>;
   }

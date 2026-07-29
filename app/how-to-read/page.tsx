@@ -7,11 +7,16 @@ export default function HowToReadPage() {
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) window.location.href = "/login?returnTo=" + window.location.pathname;
+      if (!session) {
+        window.location.href = "/login?returnTo=" + window.location.pathname;
+      } else {
+        setAuthChecked(true);
+      }
     }
     checkAuth();
   }, []);
 
+  const [authChecked, setAuthChecked] = useState(false)
   const [open, setOpen] = useState<string | null>(null);
   const toggle = (id: string) => setOpen(open === id ? null : id);
 
@@ -36,6 +41,8 @@ export default function HowToReadPage() {
   const Example = ({ children }: { children: React.ReactNode }) => (
     <div style={{ background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, padding: "12px 14px", margin: "12px 0", fontSize: 12, lineHeight: 1.8 }}>{children}</div>
   );
+
+  if (!authChecked) return null
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px" }}>

@@ -278,6 +278,102 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[] | undefine
   );
 }
 
+
+interface SessionExits {
+  commodity: string;
+  ce_exits: { strike: number; total_exited: number }[];
+  pe_exits: { strike: number; total_exited: number }[];
+  ce_total_exited: number;
+  pe_total_exited: number;
+  divergence: "pe_heavy" | "ce_heavy" | null;
+}
+
+function SessionExitSummary({ commodity }: { commodity: string }) {
+  const [exits, setExits] = useState<SessionExits | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchExits() {
+      try {
+        const res = await fetch(`/api/mcx/session-exits/${commodity}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setExits(data);
+      } catch {}
+    }
+    fetchExits();
+    const interval = setInterval(fetchExits, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [commodity]);
+
+  if (!exits) return null;
+  if (exits.ce_exits.length === 0 && exits.pe_exits.length === 0) return null;
+
+  const fmt = (n: number) => Math.abs(n).toLocaleString("en-IN");
+
+  const divergenceCfg: Record<string, any> = {
+    pe_heavy: {
+      color: "#E24B4A", bg: "rgba(220,38,38,0.08)", border: "#DC2626",
+      label: "\u26a0\ufe0f PE exits dominant \u2014 bulls exiting more than bears",
+      note: "If price is rallying, this weakens the case for the move. Existing bulls taking profit into strength.",
+    },
+    ce_heavy: {
+      color: "#1D9E75", bg: "rgba(29,158,117,0.08)", border: "#1D9E75",
+      label: "\u26a0\ufe0f CE exits dominant \u2014 bears exiting more than bulls",
+      note: "If price is falling, this weakens the case for the move. Existing bears covering into weakness.",
+    },
+  };
+
+  const cfg = exits.divergence ? divergenceCfg[exits.divergence] : null;
+
+  return (
+    <div style={{ marginTop: 16, border: "1px solid var(--color-border-secondary)", borderRadius: 8, overflow: "hidden" }}>
+      <button onClick={() => setExpanded(!expanded)} style={{ width: "100%", textAlign: "left", padding: "12px 14px", background: "var(--color-background-secondary)", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>\ud83d\udccb Session Exit Summary</div>
+          <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 2 }}>
+            Total today \u00b7 PE \u2212{fmt(exits.pe_total_exited)} lots \u00b7 CE \u2212{fmt(exits.ce_total_exited)} lots
+          </div>
+        </div>
+        <span style={{ fontSize: 16, color: "var(--color-text-tertiary)" }}>{expanded ? "\u2212" : "+"}</span>
+      </button>
+
+      {cfg && (
+        <div style={{ padding: "10px 14px", background: cfg.bg, borderTop: `1px solid ${cfg.border}`, fontSize: 12 }}>
+          <div style={{ color: cfg.color, fontWeight: 600, marginBottom: 4 }}>{cfg.label}</div>
+          <div style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>{cfg.note}</div>
+        </div>
+      )}
+
+      {expanded && (
+        <div style={{ padding: "12px 14px", display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#1D9E75", marginBottom: 6 }}>PE exited (bulls leaving)</div>
+            {exits.pe_exits.length === 0 && (<div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>No PE exits today</div>)}
+            {exits.pe_exits.map((e, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
+                <span style={{ color: "var(--color-text-primary)" }}>\u20b9{e.strike.toLocaleString("en-IN")}</span>
+                <span style={{ color: "#E24B4A" }}>\u2212{fmt(e.total_exited)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#E24B4A", marginBottom: 6 }}>CE exited (bears leaving)</div>
+            {exits.ce_exits.length === 0 && (<div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>No CE exits today</div>)}
+            {exits.ce_exits.map((e, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
+                <span style={{ color: "var(--color-text-primary)" }}>\u20b9{e.strike.toLocaleString("en-IN")}</span>
+                <span style={{ color: "#1D9E75" }}>\u2212{fmt(e.total_exited)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OIMapPage() {
   const [authChecked, setAuthChecked] = useState(false)
 
@@ -444,6 +540,7 @@ export default function OIMapPage() {
               PE (green) = put writers defending · CE (red) = call writers capping
             </div>
             <OIMapChart strikes={data.strike_oi} currentPrice={data.current_price} />
+            <SessionExitSummary commodity={selected} />
           </div>
 
           {/* OI Accumulation bars — only show when data exists */}

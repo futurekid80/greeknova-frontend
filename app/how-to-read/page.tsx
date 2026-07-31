@@ -151,6 +151,28 @@ export default function HowToReadPage() {
         <p>Tallest green bar = strongest support. Tallest red bar = strongest resistance. When a bar shifts from solid to hollow — that side is losing conviction at that strike.</p>
       </Section>
 
+      <Section id="exits" title="Session Exit Summary — spotting divergence">
+        <p>The ATM Zone shows only the <strong>latest scan</strong>. The Session Exit Summary on the OI Map page shows <strong>cumulative exits for the entire day</strong> — this persists even if a strike's exit activity happened hours ago.</p>
+        <p>This matters because a single scan can hide the bigger picture. If bulls have been quietly exiting all session while price holds up, that is a real warning sign the current move lacks fresh conviction.</p>
+        <div style={{ margin: "12px 0" }}>
+          <div style={{ marginBottom: 8 }}><Tag label="PE exited" color="#1D9E75" /> Total put-writer exits today = bulls closing floor positions.</div>
+          <div style={{ marginBottom: 8 }}><Tag label="CE exited" color="#E24B4A" /> Total call-writer exits today = bears closing ceiling positions.</div>
+        </div>
+        <p><strong>Divergence flag</strong> appears when one side has exited significantly more than the other (1.5x or more, minimum 50 lots):</p>
+        <ul style={{ paddingLeft: 20 }}>
+          <li><strong>PE heavy</strong> = bulls have been exiting more than bears. Caution if price is rallying — the move may be running without fresh buyer conviction.</li>
+          <li><strong>CE heavy</strong> = bears have been exiting more than bulls. Caution if price is falling — the move may be running without fresh seller conviction.</li>
+        </ul>
+        <Example>
+          <strong>How to use it:</strong><br />
+          Price is rallying, but the Session Exit Summary shows PE exits far exceed CE exits.<br />
+          This means the existing put writers (bulls who bet the floor would hold) are taking profit and leaving —
+          not fresh buyers stepping in.<br /><br />
+          A rally built mostly on exiting shorts/covering rather than fresh long conviction is more likely to fade.
+          Worth watching for a reversal setup rather than chasing the move.
+        </Example>
+      </Section>
+
       <Section id="limitations" title="Limitations to keep in mind">
         <ul style={{ paddingLeft: 20 }}>
           <li>MCX options are less liquid than NSE. Small OI moves can look significant on thin contracts.</li>

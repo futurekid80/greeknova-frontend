@@ -315,12 +315,12 @@ function SessionExitSummary({ commodity }: { commodity: string }) {
   const divergenceCfg: Record<string, any> = {
     pe_heavy: {
       color: "#E24B4A", bg: "rgba(220,38,38,0.08)", border: "#DC2626",
-      label: "\u26a0\ufe0f PE exits dominant \u2014 bulls exiting more than bears",
+      label: "⚠️ PE exits dominant \u2014 bulls exiting more than bears",
       note: "If price is rallying, this weakens the case for the move. Existing bulls taking profit into strength.",
     },
     ce_heavy: {
       color: "#1D9E75", bg: "rgba(29,158,117,0.08)", border: "#1D9E75",
-      label: "\u26a0\ufe0f CE exits dominant \u2014 bears exiting more than bulls",
+      label: "⚠️ CE exits dominant \u2014 bears exiting more than bulls",
       note: "If price is falling, this weakens the case for the move. Existing bears covering into weakness.",
     },
   };
@@ -331,12 +331,12 @@ function SessionExitSummary({ commodity }: { commodity: string }) {
     <div style={{ marginTop: 16, border: "1px solid var(--color-border-secondary)", borderRadius: 8, overflow: "hidden" }}>
       <button onClick={() => setExpanded(!expanded)} style={{ width: "100%", textAlign: "left", padding: "12px 14px", background: "var(--color-background-secondary)", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>\ud83d\udccb Session Exit Summary</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>📋 Session Exit Summary</div>
           <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 2 }}>
-            Total today \u00b7 PE \u2212{fmt(exits.pe_total_exited)} lots \u00b7 CE \u2212{fmt(exits.ce_total_exited)} lots
+            Total today · PE −{fmt(exits.pe_total_exited)} lots · CE −{fmt(exits.ce_total_exited)} lots
           </div>
         </div>
-        <span style={{ fontSize: 16, color: "var(--color-text-tertiary)" }}>{expanded ? "\u2212" : "+"}</span>
+        <span style={{ fontSize: 16, color: "var(--color-text-tertiary)" }}>{expanded ? "−" : "+"}</span>
       </button>
 
       {cfg && (
@@ -353,8 +353,8 @@ function SessionExitSummary({ commodity }: { commodity: string }) {
             {exits.pe_exits.length === 0 && (<div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>No PE exits today</div>)}
             {exits.pe_exits.map((e, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
-                <span style={{ color: "var(--color-text-primary)" }}>\u20b9{e.strike.toLocaleString("en-IN")}</span>
-                <span style={{ color: "#E24B4A" }}>\u2212{fmt(e.total_exited)}</span>
+                <span style={{ color: "var(--color-text-primary)" }}>₹{e.strike.toLocaleString("en-IN")}</span>
+                <span style={{ color: "#E24B4A" }}>−{fmt(e.total_exited)}</span>
               </div>
             ))}
           </div>
@@ -363,8 +363,8 @@ function SessionExitSummary({ commodity }: { commodity: string }) {
             {exits.ce_exits.length === 0 && (<div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>No CE exits today</div>)}
             {exits.ce_exits.map((e, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
-                <span style={{ color: "var(--color-text-primary)" }}>\u20b9{e.strike.toLocaleString("en-IN")}</span>
-                <span style={{ color: "#1D9E75" }}>\u2212{fmt(e.total_exited)}</span>
+                <span style={{ color: "var(--color-text-primary)" }}>₹{e.strike.toLocaleString("en-IN")}</span>
+                <span style={{ color: "#1D9E75" }}>−{fmt(e.total_exited)}</span>
               </div>
             ))}
           </div>

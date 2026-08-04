@@ -281,16 +281,23 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[] | undefine
 
 interface SessionExits {
   commodity: string;
-  ce_exits: { strike: number; total_exited: number }[];
-  pe_exits: { strike: number; total_exited: number }[];
-  ce_total_exited: number;
-  pe_total_exited: number;
+  current_price: number;
+  zone: number;
+  ce_exits_near: { strike: number; total_exited: number }[];
+  pe_exits_near: { strike: number; total_exited: number }[];
+  ce_total_near: number;
+  pe_total_near: number;
+  ce_exits_far: { strike: number; total_exited: number }[];
+  pe_exits_far: { strike: number; total_exited: number }[];
+  ce_total_far: number;
+  pe_total_far: number;
   divergence: "pe_heavy" | "ce_heavy" | null;
 }
 
 function SessionExitSummary({ commodity }: { commodity: string }) {
   const [exits, setExits] = useState<SessionExits | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [showFar, setShowFar] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -308,24 +315,38 @@ function SessionExitSummary({ commodity }: { commodity: string }) {
   }, [commodity]);
 
   if (!exits) return null;
-  if (exits.ce_exits.length === 0 && exits.pe_exits.length === 0) return null;
+  const hasNear = exits.ce_exits_near.length > 0 || exits.pe_exits_near.length > 0;
+  const hasFar = exits.ce_exits_far.length > 0 || exits.pe_exits_far.length > 0;
+  if (!hasNear && !hasFar) return null;
 
   const fmt = (n: number) => Math.abs(n).toLocaleString("en-IN");
 
   const divergenceCfg: Record<string, any> = {
     pe_heavy: {
       color: "#E24B4A", bg: "rgba(220,38,38,0.08)", border: "#DC2626",
-      label: "⚠️ PE exits dominant \u2014 bulls exiting more than bears",
+      label: "⚠️ PE exits dominant near ATM — bulls exiting more than bears",
       note: "If price is rallying, this weakens the case for the move. Existing bulls taking profit into strength.",
     },
     ce_heavy: {
       color: "#1D9E75", bg: "rgba(29,158,117,0.08)", border: "#1D9E75",
-      label: "⚠️ CE exits dominant \u2014 bears exiting more than bulls",
+      label: "⚠️ CE exits dominant near ATM — bears exiting more than bulls",
       note: "If price is falling, this weakens the case for the move. Existing bears covering into weakness.",
     },
   };
 
   const cfg = exits.divergence ? divergenceCfg[exits.divergence] : null;
+
+  const ExitList = ({ items, color }: { items: { strike: number; total_exited: number }[]; color: string }) => (
+    <>
+      {items.length === 0 && (<div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>None</div>)}
+      {items.map((e, i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
+          <span style={{ color: "var(--color-text-primary)" }}>₹{e.strike.toLocaleString("en-IN")}</span>
+          <span style={{ color }}>−{fmt(e.total_exited)}</span>
+        </div>
+      ))}
+    </>
+  );
 
   return (
     <div style={{ marginTop: 16, border: "1px solid var(--color-border-secondary)", borderRadius: 8, overflow: "hidden" }}>
@@ -333,7 +354,7 @@ function SessionExitSummary({ commodity }: { commodity: string }) {
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>📋 Session Exit Summary</div>
           <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 2 }}>
-            Total today · PE −{fmt(exits.pe_total_exited)} lots · CE −{fmt(exits.ce_total_exited)} lots
+            Near ATM (±{exits.zone}) · PE −{fmt(exits.pe_total_near)} · CE −{fmt(exits.ce_total_near)} lots
           </div>
         </div>
         <span style={{ fontSize: 16, color: "var(--color-text-tertiary)" }}>{expanded ? "−" : "+"}</span>
@@ -345,29 +366,50 @@ function SessionExitSummary({ commodity }: { commodity: string }) {
           <div style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>{cfg.note}</div>
         </div>
       )}
+      {!cfg && hasNear && (
+        <div style={{ padding: "10px 14px", background: "var(--color-background-secondary)", borderTop: "1px solid var(--color-border-tertiary)", fontSize: 11, color: "var(--color-text-tertiary)" }}>
+          No strong divergence near ATM — exits roughly balanced between CE and PE.
+        </div>
+      )}
 
       {expanded && (
-        <div style={{ padding: "12px 14px", display: "flex", gap: 20, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#1D9E75", marginBottom: 6 }}>PE exited (bulls leaving)</div>
-            {exits.pe_exits.length === 0 && (<div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>No PE exits today</div>)}
-            {exits.pe_exits.map((e, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
-                <span style={{ color: "var(--color-text-primary)" }}>₹{e.strike.toLocaleString("en-IN")}</span>
-                <span style={{ color: "#E24B4A" }}>−{fmt(e.total_exited)}</span>
-              </div>
-            ))}
+        <div style={{ padding: "12px 14px" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 8, letterSpacing: "0.04em" }}>
+            NEAR ATM (±{exits.zone}) — DRIVES THE SIGNAL
           </div>
-          <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#E24B4A", marginBottom: 6 }}>CE exited (bears leaving)</div>
-            {exits.ce_exits.length === 0 && (<div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>No CE exits today</div>)}
-            {exits.ce_exits.map((e, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
-                <span style={{ color: "var(--color-text-primary)" }}>₹{e.strike.toLocaleString("en-IN")}</span>
-                <span style={{ color: "#1D9E75" }}>−{fmt(e.total_exited)}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#1D9E75", marginBottom: 6 }}>PE exited (bulls leaving)</div>
+              <ExitList items={exits.pe_exits_near} color="#E24B4A" />
+            </div>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#E24B4A", marginBottom: 6 }}>CE exited (bears leaving)</div>
+              <ExitList items={exits.ce_exits_near} color="#1D9E75" />
+            </div>
           </div>
+
+          {hasFar && (
+            <>
+              <button
+                onClick={() => setShowFar(!showFar)}
+                style={{ fontSize: 11, color: "var(--color-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: showFar ? 8 : 0 }}
+              >
+                {showFar ? "▾" : "▸"} Far OTM background activity (not counted in signal) · PE −{fmt(exits.pe_total_far)} · CE −{fmt(exits.ce_total_far)} lots
+              </button>
+              {showFar && (
+                <div style={{ display: "flex", gap: 20, flexWrap: "wrap", opacity: 0.6 }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#1D9E75", marginBottom: 6 }}>PE exited (far)</div>
+                    <ExitList items={exits.pe_exits_far} color="#E24B4A" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#E24B4A", marginBottom: 6 }}>CE exited (far)</div>
+                    <ExitList items={exits.ce_exits_far} color="#1D9E75" />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

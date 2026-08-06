@@ -1,7 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, TrendingUp, Clock, Zap, Flame } from 'lucide-react'
+import { RefreshCw, TrendingUp, Clock, Zap, Flame, Building2 } from 'lucide-react'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 
@@ -22,13 +22,32 @@ interface ScanRow {
   cmp: number | null
 }
 
+interface TowerRow {
+  symbol: string
+  tower_date: string
+  tower_ratio: number
+  tower_volume: number
+  avg_volume_20d: number
+  tower_high: number
+  tower_low: number
+  tower_close: number
+  cmp: number
+}
+
 function fmtDate(d: string) {
   try { return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) }
   catch { return d }
 }
 
+function fmtVol(v: number) {
+  if (v >= 10000000) return `${(v / 10000000).toFixed(2)}Cr`
+  if (v >= 100000) return `${(v / 100000).toFixed(2)}L`
+  return v.toLocaleString()
+}
+
 export default function SpotVolumeScanner() {
   const [rows, setRows] = useState<ScanRow[]>([])
+  const [towerRows, setTowerRows] = useState<TowerRow[]>([])
   const [futMap, setFutMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<'all' | 'breakout' | 'bursting' | 'pausing'>('all')
@@ -46,6 +65,9 @@ export default function SpotVolumeScanner() {
         setRows(scanRes.results)
         setScanned(scanRes.scanned || 0)
         setGeneratedAt(scanRes.generated_at || '')
+      }
+      if (scanRes?.tower_days) {
+        setTowerRows(scanRes.tower_days)
       }
       if (pulseRes?.items) {
         const map: Record<string, number> = {}
@@ -87,6 +109,32 @@ export default function SpotVolumeScanner() {
             </p>
           )}
         </div>
+
+        {towerRows.length > 0 && (
+          <div className="mb-6 bg-gradient-to-r from-amber-950/30 via-amber-900/10 to-transparent border border-amber-700/50 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Building2 size={18} className="text-amber-400" />
+              <h2 className="text-lg font-black text-amber-300">Tower Day</h2>
+              <span className="text-xs text-gray-500">— today's volume dwarfs the last 20 days, live, refreshed daily</span>
+            </div>
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+              {towerRows.map(t => (
+                <div key={t.symbol} className="bg-black/30 border border-amber-800/40 rounded-xl p-3">
+                  <div className="flex items-baseline justify-between mb-1">
+                    <span className="font-bold text-white">{t.symbol}</span>
+                    <span className="text-amber-400 font-black text-lg">{t.tower_ratio}x</span>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Vol {fmtVol(t.tower_volume)} vs {fmtVol(t.avg_volume_20d)} avg
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    CMP {t.cmp?.toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-4 gap-3 mb-6">
           <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4">
@@ -222,6 +270,7 @@ export default function SpotVolumeScanner() {
         )}
 
         <div className="flex flex-wrap items-center gap-6 mt-4 text-xs text-gray-600">
+          <span><span className="text-amber-400">Tower Day</span> — today's volume is 6x+ the trailing 20-day average, a live daily signal that resets every day; only shows up on the day it actually happens, never held or carried forward</span>
           <span><span className="text-orange-400">Bursting Now</span> — volume burst happening today, still live — its high is still forming, so there's nothing to break out above yet</span>
           <span><span className="text-cyan-400">Pausing</span> — burst happened on an earlier day, price hasn't broken that day's high yet</span>
           <span><span className="text-amber-400">Breakout (vol pending)</span> — price broke out, volume confirmation still building intraday</span>

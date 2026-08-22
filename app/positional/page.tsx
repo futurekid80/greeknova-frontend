@@ -44,6 +44,8 @@ interface StealthStock {
   cmp: number
   tier: string
   today_oi_chg: number
+  next_month_oi_chg: number | null
+  combined_oi_chg: number | null
   price_chg: number
   net_delta: number | null
   delivery_pct: number | null
@@ -341,6 +343,16 @@ function StealthCard({ s, onSymbolClick }: { s: StealthStock; onSymbolClick: (sy
         <div>
           <p className="text-[10px] text-gray-400">OI Chg</p>
           <p className="text-sm font-bold text-emerald-400">+{(s.today_oi_chg ?? 0).toFixed(2)}%</p>
+          {s.next_month_oi_chg !== null && s.next_month_oi_chg !== undefined && (
+            <p className="text-[10px] mt-0.5 leading-tight" title="Next-month FUT OI change. If this is also strongly positive, the current-month spike is likely genuine positioning, not just expiry-week rollover.">
+              <span className={s.next_month_oi_chg >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}>
+                Next {s.next_month_oi_chg >= 0 ? '+' : ''}{s.next_month_oi_chg.toFixed(1)}%
+              </span>
+              {s.combined_oi_chg !== null && s.combined_oi_chg !== undefined && (
+                <span className="text-gray-500"> · Σ{s.combined_oi_chg >= 0 ? '+' : ''}{s.combined_oi_chg.toFixed(1)}%</span>
+              )}
+            </p>
+          )}
         </div>
         <div>
           <p className="text-[10px] text-gray-400">Price Chg</p>

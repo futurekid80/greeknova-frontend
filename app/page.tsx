@@ -819,6 +819,16 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
                 <div className="text-center">
                   <p className="text-[10px] text-gray-500">FUT OI</p>
                   <p className={`text-xs font-bold ${(data.fut_signal.fut_oi_chg_pct||0)>=0?'text-emerald-400':'text-red-400'}`}>{(data.fut_signal.fut_oi_chg_pct||0)>0?'+':''}{Number(data.fut_signal.fut_oi_chg_pct||0).toFixed(2)}%</p>
+                  {data.fut_signal.fut_oi_chg_pct_next !== null && data.fut_signal.fut_oi_chg_pct_next !== undefined && (
+                    <p className="text-[9px] mt-0.5 leading-tight" title="Next-month FUT OI change. If also strongly positive, the current-month figure is likely genuine positioning, not just expiry-week rollover.">
+                      <span className={data.fut_signal.fut_oi_chg_pct_next>=0?'text-emerald-500/70':'text-red-500/70'}>
+                        Next {data.fut_signal.fut_oi_chg_pct_next>0?'+':''}{Number(data.fut_signal.fut_oi_chg_pct_next).toFixed(1)}%
+                      </span>
+                      {data.fut_signal.fut_oi_chg_pct_combined !== null && data.fut_signal.fut_oi_chg_pct_combined !== undefined && (
+                        <span className="text-gray-600"> · Σ{data.fut_signal.fut_oi_chg_pct_combined>0?'+':''}{Number(data.fut_signal.fut_oi_chg_pct_combined).toFixed(1)}%</span>
+                      )}
+                    </p>
+                  )}
                 </div>
                 <div className="text-center">
                   <p className="text-[10px] text-gray-500">Price</p>

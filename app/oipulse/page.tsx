@@ -9,6 +9,7 @@ const API = 'https://greeknova-backend-production.up.railway.app'
 interface Item {
   symbol: string; is_index: boolean
   oi_now: number; oi_prev: number; oi_chg_abs: number; oi_chg_pct: number
+  fut_oi_chg_pct_next: number | null; fut_oi_chg_pct_combined: number | null
   ltp: number | null; price_chg_pct: number
   signal: string; label: string; color: string; bg: string; border: string
 }
@@ -62,6 +63,16 @@ function OICard({ item }: { item: Item }) {
           <p className={`text-lg font-black ${item.oi_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {item.oi_chg_pct > 0 ? '+' : ''}{item.oi_chg_pct}%
           </p>
+          {item.fut_oi_chg_pct_next !== null && item.fut_oi_chg_pct_next !== undefined && (
+            <p className="text-[10px] leading-tight mt-0.5" title="Next-month FUT OI change. If this is also strongly positive (or moving the same direction), the current-month figure is likely genuine positioning, not just expiry-week rollover.">
+              <span className={item.fut_oi_chg_pct_next >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}>
+                Next {item.fut_oi_chg_pct_next >= 0 ? '+' : ''}{item.fut_oi_chg_pct_next.toFixed(1)}%
+              </span>
+              {item.fut_oi_chg_pct_combined !== null && item.fut_oi_chg_pct_combined !== undefined && (
+                <span className="text-gray-600"> · Σ{item.fut_oi_chg_pct_combined >= 0 ? '+' : ''}{item.fut_oi_chg_pct_combined.toFixed(1)}%</span>
+              )}
+            </p>
+          )}
         </div>
         <div className="text-right">
           <p className="text-xs text-gray-500">Abs Change</p>

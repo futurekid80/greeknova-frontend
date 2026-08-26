@@ -98,15 +98,40 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   }, [getAudioCtx])
 
   useEffect(() => {
+    let localAlerts: Alert[] = []
     try {
       const saved = localStorage.getItem('gn_alerts')
-      if (saved) setAlerts(JSON.parse(saved))
+      if (saved) { localAlerts = JSON.parse(saved); setAlerts(localAlerts) }
       const seen = localStorage.getItem('gn_alerts_last_seen')
       if (seen) setLastSeenId(Number(seen))
     } catch {}
     setSpikeThresholdState(Number(localStorage.getItem('gn_spike_threshold') || 10))
     setMarketOpen(isMarketOpen())
     const t = setInterval(() => setMarketOpen(isMarketOpen()), 30000)
+
+    // (Aug 26 2026): the live SW->tab relay only ever reaches a tab that
+    // happens to be open at the exact moment a push fires -- anything
+    // that arrived while no tab was open is permanently missing from
+    // localStorage, even though the native OS notification still showed.
+    // Fetching real history from the backend on load fixes the panel
+    // looking "stuck" on whatever was last relayed live.
+    fetch(`${API}/alerts?limit=100`)
+      .then(r => r.json())
+      .then(data => {
+        const serverAlerts: Alert[] = data.alerts || []
+        if (!serverAlerts.length) return
+        setAlerts(prev => {
+          const byId = new Map(prev.map(a => [a.id, a]))
+          for (const a of serverAlerts) if (!byId.has(a.id)) byId.set(a.id, a)
+          const merged = Array.from(byId.values())
+            .sort((a, b) => Number(b.id) - Number(a.id))
+            .slice(0, 100)
+          try { localStorage.setItem('gn_alerts', JSON.stringify(merged)) } catch {}
+          return merged
+        })
+      })
+      .catch(() => {})
+
     return () => clearInterval(t)
   }, [])
 

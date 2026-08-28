@@ -23,6 +23,11 @@ const ALL_SYMBOLS = [
   'TVSMOTOR','BHARATFORG','MOTHERSON','LUPIN','TORNTPHARM','AUROPHARMA',
   'GODREJCP','MARICO','DABUR','PIDILITIND','MUTHOOTFIN','SBICARD','ICICIPRULI',
   'IDFCFIRSTB','FEDERALBNK','ETERNAL','POLYCAB','VOLTAS','IEX','ASTRAL',
+  // (Aug 28 2026): 21 symbols added Aug 27 -- this array was missed at
+  // the time, same pattern as several backend files fixed that day
+  'PNB','ADANIPOWER','IOC','ASHOKLEY','BANDHANBNK','INDUSTOWER','IREDA','UNIONBANK',
+  'AMBUJACEM','BANKINDIA','BHEL','SWIGGY','CROMPTON','VBL','MANAPPURAM','BIOCON',
+  'VMM','LICI','LTF','HINDPETRO','SIEMENS',
 ]
 
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }

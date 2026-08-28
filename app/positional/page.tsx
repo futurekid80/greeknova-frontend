@@ -46,6 +46,8 @@ interface StealthStock {
   today_oi_chg: number
   next_month_oi_chg: number | null
   combined_oi_chg: number | null
+  today_oi_abs: number | null
+  next_month_oi_abs: number | null
   price_chg: number
   net_delta: number | null
   delivery_pct: number | null
@@ -116,6 +118,13 @@ function fmt(n: number, dec = 2) {
 
 function fmtCmp(n: number) {
   return n >= 1000 ? n.toLocaleString('en-IN', { maximumFractionDigits: 1 }) : n.toFixed(2)
+}
+
+function fmtOI(n: number) {
+  const abs = Math.abs(n)
+  if (abs >= 10000000) return `${(n/10000000).toFixed(2)}Cr`
+  if (abs >= 100000) return `${(n/100000).toFixed(1)}L`
+  return n.toLocaleString()
 }
 
 // ── Section Header ────────────────────────────────────────────────────────────
@@ -342,11 +351,19 @@ function StealthCard({ s, onSymbolClick }: { s: StealthStock; onSymbolClick: (sy
       <div className="grid grid-cols-5 gap-2 text-center">
         <div>
           <p className="text-[10px] text-gray-400">OI Chg</p>
-          <p className="text-sm font-bold text-emerald-400">+{(s.today_oi_chg ?? 0).toFixed(2)}%</p>
+          <p className="text-sm font-bold text-emerald-400">
+            +{(s.today_oi_chg ?? 0).toFixed(2)}%
+            {s.today_oi_abs !== null && s.today_oi_abs !== undefined && (
+              <span className="text-[10px] text-gray-500 font-normal ml-1">({fmtOI(s.today_oi_abs)})</span>
+            )}
+          </p>
           {s.next_month_oi_chg !== null && s.next_month_oi_chg !== undefined && (
             <p className="text-[10px] mt-0.5 leading-tight" title="Next-month FUT OI change. If this is also strongly positive, the current-month spike is likely genuine positioning, not just expiry-week rollover.">
               <span className={s.next_month_oi_chg >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}>
                 Next {s.next_month_oi_chg >= 0 ? '+' : ''}{s.next_month_oi_chg.toFixed(1)}%
+                {s.next_month_oi_abs !== null && s.next_month_oi_abs !== undefined && (
+                  <span className="text-gray-500"> ({fmtOI(s.next_month_oi_abs)})</span>
+                )}
               </span>
               {s.combined_oi_chg !== null && s.combined_oi_chg !== undefined && (
                 <span className="text-gray-500"> · Σ{s.combined_oi_chg >= 0 ? '+' : ''}{s.combined_oi_chg.toFixed(1)}%</span>

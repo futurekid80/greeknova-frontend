@@ -12,8 +12,8 @@ interface Item {
   chg_pct: number; rs: number; signal: string; color: string
 }
 interface Data {
-  benchmark: string; bench_ltp: number; bench_chg_pct: number
-  items: Item[]; as_of: string; count: number
+  benchmark?: string; bench_ltp?: number; bench_chg_pct?: number
+  items: Item[]; as_of?: string; count?: number; error?: string
 }
 
 type SortKey = 'rs' | 'chg_pct' | 'symbol' | 'ltp'
@@ -97,8 +97,19 @@ export default function RelativeStrength() {
           ))}
         </div>
 
+        {/* Error banner (Aug 29 2026): backend can return a valid {error, items:[]}
+            shape when e.g. Kite auth fails -- this used to crash the whole page
+            (data was truthy but bench_ltp etc. were missing), since the stats
+            section below only checked `data` existed, not that the fields inside
+            it did. Now shown as a real, readable banner instead. */}
+        {data?.error && (
+          <div className="mb-6 p-4 bg-red-950/30 border border-red-800/50 rounded-xl text-sm text-red-300">
+            Unable to load relative strength data right now — {data.error}
+          </div>
+        )}
+
         {/* Benchmark stats */}
-        {data && (
+        {data && data.bench_ltp != null && (
           <div className="grid grid-cols-4 gap-3 mb-6">
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">{data.benchmark} Level</p>
@@ -139,6 +150,10 @@ export default function RelativeStrength() {
         {loading ? (
           <div className="h-64 flex items-center justify-center">
             <RefreshCw size={24} className="text-gray-600 animate-spin"/>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="h-40 flex items-center justify-center text-sm text-gray-600 bg-gray-900/20 border border-gray-800 rounded-2xl">
+            No data available right now{data?.error ? ' — see error above' : ''}.
           </div>
         ) : (
           <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden">

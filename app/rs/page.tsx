@@ -109,7 +109,7 @@ export default function RelativeStrength() {
         )}
 
         {/* Benchmark stats */}
-        {data && data.bench_ltp != null && (
+        {data && data.bench_ltp != null && data.bench_chg_pct != null && (
           <div className="grid grid-cols-4 gap-3 mb-6">
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">{data.benchmark} Level</p>

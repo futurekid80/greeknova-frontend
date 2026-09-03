@@ -74,20 +74,20 @@ function getPcrSummary(points: PCRPoint[], pcrTrend: string, volPcrTrend: string
   let explain = ''
 
   if (volAboveNow && volPcrTrend === 'RISING' && pcrTrend === 'FALLING') {
-    headline = "Today's put activity is outrunning built-up put positioning"
-    explain = "Vol PCR is climbing while OI PCR keeps falling — today's put buying/writing hasn't translated into fresh standing positions yet. Often reflects short-term hedging or intraday churn rather than a new directional build. Worth watching whether OI PCR eventually follows Vol PCR higher (confirms it), or Vol PCR fades back down (the flow was temporary)."
+    headline = "Today's put activity isn't sticking as built-up positioning"
+    explain = "Vol PCR is climbing while OI PCR keeps falling — heavy put trading today, but it isn't showing up as net OI yet. Could mean positions opening and closing within the day, or new activity offsetting older positions unwinding. PCR alone can't tell you if the puts being traded are being bought or written (sold) — that distinction changes the read entirely, and needs strike-level OI + price together (see UOA / Options Jungle) to work out."
   } else if (volPcrTrend === 'RISING' && pcrTrend === 'RISING') {
     headline = 'Both measures rising together'
-    explain = "Today's flow and overall positioning are both leaning toward puts at the same time — a stronger signal than either alone, since fresh activity is actually building into standing positions."
+    explain = "Today's flow and overall built-up positioning are both increasing on the put side at the same time — today's activity is actually adding to standing OI, not just churning. As with any PCR reading, this reflects put-side activity broadly — it doesn't distinguish buying from writing on its own."
   } else if (volPcrTrend === 'FALLING' && pcrTrend === 'FALLING') {
     headline = 'Both measures falling together'
-    explain = 'Put positioning is unwinding both in today\'s flow and in overall OI at the same time — a stronger signal than either alone.'
+    explain = 'Put-side activity is easing both in today\'s flow and in overall OI at the same time — positions are being unwound, not just going quiet for the day.'
   } else if (!volAboveNow && volPcrTrend === 'FALLING' && pcrTrend === 'RISING') {
     headline = "Built-up positioning still climbing even as today's activity cools"
-    explain = "OI PCR keeps rising even though Vol PCR is easing — suggests the crowd is holding or adding to existing positions rather than chasing with fresh volume."
+    explain = "OI PCR keeps rising even though Vol PCR is easing — the crowd is holding or adding to existing put-side positions without needing much fresh volume to do it."
   } else {
     headline = 'Mixed signal right now'
-    explain = "OI PCR and Vol PCR aren't moving in the same direction — usually means today's activity and the broader built-up positioning are telling slightly different stories. Worth waiting for one to confirm the other before reading too much into either alone."
+    explain = "OI PCR and Vol PCR aren't moving in the same direction — today's activity and the broader built-up positioning are telling slightly different stories right now, worth watching rather than reading firmly either way yet."
   }
 
   return { headline, explain: crossoverNote + explain }

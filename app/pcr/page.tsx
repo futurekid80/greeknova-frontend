@@ -42,6 +42,57 @@ function formatExpiry(expiry: string) {
   } catch { return expiry }
 }
 
+// Sep 3 2026: plain-English "what's happening right now" summary -- helps a
+// user who doesn't already know how to read OI PCR vs Vol PCR decode the
+// current pattern themselves, rather than just showing the two numbers and
+// leaving the interpretation entirely to them. Deliberately describes the
+// pattern in the data, not a trade call.
+function getPcrSummary(points: PCRPoint[], pcrTrend: string, volPcrTrend: string) {
+  if (points.length < 2) return null
+  const latest = points[points.length - 1]
+  if (latest.vol_pcr === undefined) return null
+  const latestVolPcrVal: number = latest.vol_pcr
+
+  // Detect the most recent crossover -- walk backward from the latest point
+  // to find where vol_pcr flipped from being below OI PCR to above it (or
+  // vice versa), and how long that relationship has held since.
+  const volAboveNow = latestVolPcrVal > latest.pcr
+  let crossoverIdx = -1
+  for (let i = points.length - 1; i > 0; i--) {
+    const p = points[i]
+    const prev = points[i - 1]
+    if (p.vol_pcr === undefined || prev.vol_pcr === undefined) continue
+    const prevVolPcr: number = prev.vol_pcr
+    const wasAbove = prevVolPcr > prev.pcr
+    if (wasAbove !== volAboveNow) { crossoverIdx = i; break }
+  }
+  const crossoverNote = crossoverIdx > 0
+    ? `Vol PCR crossed ${volAboveNow ? 'above' : 'below'} OI PCR around ${points[crossoverIdx].time} and has stayed ${volAboveNow ? 'above' : 'below'} since. `
+    : ''
+
+  let headline = ''
+  let explain = ''
+
+  if (volAboveNow && volPcrTrend === 'RISING' && pcrTrend === 'FALLING') {
+    headline = "Today's put activity is outrunning built-up put positioning"
+    explain = "Vol PCR is climbing while OI PCR keeps falling — today's put buying/writing hasn't translated into fresh standing positions yet. Often reflects short-term hedging or intraday churn rather than a new directional build. Worth watching whether OI PCR eventually follows Vol PCR higher (confirms it), or Vol PCR fades back down (the flow was temporary)."
+  } else if (volPcrTrend === 'RISING' && pcrTrend === 'RISING') {
+    headline = 'Both measures rising together'
+    explain = "Today's flow and overall positioning are both leaning toward puts at the same time — a stronger signal than either alone, since fresh activity is actually building into standing positions."
+  } else if (volPcrTrend === 'FALLING' && pcrTrend === 'FALLING') {
+    headline = 'Both measures falling together'
+    explain = 'Put positioning is unwinding both in today\'s flow and in overall OI at the same time — a stronger signal than either alone.'
+  } else if (!volAboveNow && volPcrTrend === 'FALLING' && pcrTrend === 'RISING') {
+    headline = "Built-up positioning still climbing even as today's activity cools"
+    explain = "OI PCR keeps rising even though Vol PCR is easing — suggests the crowd is holding or adding to existing positions rather than chasing with fresh volume."
+  } else {
+    headline = 'Mixed signal right now'
+    explain = "OI PCR and Vol PCR aren't moving in the same direction — usually means today's activity and the broader built-up positioning are telling slightly different stories. Worth waiting for one to confirm the other before reading too much into either alone."
+  }
+
+  return { headline, explain: crossoverNote + explain }
+}
+
 export default function PCRTrend() {
   const [symbol, setSymbol] = useState('NIFTY')
   const [data, setData] = useState<PCRData | null>(null)
@@ -102,6 +153,8 @@ export default function PCRTrend() {
   const volPcrChange = latestVolPcr !== undefined && firstVolPcr !== undefined
     ? (latestVolPcr - firstVolPcr).toFixed(3) : '0'
   const volPcrTrend = Number(volPcrChange) > 0 ? 'RISING' : Number(volPcrChange) < 0 ? 'FALLING' : 'FLAT'
+
+  const pcrSummary = data?.points ? getPcrSummary(data.points, pcrTrend, volPcrTrend) : null
 
   // ── 5-point rolling average to smooth PCR zigzag ──────────────────────────
   const smoothedPoints = (data?.points || []).map((p, i, arr) => {
@@ -193,6 +246,14 @@ export default function PCRTrend() {
               <p className={`text-2xl font-black ${volPcrTrend === 'RISING' ? 'text-cyan-400' : volPcrTrend === 'FALLING' ? 'text-pink-400' : 'text-amber-400'}`}>{volPcrTrend}</p>
               <p className="text-xs text-gray-600">Change: {Number(volPcrChange) > 0 ? '+' : ''}{volPcrChange}</p>
             </div>
+          </div>
+        )}
+
+        {/* Plain-English "what's happening right now" summary */}
+        {pcrSummary && (
+          <div className="bg-indigo-950/20 border border-indigo-800/40 rounded-2xl p-4 mb-6">
+            <p className="text-sm font-bold text-indigo-300 mb-1">📖 {pcrSummary.headline}</p>
+            <p className="text-xs text-gray-400 leading-relaxed">{pcrSummary.explain}</p>
           </div>
         )}
 

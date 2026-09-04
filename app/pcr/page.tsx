@@ -9,7 +9,7 @@ interface PCRPoint { time: string; pcr: number; vol_pcr?: number; ce_oi: number;
 interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number; expiry: string | null }
 
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null

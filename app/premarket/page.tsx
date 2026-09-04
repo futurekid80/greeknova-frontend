@@ -4,7 +4,7 @@ import SignalHistoryPopup from '@/components/SignalHistoryPopup'
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface GiftNifty {
   ltp: number

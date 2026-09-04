@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Clock, Calendar } from 'lucide-react'
 import { ALL_SYMBOLS } from '@/lib/symbols'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
 
 interface Greeks { ltp: number; iv: number | null; oi: number; volume: number; delta?: number; gamma?: number; theta?: number; vega?: number }

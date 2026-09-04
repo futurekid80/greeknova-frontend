@@ -6,7 +6,7 @@ import AlertThresholds from '@/components/AlertThresholds'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, Zap, Search, X } from 'lucide-react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface OISpike {
   symbol: string; tradingsymbol: string; strike: number; option_type: string

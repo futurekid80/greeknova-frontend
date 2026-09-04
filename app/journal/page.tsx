@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, X, TrendingUp, TrendingDown, BookOpen, Brain, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 const SYMBOLS = [
   "NIFTY", "BANKNIFTY", "FINNIFTY",

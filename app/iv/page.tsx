@@ -3,7 +3,7 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, TrendingUp, TrendingDown } from 'lucide-react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface IVResult {
   symbol: string; cmp: number; expiry: string; dte: number

@@ -5,7 +5,7 @@ export async function GET(
   { params }: { params: { commodity: string } }
 ) {
   const commodity = params.commodity.toUpperCase();
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "https://greeknova-backend-production.up.railway.app";
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.greeknova.com";
 
   try {
     const res = await fetch(`${backendUrl}/mcx/oi-map/${commodity}`, {

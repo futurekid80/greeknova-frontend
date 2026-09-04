@@ -4,7 +4,7 @@ import { RefreshCw, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface Item {
   symbol: string; is_index: boolean

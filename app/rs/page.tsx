@@ -4,7 +4,7 @@ import { RefreshCw, ArrowUpRight, ArrowDownRight, ArrowUp, ArrowDown } from 'luc
 import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 const BENCHMARKS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
 
 interface Item {

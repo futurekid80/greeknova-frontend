@@ -5,7 +5,7 @@ import AlertsSidebar from '@/components/AlertsSidebar'
 import { AlertsProvider } from '@/contexts/AlertsContext'
 import { useEffect, useState } from 'react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 function HolidayBanner() {
   const [status, setStatus] = useState<any>(null)

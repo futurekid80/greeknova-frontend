@@ -21,7 +21,7 @@ export default function MaxPain() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('https://greeknova-backend-production.up.railway.app/max-pain')
+      const res = await fetch('https://api.greeknova.com/max-pain')
       const json = await res.json()
       setData(json)
       if (json.timestamp) setLastUpdate(new Date(json.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }))

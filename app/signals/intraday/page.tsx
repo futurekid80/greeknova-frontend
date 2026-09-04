@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface OptionsSignal {
   signal_type: string

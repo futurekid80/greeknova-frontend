@@ -6,7 +6,7 @@ import AlertThresholds from '@/components/AlertThresholds'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, AlertTriangle, Search, X, MoonStar } from 'lucide-react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface UOASignal {
   symbol: string; tradingsymbol: string; strike: number

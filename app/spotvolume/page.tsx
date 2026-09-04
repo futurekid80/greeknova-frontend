@@ -3,7 +3,7 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, TrendingUp, Clock, Zap, Flame, Building2 } from 'lucide-react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface ScanRow {
   symbol: string

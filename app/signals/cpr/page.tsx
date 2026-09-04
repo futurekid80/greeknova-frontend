@@ -5,7 +5,7 @@ import { RefreshCw, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import React from 'react'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface OISignal {
   signal_type: string; bias: string; option_type: string; strike: number; score: number;

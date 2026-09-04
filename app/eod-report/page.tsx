@@ -6,7 +6,7 @@ import {
   Cell, PieChart, Pie, Legend
 } from 'recharts'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface Mover {
   symbol: string; fut_oi_chg_pct: number; price_chg_pct: number

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X, Zap, Eye, Moon, ChevronDown, ChevronUp, Flame, BarChart2, Volume2 } from 'lucide-react'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 const ALL_SYMBOLS = [
   'NIFTY','BANKNIFTY','FINNIFTY',

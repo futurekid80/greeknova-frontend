@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Navbar from '@/components/Navbar'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 
 interface ConfluenceResult {
   symbol: string

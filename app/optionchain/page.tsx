@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
 
 interface Greeks { ltp: number; iv: number | null; oi: number; volume: number; delta?: number; gamma?: number; theta?: number; vega?: number }

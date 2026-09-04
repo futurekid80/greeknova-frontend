@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Navbar from '@/components/Navbar'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'https://greeknova-backend-production.up.railway.app'
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://api.greeknova.com'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface WallAlert {

@@ -4,7 +4,7 @@ import { RefreshCw } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid, Legend, Cell } from 'recharts'
 
-const API = 'https://greeknova-backend-production.up.railway.app'
+const API = 'https://api.greeknova.com'
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
 const STOCKS = [
   'RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BHARTIARTL',

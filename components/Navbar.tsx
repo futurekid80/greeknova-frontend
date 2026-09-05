@@ -13,7 +13,8 @@ const NAV_GROUPS = [
       { href: '/premarket',  label: '☀️ Pre-Market Brief' },
       { href: '/watchlist',  label: 'Watchlist' },
       { href: '/journal',    label: '📓 Journal' },
-      { href: '/participant-flow', label: '🏦 Participant Flow' }
+      { href: '/participant-flow', label: '🏦 Participant Flow' },
+      { href: '/sector-strength', label: '🔥 Sector Strength' }
     ]
   },
   {
@@ -45,7 +46,6 @@ const NAV_GROUPS = [
       { href: '/jungle',      label: '🌿 Options Jungle' },
       { href: '/positional',  label: '🧠 Positional Intelligence' },
       { href: '/oi-buildup-period', label: '📊 Weekly/Monthly OI Buildup' },
-      { href: '/sector-strength', label: '🔥 Sector Strength' },
       { href: '/signals/intraday', label: '📋 Intraday Log' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
       { href: '/signals/wall-migration', label: '🧱 Wall Migration' },

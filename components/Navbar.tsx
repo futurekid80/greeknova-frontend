@@ -240,13 +240,26 @@ function UserMenu() {
   const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const loggedActivityRef = useRef(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) setEmail(session.user.email)
+      if (session?.user && !loggedActivityRef.current) {
+        loggedActivityRef.current = true
+        supabase.rpc('log_activity').then(({ error }) => {
+          if (error) console.warn('log_activity failed:', error.message)
+        })
+      }
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setEmail(session?.user?.email || '')
+      if (session?.user && !loggedActivityRef.current) {
+        loggedActivityRef.current = true
+        supabase.rpc('log_activity').then(({ error }) => {
+          if (error) console.warn('log_activity failed:', error.message)
+        })
+      }
     })
     return () => subscription.unsubscribe()
   }, [])

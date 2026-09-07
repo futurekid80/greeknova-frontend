@@ -101,7 +101,7 @@ export default function SectorStrength() {
   }, [timeframe])
 
   useEffect(() => { fetchData() }, [fetchData])
-  const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 15 * 60 * 1000, false)
+  const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, false)
 
   const chgKey = timeframe === 'daily' ? 'day_chg_pct' : 'week_chg_pct'
   const sorted = [...rows].sort((a, b) => (b[chgKey] ?? 0) - (a[chgKey] ?? 0))

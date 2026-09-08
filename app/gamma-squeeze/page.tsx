@@ -27,6 +27,11 @@ interface Squeeze {
   bias: 'BULLISH' | 'BEARISH'
   label: string
   desc: string
+  triggered?: boolean
+  legs_met?: number
+  oi_leg_pct?: number
+  ltp_leg_pct?: number
+  vol_leg_pct?: number
 }
 
 function fmtNum(n: number) {
@@ -38,6 +43,7 @@ function fmtNum(n: number) {
 
 export default function GammaSqueeze() {
   const [rows, setRows]           = useState<Squeeze[]>([])
+  const [watchlist, setWatchlist] = useState<Squeeze[]>([])
   const [windowTime, setWindowTime] = useState('')
   const [closeTime, setCloseTime] = useState('')
   const [loading, setLoading]     = useState(true)
@@ -51,6 +57,7 @@ export default function GammaSqueeze() {
       if (!res.ok) throw new Error(`Server returned ${res.status}`)
       const json = await res.json()
       setRows(json.signals || [])
+      setWatchlist(json.watchlist || [])
       setWindowTime(json.window_time || '')
       setCloseTime(json.close_time || '')
     } catch (e: any) {
@@ -186,6 +193,74 @@ export default function GammaSqueeze() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Watchlist — every stock's key strike, ranked by how close it is to qualifying */}
+        {!loading && watchlist.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-sm font-black text-gray-300 mb-1 flex items-center gap-2">
+              👀 Watchlist — Key Strikes to Watch
+            </h2>
+            <p className="text-xs text-gray-600 mb-3">
+              Every stock's highest-OI strike (CE and PE), ranked by how many of the 3 conditions are already met — the closest to qualifying sit at the top
+            </p>
+            <div className="overflow-x-auto rounded-xl border border-gray-800">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-900/60 text-gray-500 text-left">
+                    <th className="px-3 py-2 font-semibold">Stock</th>
+                    <th className="px-3 py-2 font-semibold">Strike</th>
+                    <th className="px-3 py-2 font-semibold">Level</th>
+                    <th className="px-3 py-2 font-semibold">OI Δ (30m)</th>
+                    <th className="px-3 py-2 font-semibold">Premium Δ (30m)</th>
+                    <th className="px-3 py-2 font-semibold">Vol Spike</th>
+                    <th className="px-3 py-2 font-semibold">Legs Met</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {watchlist.map(w => (
+                    <tr key={w.tradingsymbol} className="border-t border-gray-800/60 hover:bg-gray-900/30">
+                      <td className="px-3 py-2 font-bold text-white">{w.symbol}</td>
+                      <td className="px-3 py-2 text-gray-300">{w.strike.toLocaleString('en-IN')} {w.option_type}</td>
+                      <td className="px-3 py-2 text-gray-500">{w.level_kind}</td>
+                      <td className="px-3 py-2">
+                        <span className={(w.oi_leg_pct ?? 0) >= 100 ? 'text-red-400 font-bold' : 'text-gray-400'}>
+                          {w.oi_chg_30min_pct.toFixed(1)}%
+                        </span>
+                        <div className="w-14 h-1 bg-gray-800 rounded-full mt-1">
+                          <div className="h-1 bg-red-500 rounded-full" style={{ width: `${w.oi_leg_pct ?? 0}%` }} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={(w.ltp_leg_pct ?? 0) >= 100 ? 'text-emerald-400 font-bold' : 'text-gray-400'}>
+                          {w.ltp_chg_30min_pct > 0 ? '+' : ''}{w.ltp_chg_30min_pct.toFixed(1)}%
+                        </span>
+                        <div className="w-14 h-1 bg-gray-800 rounded-full mt-1">
+                          <div className="h-1 bg-emerald-500 rounded-full" style={{ width: `${w.ltp_leg_pct ?? 0}%` }} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={(w.vol_leg_pct ?? 0) >= 100 ? 'text-yellow-400 font-bold' : 'text-gray-400'}>
+                          {w.vol_spike_ratio.toFixed(1)}x
+                        </span>
+                        <div className="w-14 h-1 bg-gray-800 rounded-full mt-1">
+                          <div className="h-1 bg-yellow-500 rounded-full" style={{ width: `${w.vol_leg_pct ?? 0}%` }} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`font-bold ${w.legs_met === 2 ? 'text-yellow-400' : w.legs_met === 3 ? 'text-emerald-400' : 'text-gray-600'}`}>
+                          {w.legs_met}/3
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-gray-700 mt-2">
+              3/3 means it should already be in the list above — 2/3 is a genuine near-miss worth watching closely on the next refresh.
+            </p>
           </div>
         )}
 

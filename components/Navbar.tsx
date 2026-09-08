@@ -14,8 +14,7 @@ const NAV_GROUPS = [
       { href: '/watchlist',  label: 'Watchlist' },
       { href: '/journal',    label: '📓 Journal' },
       { href: '/participant-flow', label: '🏦 Participant Flow' },
-      { href: '/sector-strength', label: '🔥 Sector Strength' },
-      { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' }
+      { href: '/sector-strength', label: '🔥 Sector Strength' }
     ]
   },
   {
@@ -36,6 +35,7 @@ const NAV_GROUPS = [
       { href: '/historicalchain', label: '🕰️ Historical Chain' },
       { href: '/maxpain',     label: 'Max Pain' },
       { href: '/iv',          label: 'IV Analysis' },
+      { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' },
     ]
   },
   {

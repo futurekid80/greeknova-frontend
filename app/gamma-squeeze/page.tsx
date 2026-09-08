@@ -34,6 +34,11 @@ interface Squeeze {
   vol_leg_pct?: number
 }
 
+function pctAway(w: Squeeze): number {
+  if (!w.cmp || !w.strike) return 0
+  return ((w.cmp - w.strike) / w.strike) * 100
+}
+
 function fmtNum(n: number) {
   if (n >= 10000000) return (n / 10000000).toFixed(2) + 'Cr'
   if (n >= 100000) return (n / 100000).toFixed(2) + 'L'
@@ -87,11 +92,11 @@ export default function GammaSqueeze() {
   const sortedWatchlist = useMemo(() => {
     const arr = [...watchlist]
     arr.sort((a: any, b: any) => {
-      let av = a[sortCol]
-      let bv = b[sortCol]
-      // For OI/vol columns, sort by magnitude of movement (abs), not sign —
-      // that's what "spot the biggest move" actually means for these.
-      if (['oi_chg_30min_pct', 'oi_chg_from_open_pct', 'ltp_chg_30min_pct'].includes(sortCol)) {
+      let av = sortCol === 'pct_away' ? pctAway(a) : a[sortCol]
+      let bv = sortCol === 'pct_away' ? pctAway(b) : b[sortCol]
+      // For OI/vol/distance columns, sort by magnitude (abs), not sign —
+      // that's what "spot the biggest move" / "closest to the money" means.
+      if (['oi_chg_30min_pct', 'oi_chg_from_open_pct', 'ltp_chg_30min_pct', 'pct_away'].includes(sortCol)) {
         av = Math.abs(av ?? 0)
         bv = Math.abs(bv ?? 0)
       }
@@ -244,6 +249,8 @@ export default function GammaSqueeze() {
                     <SortTh label="Stock" col="symbol" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="Strike" col="strike" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="Level" col="level_kind" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="CMP" col="cmp" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="% Away" col="pct_away" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="OI Δ (Day)" col="oi_chg_from_open_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="OI Δ (30m)" col="oi_chg_30min_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="Premium Δ (30m)" col="ltp_chg_30min_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -257,6 +264,12 @@ export default function GammaSqueeze() {
                       <td className="px-3 py-2 font-bold text-white">{w.symbol}</td>
                       <td className="px-3 py-2 text-gray-300">{w.strike.toLocaleString('en-IN')} {w.option_type}</td>
                       <td className="px-3 py-2 text-gray-500">{w.level_kind}</td>
+                      <td className="px-3 py-2 text-gray-300">{w.cmp ? `₹${w.cmp.toLocaleString('en-IN')}` : '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className={Math.abs(pctAway(w)) <= 1 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
+                          {w.cmp ? `${pctAway(w) > 0 ? '+' : ''}${pctAway(w).toFixed(1)}%` : '—'}
+                        </span>
+                      </td>
                       <td className="px-3 py-2">
                         <span className={Math.abs(w.oi_chg_from_open_pct ?? 0) >= 10 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
                           {(w.oi_chg_from_open_pct ?? 0) > 0 ? '+' : ''}{(w.oi_chg_from_open_pct ?? 0).toFixed(1)}%

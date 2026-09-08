@@ -21,6 +21,8 @@ interface Squeeze {
   volume: number
   vol_spike_ratio: number
   days_to_expiry: number | null
+  conviction: 'HIGH' | 'LOW'
+  conviction_note: string
   squeeze_score: number
   bias: 'BULLISH' | 'BEARISH'
   label: string
@@ -92,7 +94,7 @@ export default function GammaSqueeze() {
         </div>
 
         {(windowTime || closeTime) && (
-          <p className="text-xs text-gray-600 mb-5">Comparing {closeTime} IST vs ~30 min ago ({windowTime} IST) at each stock's highest-OI strike · nearest expiry ≤ 14 days out</p>
+          <p className="text-xs text-gray-600 mb-5">Comparing {closeTime} IST vs ~30 min ago ({windowTime} IST) at each stock's highest-OI strike · all expiries shown, tagged by conviction</p>
         )}
 
         {error && (
@@ -145,6 +147,9 @@ export default function GammaSqueeze() {
                       <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">
                         {r.level_kind} · highest OI strike
                       </span>
+                      <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${r.conviction === 'HIGH' ? 'bg-emerald-900/60 text-emerald-400' : 'bg-yellow-900/50 text-yellow-500'}`}>
+                        {r.conviction === 'HIGH' ? '🟢 Near Expiry' : '🟡 Early Cycle'}
+                      </span>
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
                   </div>
@@ -153,7 +158,8 @@ export default function GammaSqueeze() {
                     <p className="text-xl font-black text-yellow-400">{r.squeeze_score.toFixed(1)}</p>
                   </div>
                 </div>
-                <p className="text-xs text-gray-400 mb-3">{r.desc}</p>
+                <p className="text-xs text-gray-400 mb-1">{r.desc}</p>
+                <p className={`text-[11px] mb-3 ${r.conviction === 'HIGH' ? 'text-emerald-500/80' : 'text-yellow-600/80'}`}>{r.conviction_note}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                   <div>
                     <p className="text-gray-600">Premium (30 min)</p>
@@ -189,8 +195,9 @@ export default function GammaSqueeze() {
             For every stock we take the single strike carrying the most open interest on each side — that strike IS the real support (PE) or resistance (CE),
             since that's where the most writers are positioned. We watch that one strike for three things happening together in the last ~30 minutes: its OI
             unwinding fast, its volume running well above its own recent baseline rate, and its own premium rising — the sign that writers there are being
-            forced to cover, which can accelerate the move further. Only shown for stocks within 2 weeks of expiry, since the setup needs urgency to cover
-            that isn't there early in a fresh monthly contract. Call-side squeezes (resistance) are bullish, put-side (support) are bearish · Not investment advice
+            forced to cover, which can accelerate the move further. Shown for every expiry, tagged 🟢 Near Expiry (≤14 days — matches the strategy's own
+            conditions) or 🟡 Early Cycle (further out — the pattern showed up, but writers may not be under real pressure to cover yet, so weight it
+            accordingly). Call-side squeezes (resistance) are bullish, put-side (support) are bearish · Not investment advice
           </p>
         </div>
       </div>

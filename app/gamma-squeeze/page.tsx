@@ -60,7 +60,7 @@ export default function GammaSqueeze() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API}/gamma-squeeze`)
+      const res = await fetch(`${API}/gamma-squeeze?t=${Date.now()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`Server returned ${res.status}`)
       const json = await res.json()
       setRows(json.signals || [])

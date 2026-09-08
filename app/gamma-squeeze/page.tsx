@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, Zap } from 'lucide-react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { RefreshCw, Zap, ArrowUp, ArrowDown } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 
@@ -44,6 +44,8 @@ function fmtNum(n: number) {
 export default function GammaSqueeze() {
   const [rows, setRows]           = useState<Squeeze[]>([])
   const [watchlist, setWatchlist] = useState<Squeeze[]>([])
+  const [sortCol, setSortCol] = useState<string>('legs_met')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [windowTime, setWindowTime] = useState('')
   const [closeTime, setCloseTime] = useState('')
   const [loading, setLoading]     = useState(true)
@@ -72,6 +74,36 @@ export default function GammaSqueeze() {
 
   const bullish = rows.filter(r => r.bias === 'BULLISH')
   const bearish = rows.filter(r => r.bias === 'BEARISH')
+
+  const handleSort = (col: string) => {
+    if (sortCol === col) {
+      setSortDir(d => (d === 'desc' ? 'asc' : 'desc'))
+    } else {
+      setSortCol(col)
+      setSortDir('desc')
+    }
+  }
+
+  const sortedWatchlist = useMemo(() => {
+    const arr = [...watchlist]
+    arr.sort((a: any, b: any) => {
+      let av = a[sortCol]
+      let bv = b[sortCol]
+      // For OI/vol columns, sort by magnitude of movement (abs), not sign —
+      // that's what "spot the biggest move" actually means for these.
+      if (['oi_chg_30min_pct', 'oi_chg_from_open_pct', 'ltp_chg_30min_pct'].includes(sortCol)) {
+        av = Math.abs(av ?? 0)
+        bv = Math.abs(bv ?? 0)
+      }
+      if (typeof av === 'string' && typeof bv === 'string') {
+        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      av = av ?? 0
+      bv = bv ?? 0
+      return sortDir === 'asc' ? av - bv : bv - av
+    })
+    return arr
+  }, [watchlist, sortCol, sortDir])
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -203,27 +235,33 @@ export default function GammaSqueeze() {
               👀 Watchlist — Key Strikes to Watch
             </h2>
             <p className="text-xs text-gray-600 mb-3">
-              Every stock's highest-OI strike (CE and PE), ranked by how many of the 3 conditions are already met — the closest to qualifying sit at the top
+              Every stock's highest-OI strike (CE and PE). Click any column header to sort — default is by how many of the 3 conditions are already met.
             </p>
             <div className="overflow-x-auto rounded-xl border border-gray-800">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-900/60 text-gray-500 text-left">
-                    <th className="px-3 py-2 font-semibold">Stock</th>
-                    <th className="px-3 py-2 font-semibold">Strike</th>
-                    <th className="px-3 py-2 font-semibold">Level</th>
-                    <th className="px-3 py-2 font-semibold">OI Δ (30m)</th>
-                    <th className="px-3 py-2 font-semibold">Premium Δ (30m)</th>
-                    <th className="px-3 py-2 font-semibold">Vol Spike</th>
-                    <th className="px-3 py-2 font-semibold">Legs Met</th>
+                    <SortTh label="Stock" col="symbol" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Strike" col="strike" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Level" col="level_kind" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="OI Δ (Day)" col="oi_chg_from_open_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="OI Δ (30m)" col="oi_chg_30min_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Premium Δ (30m)" col="ltp_chg_30min_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Vol Spike" col="vol_spike_ratio" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Legs Met" col="legs_met" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   </tr>
                 </thead>
                 <tbody>
-                  {watchlist.map(w => (
+                  {sortedWatchlist.map(w => (
                     <tr key={w.tradingsymbol} className="border-t border-gray-800/60 hover:bg-gray-900/30">
                       <td className="px-3 py-2 font-bold text-white">{w.symbol}</td>
                       <td className="px-3 py-2 text-gray-300">{w.strike.toLocaleString('en-IN')} {w.option_type}</td>
                       <td className="px-3 py-2 text-gray-500">{w.level_kind}</td>
+                      <td className="px-3 py-2">
+                        <span className={Math.abs(w.oi_chg_from_open_pct ?? 0) >= 10 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
+                          {(w.oi_chg_from_open_pct ?? 0) > 0 ? '+' : ''}{(w.oi_chg_from_open_pct ?? 0).toFixed(1)}%
+                        </span>
+                      </td>
                       <td className="px-3 py-2">
                         <span className={(w.oi_leg_pct ?? 0) >= 100 ? 'text-red-400 font-bold' : 'text-gray-400'}>
                           {w.oi_chg_30min_pct.toFixed(1)}%
@@ -260,6 +298,7 @@ export default function GammaSqueeze() {
             </div>
             <p className="text-[11px] text-gray-700 mt-2">
               3/3 means it should already be in the list above — 2/3 is a genuine near-miss worth watching closely on the next refresh.
+              "OI Δ (Day)" is the change since today's open (whole-day context); every other OI/premium/volume column is the live ~30-min window the strategy actually triggers on.
             </p>
           </div>
         )}
@@ -277,5 +316,30 @@ export default function GammaSqueeze() {
         </div>
       </div>
     </div>
+  )
+}
+
+function SortTh({ label, col, sortCol, sortDir, onSort }: {
+  label: string
+  col: string
+  sortCol: string
+  sortDir: 'asc' | 'desc'
+  onSort: (col: string) => void
+}) {
+  const active = sortCol === col
+  return (
+    <th
+      onClick={() => onSort(col)}
+      className={`px-3 py-2 font-semibold cursor-pointer select-none whitespace-nowrap hover:text-white transition-colors ${active ? 'text-white' : ''}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          sortDir === 'desc' ? <ArrowDown size={11} /> : <ArrowUp size={11} />
+        ) : (
+          <span className="w-[11px]" />
+        )}
+      </span>
+    </th>
   )
 }

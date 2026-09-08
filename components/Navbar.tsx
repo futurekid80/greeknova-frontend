@@ -14,7 +14,8 @@ const NAV_GROUPS = [
       { href: '/watchlist',  label: 'Watchlist' },
       { href: '/journal',    label: '📓 Journal' },
       { href: '/participant-flow', label: '🏦 Participant Flow' },
-      { href: '/sector-strength', label: '🔥 Sector Strength' }
+      { href: '/sector-strength', label: '🔥 Sector Strength' },
+      { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' }
     ]
   },
   {

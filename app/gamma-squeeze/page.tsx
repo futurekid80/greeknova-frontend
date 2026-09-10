@@ -1,11 +1,19 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { RefreshCw, Zap, ArrowUp, ArrowDown, Search, X } from 'lucide-react'
+import { RefreshCw, Zap, ArrowUp, ArrowDown, Search, X, CheckCircle2 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 
 const API = 'https://api.greeknova.com'
 const PAGE_SIZE = 20
+
+interface AlertConfirmation {
+  signal: string | null
+  oi_pct: number | null
+  vol_pct: number | null
+  ltp: number | null
+  created_at: string | null
+}
 
 interface GexRow {
   symbol: string
@@ -24,6 +32,11 @@ interface GexRow {
   pct_to_put_wall: number | null
   pct_to_flip: number | null
   squeeze: boolean
+  stage: 'ACTIVE_SQUEEZE' | 'ON_THE_VERGE' | null
+  squeeze_strike: number | null
+  squeeze_option_type: 'CE' | 'PE' | null
+  confirmed_by_alerts: boolean
+  confirmations: AlertConfirmation[]
   bias: 'BULLISH' | 'BEARISH' | null
   label: string
   desc: string
@@ -48,6 +61,24 @@ function closestWallPct(r: GexRow): number {
   const vals = [r.pct_to_call_wall, r.pct_to_put_wall].filter((v): v is number => v !== null)
   if (!vals.length) return 999
   return Math.min(...vals.map(v => Math.abs(v)))
+}
+
+function StageBadge({ stage }: { stage: 'ACTIVE_SQUEEZE' | 'ON_THE_VERGE' | null }) {
+  if (stage === 'ACTIVE_SQUEEZE') {
+    return (
+      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/90 text-black animate-pulse">
+        🔥 ACTIVE SQUEEZE
+      </span>
+    )
+  }
+  if (stage === 'ON_THE_VERGE') {
+    return (
+      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-900/60 text-orange-300">
+        ⏳ ON THE VERGE
+      </span>
+    )
+  }
+  return null
 }
 
 export default function GammaSqueeze() {
@@ -88,6 +119,8 @@ export default function GammaSqueeze() {
 
   const shortGamma = watchlist.filter(r => r.regime === 'SHORT_GAMMA')
   const longGamma  = watchlist.filter(r => r.regime === 'LONG_GAMMA')
+  const activeSqueezeCount = watchlist.filter(r => r.stage === 'ACTIVE_SQUEEZE').length
+  const onVergeCount = watchlist.filter(r => r.stage === 'ON_THE_VERGE').length
 
   const handleSort = (col: string) => {
     if (sortCol === col) {
@@ -144,7 +177,17 @@ export default function GammaSqueeze() {
     })
   }, [signals, searchTerm, regimeFilter])
 
-  const visibleSignals = showAllSignals ? filteredSignals : filteredSignals.slice(0, 8)
+  // Active squeezes (already through the wall) surface above ones still on the verge
+  const sortedSignals = useMemo(() => {
+    const arr = [...filteredSignals]
+    arr.sort((a, b) => {
+      const rank = (r: GexRow) => (r.stage === 'ACTIVE_SQUEEZE' ? 0 : r.stage === 'ON_THE_VERGE' ? 1 : 2)
+      return rank(a) - rank(b)
+    })
+    return arr
+  }, [filteredSignals])
+
+  const visibleSignals = showAllSignals ? sortedSignals : sortedSignals.slice(0, 8)
 
   const clearFilters = () => {
     setSearch('')
@@ -190,7 +233,15 @@ export default function GammaSqueeze() {
         )}
 
         {!loading && !error && watchlist.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+            <div className="bg-yellow-500/10 border border-yellow-600/40 rounded-xl px-4 py-3">
+              <p className="text-[10px] text-yellow-500 uppercase tracking-wide mb-1">🔥 Active Squeeze</p>
+              <p className="text-lg font-black text-yellow-400">{activeSqueezeCount}</p>
+            </div>
+            <div className="bg-orange-950/30 border border-orange-900/40 rounded-xl px-4 py-3">
+              <p className="text-[10px] text-orange-500 uppercase tracking-wide mb-1">⏳ On The Verge</p>
+              <p className="text-lg font-black text-orange-400">{onVergeCount}</p>
+            </div>
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-3">
               <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Squeeze Signals</p>
               <p className="text-lg font-black text-white">{signals.length}</p>
@@ -278,19 +329,31 @@ export default function GammaSqueeze() {
             <div className="space-y-3">
               {visibleSignals.map(r => (
                 <div key={r.symbol}
-                  className={`rounded-xl border p-4 ${r.bias === 'BULLISH' ? 'bg-emerald-950/20 border-emerald-900/40' : 'bg-red-950/20 border-red-900/40'}`}>
+                  className={`rounded-xl border p-4 ${r.stage === 'ACTIVE_SQUEEZE' ? 'ring-1 ring-yellow-500/40' : ''} ${r.bias === 'BULLISH' ? 'bg-emerald-950/20 border-emerald-900/40' : 'bg-red-950/20 border-red-900/40'}`}>
                   <div className="flex items-start justify-between flex-wrap gap-2 mb-2">
                     <div>
-                      <p className="font-black text-white text-sm">
+                      <p className="font-black text-white text-sm flex items-center flex-wrap gap-1.5">
                         {r.symbol}
-                        <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${r.bias === 'BULLISH' ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400'}`}>
+                        <StageBadge stage={r.stage} />
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.bias === 'BULLISH' ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400'}`}>
                           {r.bias}
                         </span>
-                        <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">
                           SHORT GAMMA
                         </span>
+                        {r.confirmed_by_alerts && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-900/50 text-sky-300">
+                            <CheckCircle2 size={11} /> Confirmed by live order flow
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
+                      {r.squeeze_strike !== null && (
+                        <p className="text-xs mt-1">
+                          <span className="text-gray-600">Strike being squeezed: </span>
+                          <span className="font-bold text-yellow-400">{fmtStrike(r.squeeze_strike)} {r.squeeze_option_type}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] text-gray-500 uppercase tracking-wide">Spot (CMP)</p>
@@ -322,6 +385,20 @@ export default function GammaSqueeze() {
                       <p className="text-white font-semibold">{r.days_to_expiry ?? '—'}</p>
                     </div>
                   </div>
+                  {r.confirmations.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-800/60">
+                      <p className="text-[10px] text-sky-400 uppercase tracking-wide mb-1.5">Live order-flow confirmation at this strike</p>
+                      <div className="flex flex-wrap gap-2">
+                        {r.confirmations.map((c, i) => (
+                          <span key={i} className="text-[11px] bg-sky-950/40 border border-sky-900/50 text-sky-300 rounded-lg px-2 py-1">
+                            {c.signal || 'Alert'}
+                            {c.oi_pct !== null ? ` · OI ${c.oi_pct > 0 ? '+' : ''}${c.oi_pct}%` : ''}
+                            {c.vol_pct !== null ? ` · Vol ${c.vol_pct > 0 ? '+' : ''}${c.vol_pct}%` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -355,6 +432,7 @@ export default function GammaSqueeze() {
                     <thead>
                       <tr className="bg-gray-900/60 text-gray-500 text-left">
                         <SortTh label="Stock" col="symbol" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                        <th className="px-3 py-2 font-semibold whitespace-nowrap">Stage</th>
                         <SortTh label="CMP" col="cmp" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                         <SortTh label="Call Wall" col="call_wall_strike" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                         <SortTh label="% to Call Wall" col="pct_to_call_wall" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -367,8 +445,19 @@ export default function GammaSqueeze() {
                     </thead>
                     <tbody>
                       {pagedWatchlist.map(w => (
-                        <tr key={w.symbol} className="border-t border-gray-800/60 hover:bg-gray-900/30">
-                          <td className="px-3 py-2 font-bold text-white">{w.symbol}</td>
+                        <tr key={w.symbol} className={`border-t border-gray-800/60 hover:bg-gray-900/30 ${w.stage === 'ACTIVE_SQUEEZE' ? 'bg-yellow-500/5' : ''}`}>
+                          <td className="px-3 py-2 font-bold text-white">
+                            {w.symbol}
+                            {w.squeeze_strike !== null && (
+                              <span className="block text-[10px] font-normal text-gray-500">@ {fmtStrike(w.squeeze_strike)} {w.squeeze_option_type}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-1">
+                              <StageBadge stage={w.stage} />
+                              {w.confirmed_by_alerts && <CheckCircle2 size={12} className="text-sky-400" />}
+                            </div>
+                          </td>
                           <td className="px-3 py-2 text-gray-300">₹{w.cmp.toLocaleString('en-IN')}</td>
                           <td className="px-3 py-2 text-gray-300">{fmtStrike(w.call_wall_strike)}</td>
                           <td className="px-3 py-2">
@@ -425,8 +514,11 @@ export default function GammaSqueeze() {
             the strikes carrying the most gamma-weighted OI on each side — real dealer hedging concentration, not just raw OI — and tend to act as resistance /
             support respectively. <span className="text-gray-400">Regime</span> is whether dealers are net <span className="text-red-400">short gamma</span> (their
             hedging amplifies moves — buying into strength, selling into weakness) or net <span className="text-emerald-400">long gamma</span> (hedging dampens
-            moves, price tends to pin) right now, read from the gamma balance near the current spot. A <span className="text-yellow-400">squeeze signal</span> fires
-            when a stock is short-gamma AND spot is pressing into its call or put wall — the setup where a breakout is most likely to accelerate rather than stall.
+            moves, price tends to pin) right now, read from the gamma balance near the current spot. A squeeze fires when a stock is short-gamma AND spot is
+            pressing into its call or put wall: <span className="text-orange-400 font-semibold">⏳ On The Verge</span> means the wall is still ahead and price is
+            approaching it, <span className="text-yellow-400 font-semibold">🔥 Active Squeeze</span> means price has already pushed through the wall and the move
+            may still be accelerating. A <span className="text-sky-400">Confirmed by live order flow</span> tag means the live Alerts feed picked up a real OI/volume
+            event at that exact strike in the last 45 minutes — the modeled squeeze lining up with actual order flow, not just the math.
             No lot-size table is wired in yet, so Net GEX is shown in relative "gamma × OI" units, not rupees — still exactly right for comparing walls and regime
             within one stock, just not for ranking absolute size across stocks · Not investment advice
           </p>

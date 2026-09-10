@@ -96,6 +96,7 @@ export default function GammaSqueeze() {
   const [regimeFilter, setRegimeFilter] = useState<RegimeFilter>('ALL')
   const [stageFilter, setStageFilter] = useState<StageFilter>('ALL')
   const [maxWallDist, setMaxWallDist] = useState<number>(100) // % — 100 = no filter
+  const [confirmedOnly, setConfirmedOnly] = useState(false)
   const [page, setPage] = useState(1)
   const [showAllSignals, setShowAllSignals] = useState(false)
 
@@ -134,7 +135,7 @@ export default function GammaSqueeze() {
   }
 
   const searchTerm = search.trim().toUpperCase()
-  const filtersActive = searchTerm !== '' || regimeFilter !== 'ALL' || stageFilter !== 'ALL' || maxWallDist < 100
+  const filtersActive = searchTerm !== '' || regimeFilter !== 'ALL' || stageFilter !== 'ALL' || maxWallDist < 100 || confirmedOnly
 
   const filteredWatchlist = useMemo(() => {
     return watchlist.filter(r => {
@@ -142,9 +143,10 @@ export default function GammaSqueeze() {
       if (regimeFilter !== 'ALL' && r.regime !== regimeFilter) return false
       if (stageFilter !== 'ALL' && r.stage !== stageFilter) return false
       if (maxWallDist < 100 && closestWallPct(r) > maxWallDist) return false
+      if (confirmedOnly && !r.confirmed_by_alerts) return false
       return true
     })
-  }, [watchlist, searchTerm, regimeFilter, stageFilter, maxWallDist])
+  }, [watchlist, searchTerm, regimeFilter, stageFilter, maxWallDist, confirmedOnly])
 
   const sortedWatchlist = useMemo(() => {
     const arr = [...filteredWatchlist]
@@ -166,7 +168,7 @@ export default function GammaSqueeze() {
   }, [filteredWatchlist, sortCol, sortDir])
 
   // Reset to page 1 whenever the filtered set or sort changes underneath the current page
-  useEffect(() => { setPage(1) }, [searchTerm, regimeFilter, stageFilter, maxWallDist, sortCol, sortDir])
+  useEffect(() => { setPage(1) }, [searchTerm, regimeFilter, stageFilter, maxWallDist, confirmedOnly, sortCol, sortDir])
 
   const totalPages = Math.max(1, Math.ceil(sortedWatchlist.length / PAGE_SIZE))
   const pageSafe = Math.min(page, totalPages)
@@ -177,9 +179,10 @@ export default function GammaSqueeze() {
       if (searchTerm && !r.symbol.includes(searchTerm)) return false
       if (regimeFilter === 'LONG_GAMMA') return false // signals are always short-gamma
       if (stageFilter !== 'ALL' && r.stage !== stageFilter) return false
+      if (confirmedOnly && !r.confirmed_by_alerts) return false
       return true
     })
-  }, [signals, searchTerm, regimeFilter, stageFilter])
+  }, [signals, searchTerm, regimeFilter, stageFilter, confirmedOnly])
 
   // Active squeezes (already through the wall) surface above ones still on the verge
   const sortedSignals = useMemo(() => {
@@ -198,6 +201,7 @@ export default function GammaSqueeze() {
   const closestToTrigger = useMemo(() => {
     return [...watchlist]
       .filter(r => r.regime === 'SHORT_GAMMA' && closestWallPct(r) <= 3)
+      .filter(r => !confirmedOnly || r.confirmed_by_alerts)
       .sort((a, b) => {
         const rank = (r: GexRow) => (r.stage === 'ACTIVE_SQUEEZE' ? 0 : r.stage === 'ON_THE_VERGE' ? 1 : 2)
         const rankDiff = rank(a) - rank(b)
@@ -205,13 +209,14 @@ export default function GammaSqueeze() {
         return closestWallPct(a) - closestWallPct(b)
       })
       .slice(0, 10)
-  }, [watchlist])
+  }, [watchlist, confirmedOnly])
 
   const clearFilters = () => {
     setSearch('')
     setRegimeFilter('ALL')
     setStageFilter('ALL')
     setMaxWallDist(100)
+    setConfirmedOnly(false)
   }
 
   return (
@@ -376,6 +381,12 @@ export default function GammaSqueeze() {
               </select>
               of a wall
             </label>
+            <button onClick={() => setConfirmedOnly(v => !v)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
+                confirmedOnly ? 'bg-sky-900/50 text-sky-300 border-sky-700/60' : 'bg-gray-900/60 text-gray-500 border-gray-800 hover:text-gray-300'
+              }`}>
+              <CheckCircle2 size={12} /> Confirmed by order flow
+            </button>
             {filtersActive && (
               <button onClick={clearFilters} className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-white px-2 py-1.5">
                 <X size={12} /> Clear

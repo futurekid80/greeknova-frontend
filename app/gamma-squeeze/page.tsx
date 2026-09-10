@@ -43,6 +43,7 @@ interface GexRow {
 }
 
 type RegimeFilter = 'ALL' | 'SHORT_GAMMA' | 'LONG_GAMMA'
+type StageFilter = 'ALL' | 'ACTIVE_SQUEEZE' | 'ON_THE_VERGE'
 
 function fmtNum(n: number | null) {
   if (n === null || n === undefined) return '—'
@@ -93,6 +94,7 @@ export default function GammaSqueeze() {
   // Filters — shared across signal cards and the watchlist table
   const [search, setSearch] = useState('')
   const [regimeFilter, setRegimeFilter] = useState<RegimeFilter>('ALL')
+  const [stageFilter, setStageFilter] = useState<StageFilter>('ALL')
   const [maxWallDist, setMaxWallDist] = useState<number>(100) // % — 100 = no filter
   const [page, setPage] = useState(1)
   const [showAllSignals, setShowAllSignals] = useState(false)
@@ -132,16 +134,17 @@ export default function GammaSqueeze() {
   }
 
   const searchTerm = search.trim().toUpperCase()
-  const filtersActive = searchTerm !== '' || regimeFilter !== 'ALL' || maxWallDist < 100
+  const filtersActive = searchTerm !== '' || regimeFilter !== 'ALL' || stageFilter !== 'ALL' || maxWallDist < 100
 
   const filteredWatchlist = useMemo(() => {
     return watchlist.filter(r => {
       if (searchTerm && !r.symbol.includes(searchTerm)) return false
       if (regimeFilter !== 'ALL' && r.regime !== regimeFilter) return false
+      if (stageFilter !== 'ALL' && r.stage !== stageFilter) return false
       if (maxWallDist < 100 && closestWallPct(r) > maxWallDist) return false
       return true
     })
-  }, [watchlist, searchTerm, regimeFilter, maxWallDist])
+  }, [watchlist, searchTerm, regimeFilter, stageFilter, maxWallDist])
 
   const sortedWatchlist = useMemo(() => {
     const arr = [...filteredWatchlist]
@@ -163,7 +166,7 @@ export default function GammaSqueeze() {
   }, [filteredWatchlist, sortCol, sortDir])
 
   // Reset to page 1 whenever the filtered set or sort changes underneath the current page
-  useEffect(() => { setPage(1) }, [searchTerm, regimeFilter, maxWallDist, sortCol, sortDir])
+  useEffect(() => { setPage(1) }, [searchTerm, regimeFilter, stageFilter, maxWallDist, sortCol, sortDir])
 
   const totalPages = Math.max(1, Math.ceil(sortedWatchlist.length / PAGE_SIZE))
   const pageSafe = Math.min(page, totalPages)
@@ -173,9 +176,10 @@ export default function GammaSqueeze() {
     return signals.filter(r => {
       if (searchTerm && !r.symbol.includes(searchTerm)) return false
       if (regimeFilter === 'LONG_GAMMA') return false // signals are always short-gamma
+      if (stageFilter !== 'ALL' && r.stage !== stageFilter) return false
       return true
     })
-  }, [signals, searchTerm, regimeFilter])
+  }, [signals, searchTerm, regimeFilter, stageFilter])
 
   // Active squeezes (already through the wall) surface above ones still on the verge
   const sortedSignals = useMemo(() => {
@@ -206,6 +210,7 @@ export default function GammaSqueeze() {
   const clearFilters = () => {
     setSearch('')
     setRegimeFilter('ALL')
+    setStageFilter('ALL')
     setMaxWallDist(100)
   }
 
@@ -248,18 +253,21 @@ export default function GammaSqueeze() {
 
         {!loading && !error && watchlist.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
-            <div className="bg-yellow-500/10 border border-yellow-600/40 rounded-xl px-4 py-3">
+            <button onClick={() => setStageFilter(stageFilter === 'ACTIVE_SQUEEZE' ? 'ALL' : 'ACTIVE_SQUEEZE')}
+              className={`text-left bg-yellow-500/10 border rounded-xl px-4 py-3 transition-all ${stageFilter === 'ACTIVE_SQUEEZE' ? 'border-yellow-400' : 'border-yellow-600/40 hover:border-yellow-500/70'}`}>
               <p className="text-[10px] text-yellow-500 uppercase tracking-wide mb-1">🔥 Active Squeeze</p>
               <p className="text-lg font-black text-yellow-400">{activeSqueezeCount}</p>
-            </div>
-            <div className="bg-orange-950/30 border border-orange-900/40 rounded-xl px-4 py-3">
+            </button>
+            <button onClick={() => setStageFilter(stageFilter === 'ON_THE_VERGE' ? 'ALL' : 'ON_THE_VERGE')}
+              className={`text-left bg-orange-950/30 border rounded-xl px-4 py-3 transition-all ${stageFilter === 'ON_THE_VERGE' ? 'border-orange-400' : 'border-orange-900/40 hover:border-orange-700/60'}`}>
               <p className="text-[10px] text-orange-500 uppercase tracking-wide mb-1">⏳ On The Verge</p>
               <p className="text-lg font-black text-orange-400">{onVergeCount}</p>
-            </div>
-            <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-3">
+            </button>
+            <button onClick={() => setStageFilter('ALL')}
+              className={`text-left bg-gray-900/30 border rounded-xl px-4 py-3 transition-all ${stageFilter === 'ALL' ? 'border-gray-500' : 'border-gray-800 hover:border-gray-600'}`}>
               <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Squeeze Signals</p>
               <p className="text-lg font-black text-white">{signals.length}</p>
-            </div>
+            </button>
             <button onClick={() => setRegimeFilter(regimeFilter === 'SHORT_GAMMA' ? 'ALL' : 'SHORT_GAMMA')}
               className={`text-left bg-red-950/30 border rounded-xl px-4 py-3 transition-all ${regimeFilter === 'SHORT_GAMMA' ? 'border-red-500' : 'border-red-900/40 hover:border-red-700/60'}`}>
               <p className="text-[10px] text-red-600 uppercase tracking-wide mb-1">Short Gamma — Amplifying</p>

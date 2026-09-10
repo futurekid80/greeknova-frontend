@@ -189,6 +189,20 @@ export default function GammaSqueeze() {
 
   const visibleSignals = showAllSignals ? sortedSignals : sortedSignals.slice(0, 8)
 
+  // Stocks nearest to triggering (or already triggered) a squeeze, regardless of
+  // page/pagination — this is the "what's about to move" quick-glance panel
+  const closestToTrigger = useMemo(() => {
+    return [...watchlist]
+      .filter(r => r.regime === 'SHORT_GAMMA' && closestWallPct(r) <= 3)
+      .sort((a, b) => {
+        const rank = (r: GexRow) => (r.stage === 'ACTIVE_SQUEEZE' ? 0 : r.stage === 'ON_THE_VERGE' ? 1 : 2)
+        const rankDiff = rank(a) - rank(b)
+        if (rankDiff !== 0) return rankDiff
+        return closestWallPct(a) - closestWallPct(b)
+      })
+      .slice(0, 10)
+  }, [watchlist])
+
   const clearFilters = () => {
     setSearch('')
     setRegimeFilter('ALL')
@@ -256,6 +270,61 @@ export default function GammaSqueeze() {
               <p className="text-[10px] text-emerald-600 uppercase tracking-wide mb-1">Long Gamma — Pinning</p>
               <p className="text-lg font-black text-emerald-400">{longGamma.length}</p>
             </button>
+          </div>
+        )}
+
+        {/* Closest to Trigger — always visible, no scrolling/paging needed */}
+        {!loading && !error && closestToTrigger.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-sm font-black text-gray-300 mb-1 flex items-center gap-2">
+              🎯 Closest to Trigger
+            </h2>
+            <p className="text-xs text-gray-600 mb-3">
+              Short-gamma stocks nearest their wall right now (within 3%), closest first — the ones most likely to flip stage on the next move.
+            </p>
+            <div className="overflow-x-auto rounded-xl border border-gray-800">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-900/60 text-gray-500 text-left">
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Stock</th>
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Stage</th>
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">CMP</th>
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Wall</th>
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Distance</th>
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Bias</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {closestToTrigger.map(r => {
+                    const useCall = r.pct_to_call_wall !== null && (r.pct_to_put_wall === null || Math.abs(r.pct_to_call_wall) <= Math.abs(r.pct_to_put_wall))
+                    const wallStrike = useCall ? r.call_wall_strike : r.put_wall_strike
+                    const wallSide = useCall ? 'CE' : 'PE'
+                    const dist = useCall ? r.pct_to_call_wall : r.pct_to_put_wall
+                    return (
+                      <tr key={r.symbol} className={`border-t border-gray-800/60 hover:bg-gray-900/30 ${r.stage === 'ACTIVE_SQUEEZE' ? 'bg-yellow-500/5' : ''}`}>
+                        <td className="px-3 py-2 font-bold text-white">
+                          {r.symbol}
+                          {r.confirmed_by_alerts && <CheckCircle2 size={11} className="inline ml-1.5 text-sky-400" />}
+                        </td>
+                        <td className="px-3 py-2"><StageBadge stage={r.stage} /></td>
+                        <td className="px-3 py-2 text-gray-300">₹{r.cmp.toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-2 text-gray-300">{fmtStrike(wallStrike)} {wallSide}</td>
+                        <td className="px-3 py-2">
+                          <span className="text-orange-400 font-bold">
+                            {dist !== null ? `${dist > 0 ? '+' : ''}${dist.toFixed(1)}%` : '—'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.bias === 'BULLISH' ? 'bg-emerald-900/60 text-emerald-400' : r.bias === 'BEARISH' ? 'bg-red-900/60 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
+                            {r.bias ?? '—'}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

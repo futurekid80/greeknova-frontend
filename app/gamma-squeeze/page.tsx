@@ -6,53 +6,47 @@ import { useAutoRefresh } from '@/lib/useAutoRefresh'
 
 const API = 'https://api.greeknova.com'
 
-interface Squeeze {
+interface GexRow {
   symbol: string
-  tradingsymbol: string
-  strike: number
-  option_type: 'CE' | 'PE'
-  level_kind: 'Resistance' | 'Support'
   cmp: number
-  ltp: number
-  ltp_chg_30min_pct: number
-  oi: number
-  oi_chg_30min_pct: number
-  oi_chg_from_open_pct: number
-  volume: number
-  vol_spike_ratio: number
+  expiry: string | null
   days_to_expiry: number | null
-  conviction: 'HIGH' | 'LOW'
-  conviction_note: string
-  squeeze_score: number
-  bias: 'BULLISH' | 'BEARISH'
+  call_wall_strike: number | null
+  call_wall_gamma_oi: number | null
+  put_wall_strike: number | null
+  put_wall_gamma_oi: number | null
+  flip_point: number | null
+  net_gex: number
+  net_gex_near_spot: number
+  regime: 'SHORT_GAMMA' | 'LONG_GAMMA'
+  pct_to_call_wall: number | null
+  pct_to_put_wall: number | null
+  pct_to_flip: number | null
+  squeeze: boolean
+  bias: 'BULLISH' | 'BEARISH' | null
   label: string
   desc: string
-  triggered?: boolean
-  legs_met?: number
-  oi_leg_pct?: number
-  ltp_leg_pct?: number
-  vol_leg_pct?: number
 }
 
-function pctAway(w: Squeeze): number {
-  if (!w.cmp || !w.strike) return 0
-  return ((w.cmp - w.strike) / w.strike) * 100
-}
-
-function fmtNum(n: number) {
-  if (n >= 10000000) return (n / 10000000).toFixed(2) + 'Cr'
-  if (n >= 100000) return (n / 100000).toFixed(2) + 'L'
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+function fmtNum(n: number | null) {
+  if (n === null || n === undefined) return '—'
+  const abs = Math.abs(n)
+  if (abs >= 10000000) return (n / 10000000).toFixed(2) + 'Cr'
+  if (abs >= 100000) return (n / 100000).toFixed(2) + 'L'
+  if (abs >= 1000) return (n / 1000).toFixed(1) + 'K'
   return n.toLocaleString('en-IN')
 }
 
+function fmtStrike(n: number | null) {
+  return n === null || n === undefined ? '—' : n.toLocaleString('en-IN')
+}
+
 export default function GammaSqueeze() {
-  const [rows, setRows]           = useState<Squeeze[]>([])
-  const [watchlist, setWatchlist] = useState<Squeeze[]>([])
-  const [sortCol, setSortCol] = useState<string>('legs_met')
+  const [watchlist, setWatchlist] = useState<GexRow[]>([])
+  const [signals, setSignals]     = useState<GexRow[]>([])
+  const [sortCol, setSortCol] = useState<string>('regime')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [windowTime, setWindowTime] = useState('')
-  const [closeTime, setCloseTime] = useState('')
+  const [asOf, setAsOf] = useState('')
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
 
@@ -63,13 +57,12 @@ export default function GammaSqueeze() {
       const res = await fetch(`${API}/gamma-squeeze?t=${Date.now()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`Server returned ${res.status}`)
       const json = await res.json()
-      setRows(json.signals || [])
       setWatchlist(json.watchlist || [])
-      setWindowTime(json.window_time || '')
-      setCloseTime(json.close_time || '')
+      setSignals(json.signals || [])
+      setAsOf(json.as_of || '')
     } catch (e: any) {
       console.error(e)
-      setError(e?.message || 'Failed to load gamma squeeze data')
+      setError(e?.message || 'Failed to load gamma exposure data')
     }
     setLoading(false)
   }, [])
@@ -77,8 +70,8 @@ export default function GammaSqueeze() {
   useEffect(() => { fetchData() }, [fetchData])
   const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, false)
 
-  const bullish = rows.filter(r => r.bias === 'BULLISH')
-  const bearish = rows.filter(r => r.bias === 'BEARISH')
+  const shortGamma = watchlist.filter(r => r.regime === 'SHORT_GAMMA')
+  const longGamma  = watchlist.filter(r => r.regime === 'LONG_GAMMA')
 
   const handleSort = (col: string) => {
     if (sortCol === col) {
@@ -92,11 +85,9 @@ export default function GammaSqueeze() {
   const sortedWatchlist = useMemo(() => {
     const arr = [...watchlist]
     arr.sort((a: any, b: any) => {
-      let av = sortCol === 'pct_away' ? pctAway(a) : a[sortCol]
-      let bv = sortCol === 'pct_away' ? pctAway(b) : b[sortCol]
-      // For OI/vol/distance columns, sort by magnitude (abs), not sign —
-      // that's what "spot the biggest move" / "closest to the money" means.
-      if (['oi_chg_30min_pct', 'oi_chg_from_open_pct', 'ltp_chg_30min_pct', 'pct_away'].includes(sortCol)) {
+      let av = a[sortCol]
+      let bv = b[sortCol]
+      if (['pct_to_call_wall', 'pct_to_put_wall', 'pct_to_flip', 'net_gex_near_spot'].includes(sortCol)) {
         av = Math.abs(av ?? 0)
         bv = Math.abs(bv ?? 0)
       }
@@ -119,10 +110,10 @@ export default function GammaSqueeze() {
         <div className="flex items-end justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1 flex items-center gap-2">
-              <Zap size={26} className="text-yellow-400" /> Gamma Squeeze
+              <Zap size={26} className="text-yellow-400" /> Gamma Exposure
             </h1>
             <p className="text-gray-500 text-sm">
-              Highest-OI strike per stock (the real support/resistance) where writers are getting squeezed out — OI unwinding + abnormal volume + premium spiking, together
+              Real dealer gamma per stock — Call Wall / Put Wall from IV-solved option gamma weighted by OI, and whether dealer hedging is currently amplifying or dampening moves
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -137,8 +128,8 @@ export default function GammaSqueeze() {
           </div>
         </div>
 
-        {(windowTime || closeTime) && (
-          <p className="text-xs text-gray-600 mb-5">Comparing {closeTime} IST vs ~30 min ago ({windowTime} IST) at each stock's highest-OI strike · all expiries shown, tagged by conviction</p>
+        {asOf && (
+          <p className="text-xs text-gray-600 mb-5">As of {asOf} IST · nearest active expiry per stock · walls & regime computed from IV-implied gamma × OI across the live chain</p>
         )}
 
         {error && (
@@ -147,19 +138,19 @@ export default function GammaSqueeze() {
           </div>
         )}
 
-        {!loading && !error && rows.length > 0 && (
+        {!loading && !error && watchlist.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-3">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Total Setups</p>
-              <p className="text-lg font-black text-white">{rows.length}</p>
-            </div>
-            <div className="bg-emerald-950/30 border border-emerald-900/40 rounded-xl px-4 py-3">
-              <p className="text-[10px] text-emerald-600 uppercase tracking-wide mb-1">Bullish — Resistance Squeeze</p>
-              <p className="text-lg font-black text-emerald-400">{bullish.length}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Squeeze Signals</p>
+              <p className="text-lg font-black text-white">{signals.length}</p>
             </div>
             <div className="bg-red-950/30 border border-red-900/40 rounded-xl px-4 py-3">
-              <p className="text-[10px] text-red-600 uppercase tracking-wide mb-1">Bearish — Support Squeeze</p>
-              <p className="text-lg font-black text-red-400">{bearish.length}</p>
+              <p className="text-[10px] text-red-600 uppercase tracking-wide mb-1">Short Gamma — Amplifying</p>
+              <p className="text-lg font-black text-red-400">{shortGamma.length}</p>
+            </div>
+            <div className="bg-emerald-950/30 border border-emerald-900/40 rounded-xl px-4 py-3">
+              <p className="text-[10px] text-emerald-600 uppercase tracking-wide mb-1">Long Gamma — Pinning</p>
+              <p className="text-lg font-black text-emerald-400">{longGamma.length}</p>
             </div>
           </div>
         )}
@@ -170,58 +161,54 @@ export default function GammaSqueeze() {
               <div key={i} className="h-28 bg-gray-900/30 rounded-xl animate-pulse" />
             ))}
           </div>
-        ) : !error && rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
+        ) : !error && signals.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 border border-gray-800/50 rounded-2xl mb-8">
             <div className="text-4xl mb-4">⚡</div>
-            <p className="text-gray-500">No squeeze setups right now</p>
-            <p className="text-gray-700 text-xs mt-1">Nothing has its key strike unwinding 4%+ OI with an abnormal volume spike and premium up 3%+ in the last 30 min</p>
+            <p className="text-gray-500">No squeeze signals right now</p>
+            <p className="text-gray-700 text-xs mt-1">Nothing is both in a short-gamma regime and pressing into its call or put wall — check the watchlist below for what's closest</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {rows.map(r => (
-              <div key={r.tradingsymbol}
+          <div className="space-y-3 mb-8">
+            {signals.map(r => (
+              <div key={r.symbol}
                 className={`rounded-xl border p-4 ${r.bias === 'BULLISH' ? 'bg-emerald-950/20 border-emerald-900/40' : 'bg-red-950/20 border-red-900/40'}`}>
                 <div className="flex items-start justify-between flex-wrap gap-2 mb-2">
                   <div>
                     <p className="font-black text-white text-sm">
-                      {r.symbol} {r.strike.toLocaleString('en-IN')} {r.option_type}
+                      {r.symbol}
                       <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${r.bias === 'BULLISH' ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400'}`}>
                         {r.bias}
                       </span>
-                      <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">
-                        {r.level_kind} · highest OI strike
-                      </span>
-                      <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${r.conviction === 'HIGH' ? 'bg-emerald-900/60 text-emerald-400' : 'bg-yellow-900/50 text-yellow-500'}`}>
-                        {r.conviction === 'HIGH' ? '🟢 Near Expiry' : '🟡 Early Cycle'}
+                      <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">
+                        SHORT GAMMA
                       </span>
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wide">Squeeze Score</p>
-                    <p className="text-xl font-black text-yellow-400">{r.squeeze_score.toFixed(1)}</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide">Spot (CMP)</p>
+                    <p className="text-xl font-black text-yellow-400">₹{r.cmp.toLocaleString('en-IN')}</p>
                   </div>
                 </div>
-                <p className="text-xs text-gray-400 mb-1">{r.desc}</p>
-                <p className={`text-[11px] mb-3 ${r.conviction === 'HIGH' ? 'text-emerald-500/80' : 'text-yellow-600/80'}`}>{r.conviction_note}</p>
+                <p className="text-xs text-gray-400 mb-3">{r.desc}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                   <div>
-                    <p className="text-gray-600">Premium (30 min)</p>
-                    <p className="text-white font-semibold">₹{r.ltp.toFixed(2)}</p>
-                    <p className="text-emerald-400">+{r.ltp_chg_30min_pct.toFixed(1)}%</p>
+                    <p className="text-gray-600">Call Wall</p>
+                    <p className="text-white font-semibold">{fmtStrike(r.call_wall_strike)}</p>
+                    <p className="text-gray-500">{r.pct_to_call_wall !== null ? `${r.pct_to_call_wall > 0 ? '+' : ''}${r.pct_to_call_wall.toFixed(1)}% away` : '—'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600">OI (30 min)</p>
-                    <p className="text-white font-semibold">{fmtNum(r.oi)}</p>
-                    <p className="text-red-400">{r.oi_chg_30min_pct.toFixed(1)}%</p>
+                    <p className="text-gray-600">Put Wall</p>
+                    <p className="text-white font-semibold">{fmtStrike(r.put_wall_strike)}</p>
+                    <p className="text-gray-500">{r.pct_to_put_wall !== null ? `${r.pct_to_put_wall > 0 ? '+' : ''}${r.pct_to_put_wall.toFixed(1)}% away` : '—'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600">Volume Spike</p>
-                    <p className="text-white font-semibold">{r.vol_spike_ratio.toFixed(1)}x baseline</p>
+                    <p className="text-gray-600">Flip Point</p>
+                    <p className="text-white font-semibold">{fmtStrike(r.flip_point)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600">Spot (CMP)</p>
-                    <p className="text-white font-semibold">₹{r.cmp.toLocaleString('en-IN')}</p>
+                    <p className="text-gray-600">Net GEX (near spot)</p>
+                    <p className={`font-semibold ${r.net_gex_near_spot < 0 ? 'text-red-400' : 'text-emerald-400'}`}>{fmtNum(r.net_gex_near_spot)}</p>
                   </div>
                   <div>
                     <p className="text-gray-600">Days to Expiry</p>
@@ -233,75 +220,54 @@ export default function GammaSqueeze() {
           </div>
         )}
 
-        {/* Watchlist — every stock's key strike, ranked by how close it is to qualifying */}
+        {/* Watchlist — every stock's gamma profile */}
         {!loading && watchlist.length > 0 && (
-          <div className="mt-8">
+          <div className="mt-2">
             <h2 className="text-sm font-black text-gray-300 mb-1 flex items-center gap-2">
-              👀 Watchlist — Key Strikes to Watch
+              👀 Watchlist — Gamma Profile by Stock
             </h2>
             <p className="text-xs text-gray-600 mb-3">
-              Every stock's highest-OI strike (CE and PE). Click any column header to sort — default is by how many of the 3 conditions are already met.
+              Every stock's call wall, put wall, flip point and current gamma regime. Click any column header to sort.
             </p>
             <div className="overflow-x-auto rounded-xl border border-gray-800">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-900/60 text-gray-500 text-left">
                     <SortTh label="Stock" col="symbol" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="Strike" col="strike" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="Level" col="level_kind" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="CMP" col="cmp" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="% Away" col="pct_away" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="OI Δ (Day)" col="oi_chg_from_open_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="OI Δ (30m)" col="oi_chg_30min_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="Premium Δ (30m)" col="ltp_chg_30min_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="Vol Spike" col="vol_spike_ratio" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="Legs Met" col="legs_met" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Call Wall" col="call_wall_strike" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="% to Call Wall" col="pct_to_call_wall" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Put Wall" col="put_wall_strike" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="% to Put Wall" col="pct_to_put_wall" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Flip Point" col="flip_point" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Net GEX" col="net_gex_near_spot" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="Regime" col="regime" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   </tr>
                 </thead>
                 <tbody>
                   {sortedWatchlist.map(w => (
-                    <tr key={w.tradingsymbol} className="border-t border-gray-800/60 hover:bg-gray-900/30">
+                    <tr key={w.symbol} className="border-t border-gray-800/60 hover:bg-gray-900/30">
                       <td className="px-3 py-2 font-bold text-white">{w.symbol}</td>
-                      <td className="px-3 py-2 text-gray-300">{w.strike.toLocaleString('en-IN')} {w.option_type}</td>
-                      <td className="px-3 py-2 text-gray-500">{w.level_kind}</td>
-                      <td className="px-3 py-2 text-gray-300">{w.cmp ? `₹${w.cmp.toLocaleString('en-IN')}` : '—'}</td>
+                      <td className="px-3 py-2 text-gray-300">₹{w.cmp.toLocaleString('en-IN')}</td>
+                      <td className="px-3 py-2 text-gray-300">{fmtStrike(w.call_wall_strike)}</td>
                       <td className="px-3 py-2">
-                        <span className={Math.abs(pctAway(w)) <= 1 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
-                          {w.cmp ? `${pctAway(w) > 0 ? '+' : ''}${pctAway(w).toFixed(1)}%` : '—'}
+                        <span className={w.pct_to_call_wall !== null && Math.abs(w.pct_to_call_wall) <= 1.5 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
+                          {w.pct_to_call_wall !== null ? `${w.pct_to_call_wall > 0 ? '+' : ''}${w.pct_to_call_wall.toFixed(1)}%` : '—'}
                         </span>
                       </td>
+                      <td className="px-3 py-2 text-gray-300">{fmtStrike(w.put_wall_strike)}</td>
                       <td className="px-3 py-2">
-                        <span className={Math.abs(w.oi_chg_from_open_pct ?? 0) >= 10 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
-                          {(w.oi_chg_from_open_pct ?? 0) > 0 ? '+' : ''}{(w.oi_chg_from_open_pct ?? 0).toFixed(1)}%
+                        <span className={w.pct_to_put_wall !== null && Math.abs(w.pct_to_put_wall) <= 1.5 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
+                          {w.pct_to_put_wall !== null ? `${w.pct_to_put_wall > 0 ? '+' : ''}${w.pct_to_put_wall.toFixed(1)}%` : '—'}
                         </span>
                       </td>
+                      <td className="px-3 py-2 text-gray-400">{fmtStrike(w.flip_point)}</td>
                       <td className="px-3 py-2">
-                        <span className={(w.oi_leg_pct ?? 0) >= 100 ? 'text-red-400 font-bold' : 'text-gray-400'}>
-                          {w.oi_chg_30min_pct.toFixed(1)}%
-                        </span>
-                        <div className="w-14 h-1 bg-gray-800 rounded-full mt-1">
-                          <div className="h-1 bg-red-500 rounded-full" style={{ width: `${w.oi_leg_pct ?? 0}%` }} />
-                        </div>
+                        <span className={w.net_gex_near_spot < 0 ? 'text-red-400' : 'text-emerald-400'}>{fmtNum(w.net_gex_near_spot)}</span>
                       </td>
                       <td className="px-3 py-2">
-                        <span className={(w.ltp_leg_pct ?? 0) >= 100 ? 'text-emerald-400 font-bold' : 'text-gray-400'}>
-                          {w.ltp_chg_30min_pct > 0 ? '+' : ''}{w.ltp_chg_30min_pct.toFixed(1)}%
-                        </span>
-                        <div className="w-14 h-1 bg-gray-800 rounded-full mt-1">
-                          <div className="h-1 bg-emerald-500 rounded-full" style={{ width: `${w.ltp_leg_pct ?? 0}%` }} />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={(w.vol_leg_pct ?? 0) >= 100 ? 'text-yellow-400 font-bold' : 'text-gray-400'}>
-                          {w.vol_spike_ratio.toFixed(1)}x
-                        </span>
-                        <div className="w-14 h-1 bg-gray-800 rounded-full mt-1">
-                          <div className="h-1 bg-yellow-500 rounded-full" style={{ width: `${w.vol_leg_pct ?? 0}%` }} />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`font-bold ${w.legs_met === 2 ? 'text-yellow-400' : w.legs_met === 3 ? 'text-emerald-400' : 'text-gray-600'}`}>
-                          {w.legs_met}/3
+                        <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${w.regime === 'SHORT_GAMMA' ? 'bg-red-900/40 text-red-400' : 'bg-emerald-900/40 text-emerald-400'}`}>
+                          {w.regime === 'SHORT_GAMMA' ? 'SHORT' : 'LONG'}
                         </span>
                       </td>
                     </tr>
@@ -309,22 +275,21 @@ export default function GammaSqueeze() {
                 </tbody>
               </table>
             </div>
-            <p className="text-[11px] text-gray-700 mt-2">
-              3/3 means it should already be in the list above — 2/3 is a genuine near-miss worth watching closely on the next refresh.
-              "OI Δ (Day)" is the change since today's open (whole-day context); every other OI/premium/volume column is the live ~30-min window the strategy actually triggers on.
-            </p>
           </div>
         )}
 
         <div className="mt-6 bg-gray-900/20 border border-gray-800/40 rounded-xl p-4">
           <p className="text-xs text-gray-600 leading-relaxed">
-            <span className="text-gray-400 font-semibold">How to read (Gamma Move strategy): </span>
-            For every stock we take the single strike carrying the most open interest on each side — that strike IS the real support (PE) or resistance (CE),
-            since that's where the most writers are positioned. We watch that one strike for three things happening together in the last ~30 minutes: its OI
-            unwinding fast, its volume running well above its own recent baseline rate, and its own premium rising — the sign that writers there are being
-            forced to cover, which can accelerate the move further. Shown for every expiry, tagged 🟢 Near Expiry (≤14 days — matches the strategy's own
-            conditions) or 🟡 Early Cycle (further out — the pattern showed up, but writers may not be under real pressure to cover yet, so weight it
-            accordingly). Call-side squeezes (resistance) are bullish, put-side (support) are bearish · Not investment advice
+            <span className="text-gray-400 font-semibold">How to read (Gamma Exposure): </span>
+            For every stock we back out implied volatility from each strike's live premium, compute that strike's Black-Scholes gamma, and weight it by
+            open interest across the whole nearest-expiry chain. The <span className="text-gray-400">Call Wall</span> and <span className="text-gray-400">Put Wall</span> are
+            the strikes carrying the most gamma-weighted OI on each side — real dealer hedging concentration, not just raw OI — and tend to act as resistance /
+            support respectively. <span className="text-gray-400">Regime</span> is whether dealers are net <span className="text-red-400">short gamma</span> (their
+            hedging amplifies moves — buying into strength, selling into weakness) or net <span className="text-emerald-400">long gamma</span> (hedging dampens
+            moves, price tends to pin) right now, read from the gamma balance near the current spot. A <span className="text-yellow-400">squeeze signal</span> fires
+            when a stock is short-gamma AND spot is pressing into its call or put wall — the setup where a breakout is most likely to accelerate rather than stall.
+            No lot-size table is wired in yet, so Net GEX is shown in relative "gamma × OI" units, not rupees — still exactly right for comparing walls and regime
+            within one stock, just not for ranking absolute size across stocks · Not investment advice
           </p>
         </div>
       </div>

@@ -37,6 +37,10 @@ interface GexRow {
   squeeze_option_type: 'CE' | 'PE' | null
   confirmed_by_alerts: boolean
   confirmations: AlertConfirmation[]
+  oi_open: number | null
+  oi_current: number | null
+  oi_trend_pct: number | null
+  oi_trend_label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null
   bias: 'BULLISH' | 'BEARISH' | null
   label: string
   desc: string
@@ -62,6 +66,30 @@ function closestWallPct(r: GexRow): number {
   const vals = [r.pct_to_call_wall, r.pct_to_put_wall].filter((v): v is number => v !== null)
   if (!vals.length) return 999
   return Math.min(...vals.map(v => Math.abs(v)))
+}
+
+function OiTrendBadge({ label, pct }: { label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null, pct: number | null }) {
+  if (!label) return null
+  const pctStr = pct !== null && pct !== undefined ? `${pct > 0 ? '+' : ''}${pct.toFixed(0)}%` : ''
+  if (label === 'UNWINDING') {
+    return (
+      <span title="OI draining at the wall strike since open — wall dissolving, break looks real" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/60 text-red-300 whitespace-nowrap">
+        📉 UNWINDING {pctStr}
+      </span>
+    )
+  }
+  if (label === 'BUILDING') {
+    return (
+      <span title="OI still being added at the wall strike since open — wall being defended, rebound risk" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 whitespace-nowrap">
+        🧱 BUILDING {pctStr}
+      </span>
+    )
+  }
+  return (
+    <span title="OI at the wall strike roughly flat since open" className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-800/70 text-gray-400 whitespace-nowrap">
+      STEADY {pctStr}
+    </span>
+  )
 }
 
 function StageBadge({ stage }: { stage: 'ACTIVE_SQUEEZE' | 'ON_THE_VERGE' | null }) {
@@ -305,6 +333,7 @@ export default function GammaSqueeze() {
                     <th className="px-3 py-2 font-semibold whitespace-nowrap">Wall</th>
                     <th className="px-3 py-2 font-semibold whitespace-nowrap">Distance</th>
                     <th className="px-3 py-2 font-semibold whitespace-nowrap">Bias</th>
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">OI @ Wall</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -331,6 +360,9 @@ export default function GammaSqueeze() {
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.bias === 'BULLISH' ? 'bg-emerald-900/60 text-emerald-400' : r.bias === 'BEARISH' ? 'bg-red-900/60 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
                             {r.bias ?? '—'}
                           </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <OiTrendBadge label={r.oi_trend_label} pct={r.oi_trend_pct} />
                         </td>
                       </tr>
                     )
@@ -437,9 +469,10 @@ export default function GammaSqueeze() {
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
                       {r.squeeze_strike !== null && (
-                        <p className="text-xs mt-1">
+                        <p className="text-xs mt-1 flex items-center flex-wrap gap-1.5">
                           <span className="text-gray-600">Strike being squeezed: </span>
                           <span className="font-bold text-yellow-400">{fmtStrike(r.squeeze_strike)} {r.squeeze_option_type}</span>
+                          <OiTrendBadge label={r.oi_trend_label} pct={r.oi_trend_pct} />
                         </p>
                       )}
                     </div>
@@ -541,10 +574,11 @@ export default function GammaSqueeze() {
                             )}
                           </td>
                           <td className="px-3 py-2">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <StageBadge stage={w.stage} />
                               {w.confirmed_by_alerts && <CheckCircle2 size={12} className="text-sky-400" />}
                             </div>
+                            {w.stage === 'ACTIVE_SQUEEZE' && <div className="mt-1"><OiTrendBadge label={w.oi_trend_label} pct={w.oi_trend_pct} /></div>}
                           </td>
                           <td className="px-3 py-2 text-gray-300">₹{w.cmp.toLocaleString('en-IN')}</td>
                           <td className="px-3 py-2 text-gray-300">{fmtStrike(w.call_wall_strike)}</td>

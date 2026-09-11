@@ -23,6 +23,12 @@ export const STOCKS = [
   'TVSMOTOR','BHARATFORG','MOTHERSON','LUPIN','TORNTPHARM','AUROPHARMA',
   'GODREJCP','MARICO','DABUR','PIDILITIND','MUTHOOTFIN','SBICARD','ICICIPRULI',
   'IDFCFIRSTB','FEDERALBNK','ETERNAL','POLYCAB','VOLTAS','IEX','ASTRAL',
+  // Added Sep 2026 -- these matched the backend's canonical api/iv_analysis.py
+  // SYMBOLS list (Aug 26 2026 batch) but were missing here, so they couldn't
+  // be added on the Watchlist page even though the backend captures them fine.
+  'PNB','ADANIPOWER','IOC','ASHOKLEY','BANDHANBNK','INDUSTOWER','IREDA',
+  'UNIONBANK','AMBUJACEM','BANKINDIA','BHEL','SWIGGY','CROMPTON','VBL',
+  'MANAPPURAM','BIOCON','VMM','LICI','LTF','HINDPETRO','SIEMENS',
 ].sort()
 
 export const ALL_SYMBOLS = [...INDICES, ...STOCKS]

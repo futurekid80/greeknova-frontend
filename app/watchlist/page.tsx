@@ -7,22 +7,14 @@ import { supabase } from '@/lib/supabase'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 import { useCasIndicative } from '@/lib/useCasIndicative'
 import CasIndicativePrice from '@/components/CasIndicativePrice'
+import { ALL_SYMBOLS as CANONICAL_SYMBOLS, INDICES as CANONICAL_INDICES } from '@/lib/symbols'
 
-const ALL_SYMBOLS = [
-  'NIFTY','BANKNIFTY','FINNIFTY',
-  'RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN',
-  'BHARTIARTL','KOTAKBANK','LT','AXISBANK','ASIANPAINT','MARUTI','TITAN',
-  'SUNPHARMA','ULTRACEMCO','BAJFINANCE','WIPRO','HCLTECH','TATACONSUM',
-  'TATASTEEL','ADANIENT','POWERGRID','NTPC','ONGC','JSWSTEEL','COALINDIA',
-  'BAJAJFINSV','TECHM',
-  'TVSMOTOR','BHARATFORG','MOTHERSON','LUPIN','TORNTPHARM','AUROPHARMA',
-  'GODREJCP','MARICO','DABUR','PIDILITIND','MUTHOOTFIN','SBICARD','ICICIPRULI',
-  'IDFCFIRSTB','FEDERALBNK','ETERNAL','POLYCAB','VOLTAS','IEX','ASTRAL',
-  'BSE','MCX','TMPV','GODREJPROP','DIVISLAB','COFORGE','ANGELONE','CDSL','OIL',
-  'PAYTM','NYKAA','PERSISTENT','DIXON',
-]
-
-const INDICES = ['NIFTY','BANKNIFTY','FINNIFTY']
+// Sep 2026 -- was a separately hardcoded, stale copy (missing ~40 symbols,
+// including the entire BAJAJ-AUTO/APOLLOHOSP/DRREDDY/VEDL/TRENT block and the
+// Aug 26 batch) that silently blocked adding those stocks to the watchlist.
+// Now sourced from the single canonical list shared with the rest of the app.
+const ALL_SYMBOLS = CANONICAL_SYMBOLS
+const INDICES = CANONICAL_INDICES
 
 interface WatchItem {
   symbol: string; cmp: number; pcr: number

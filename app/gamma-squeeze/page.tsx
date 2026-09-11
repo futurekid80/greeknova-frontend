@@ -140,10 +140,10 @@ export default function GammaSqueeze() {
   const [page, setPage] = useState(1)
   const [showAllSignals, setShowAllSignals] = useState(false)
 
-  const { alerts } = useAlerts()
+  const { priorityAlerts } = useAlerts()
   const nearStrikeAlerts = useMemo(
-    () => alerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND').sort((a, b) => b.id - a.id).slice(0, 6),
-    [alerts]
+    () => priorityAlerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND').sort((a, b) => b.id - a.id).slice(0, 6),
+    [priorityAlerts]
   )
 
   const fetchData = useCallback(async () => {

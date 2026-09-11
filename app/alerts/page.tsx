@@ -7,7 +7,7 @@ import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
 
 export default function Alerts() {
   const {
-    alerts, enabled, permission, swReady, marketOpen, lastCheck,
+    alerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck,
     spikeThreshold, setSpikeThreshold,
     enableAlerts, disableAlerts, checkNow, clearAlerts, playSound,
   } = useAlerts()
@@ -125,14 +125,14 @@ export default function Alerts() {
           </div>
         </div>
 
-        {alerts.some(a => a.signal === 'NEAR_STRIKE_UNWIND') && (
+        {priorityAlerts.some(a => a.signal === 'NEAR_STRIKE_UNWIND') && (
           <div className="mb-6">
             <h2 className="text-lg font-bold text-fuchsia-300 flex items-center gap-2 mb-1">
               💥 Near-Strike Unwind — Tradeable Breaks
             </h2>
             <p className="text-xs text-gray-500 mb-3">Near-ATM OI collapsing fast — a support/resistance wall is breaking right now. Higher conviction than routine OI spikes.</p>
             <div className="space-y-2">
-              {alerts
+              {priorityAlerts
                 .filter(a => a.signal === 'NEAR_STRIKE_UNWIND')
                 .sort((a, b) => b.id - a.id)
                 .slice(0, 8)

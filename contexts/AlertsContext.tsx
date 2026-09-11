@@ -54,8 +54,15 @@ function playTerminalBeep(ctx: AudioContext) {
   osc2.start(now + 0.01); osc2.stop(now + 0.35)
 }
 
+// Signal types that fire rarely relative to the general feed's volume
+// (currently ~20+/min at busy times) and would otherwise get pushed out
+// of a plain top-100 "/alerts" window within minutes -- these get their
+// own dedicated, never-crowded-out fetch instead.
+const PRIORITY_SIGNALS = ['NEAR_STRIKE_UNWIND']
+
 interface AlertsContextValue {
   alerts: Alert[]
+  priorityAlerts: Alert[]
   enabled: boolean
   permission: string
   swReady: boolean
@@ -81,6 +88,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   const [spikeThreshold, setSpikeThresholdState] = useState(10)
   const [lastCheck, setLastCheck]     = useState('')
   const [alerts, setAlerts]           = useState<Alert[]>([])
+  const [priorityAlerts, setPriorityAlerts] = useState<Alert[]>([])
   const [marketOpen, setMarketOpen]   = useState(false)
   const [lastSeenId, setLastSeenId]   = useState(0)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -135,6 +143,23 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t)
   }, [])
 
+  // Priority signals (currently just NEAR_STRIKE_UNWIND) are fetched on
+  // their own, filtered server-side, so high-volume routine signal types
+  // can never bury them before anyone sees them -- unlike the general
+  // feed's plain top-100 window, this list only ever holds these rarer,
+  // higher-conviction alerts.
+  useEffect(() => {
+    const fetchPriority = () => {
+      fetch(`${API}/alerts?limit=20&signal=${PRIORITY_SIGNALS.join(',')}`)
+        .then(r => r.json())
+        .then(data => setPriorityAlerts(data.alerts || []))
+        .catch(() => {})
+    }
+    fetchPriority()
+    const t = setInterval(fetchPriority, 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
+
   useEffect(() => {
     if ('Notification' in window) setPermission(Notification.permission)
 
@@ -179,6 +204,13 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
             try { localStorage.setItem('gn_alerts', JSON.stringify(updated)) } catch {}
             return updated
           })
+
+          if (PRIORITY_SIGNALS.includes(newAlert.signal)) {
+            setPriorityAlerts(prev => {
+              if (prev.find(a => a.id === newAlert.id)) return prev
+              return [newAlert, ...prev].slice(0, 20)
+            })
+          }
 
           setLastCheck(new Date().toLocaleTimeString('en-IN'))
         }
@@ -318,7 +350,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AlertsContext.Provider value={{
-      alerts, enabled, permission, swReady, marketOpen, lastCheck, unreadCount,
+      alerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck, unreadCount,
       spikeThreshold, setSpikeThreshold,
       enableAlerts, disableAlerts, checkNow, clearAlerts, markAllRead, playSound,
     }}>

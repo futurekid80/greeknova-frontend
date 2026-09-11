@@ -5,6 +5,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Plus, X, Star } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
+import { useCasIndicative } from '@/lib/useCasIndicative'
+import CasIndicativePrice from '@/components/CasIndicativePrice'
 
 const ALL_SYMBOLS = [
   'NIFTY','BANKNIFTY','FINNIFTY',
@@ -120,6 +122,7 @@ export default function Watchlist() {
   }, [watchlist])
 
   const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, true)
+  const { rows: casRows, casActive } = useCasIndicative()
   useEffect(() => { fetchData() }, [fetchData])
 
   const addSymbol = (sym: string) => {
@@ -199,7 +202,13 @@ export default function Watchlist() {
                           {INDICES.includes(item.symbol) && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 text-right text-sm font-bold text-amber-400">₹{item.cmp.toLocaleString()}</td>
+                      <td className="px-4 py-3.5 text-right">
+                        {casActive && casRows[item.symbol] ? (
+                          <CasIndicativePrice row={casRows[item.symbol]} />
+                        ) : (
+                          <span className="text-sm font-bold text-amber-400">₹{item.cmp.toLocaleString()}</span>
+                        )}
+                      </td>
                       <td className={`px-4 py-3.5 text-right text-sm font-black ${item.pcr > 1 ? 'text-emerald-400' : 'text-red-400'}`}>{item.pcr.toFixed(2)}</td>
                       <td className="px-4 py-3.5 text-right">
                         <span className={`text-xs font-bold ${SIGNAL_COLOR[item.signal]}`}>{item.signal.replace('_', ' ')}</span>

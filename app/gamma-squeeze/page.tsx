@@ -69,6 +69,17 @@ function closestWallPct(r: GexRow): number {
   return Math.min(...vals.map(v => Math.abs(v)))
 }
 
+function closestWallInfo(r: GexRow) {
+  const useCall = r.pct_to_call_wall !== null && (r.pct_to_put_wall === null || Math.abs(r.pct_to_call_wall) <= Math.abs(r.pct_to_put_wall))
+  return {
+    wallStrike: useCall ? r.call_wall_strike : r.put_wall_strike,
+    wallSide: useCall ? 'CE' : 'PE',
+    dist: useCall ? r.pct_to_call_wall : r.pct_to_put_wall,
+  }
+}
+
+const CT_STAGE_RANK: Record<string, number> = { ACTIVE_SQUEEZE: 0, ON_THE_VERGE: 1 }
+
 function OiTrendBadge({ label, pct }: { label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null, pct: number | null }) {
   if (!label) return null
   const pctStr = pct !== null && pct !== undefined ? `${pct > 0 ? '+' : ''}${pct.toFixed(0)}%` : ''
@@ -233,18 +244,73 @@ export default function GammaSqueeze() {
 
   // Stocks nearest to triggering (or already triggered) a squeeze, regardless of
   // page/pagination — this is the "what's about to move" quick-glance panel
+  const [ctSortCol, setCtSortCol] = useState<string>('default')
+  const [ctSortDir, setCtSortDir] = useState<'asc' | 'desc'>('asc')
+  const handleCtSort = (col: string) => {
+    if (ctSortCol === col) {
+      setCtSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setCtSortCol(col)
+      setCtSortDir('asc')
+    }
+  }
+
   const closestToTrigger = useMemo(() => {
-    return [...watchlist]
+    const rows = [...watchlist]
       .filter(r => r.regime === 'SHORT_GAMMA' && closestWallPct(r) <= 3)
       .filter(r => !confirmedOnly || r.confirmed_by_alerts)
+
+    if (ctSortCol === 'default') {
+      return rows
+        .sort((a, b) => {
+          const rank = (r: GexRow) => (r.stage === 'ACTIVE_SQUEEZE' ? 0 : r.stage === 'ON_THE_VERGE' ? 1 : 2)
+          const rankDiff = rank(a) - rank(b)
+          if (rankDiff !== 0) return rankDiff
+          return closestWallPct(a) - closestWallPct(b)
+        })
+        .slice(0, 10)
+    }
+
+    const dir = ctSortDir === 'asc' ? 1 : -1
+    const nullsLast = (v: number | null | undefined) => v === null || v === undefined
+    return rows
       .sort((a, b) => {
-        const rank = (r: GexRow) => (r.stage === 'ACTIVE_SQUEEZE' ? 0 : r.stage === 'ON_THE_VERGE' ? 1 : 2)
-        const rankDiff = rank(a) - rank(b)
-        if (rankDiff !== 0) return rankDiff
-        return closestWallPct(a) - closestWallPct(b)
+        switch (ctSortCol) {
+          case 'symbol':
+            return dir * a.symbol.localeCompare(b.symbol)
+          case 'stage': {
+            const ra = CT_STAGE_RANK[a.stage ?? ''] ?? 2
+            const rb = CT_STAGE_RANK[b.stage ?? ''] ?? 2
+            return dir * (ra - rb)
+          }
+          case 'cmp':
+            return dir * (a.cmp - b.cmp)
+          case 'wall': {
+            const wa = closestWallInfo(a).wallStrike, wb = closestWallInfo(b).wallStrike
+            if (nullsLast(wa) && nullsLast(wb)) return 0
+            if (nullsLast(wa)) return 1
+            if (nullsLast(wb)) return -1
+            return dir * (wa! - wb!)
+          }
+          case 'distance': {
+            const da = closestWallPct(a), db = closestWallPct(b)
+            return dir * (da - db)
+          }
+          case 'bias':
+            return dir * (a.bias ?? '').localeCompare(b.bias ?? '')
+          case 'oi': {
+            const oa = a.oi_trend_pct, ob = b.oi_trend_pct
+            if (nullsLast(oa) && nullsLast(ob)) return 0
+            if (nullsLast(oa)) return 1
+            if (nullsLast(ob)) return -1
+            return dir * (oa! - ob!)
+          }
+          default:
+            return 0
+        }
       })
       .slice(0, 10)
-  }, [watchlist, confirmedOnly])
+  }, [watchlist, confirmedOnly, ctSortCol, ctSortDir])
 
   const clearFilters = () => {
     setSearch('')
@@ -361,21 +427,18 @@ export default function GammaSqueeze() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-900/60 text-gray-500 text-left">
-                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Stock</th>
-                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Stage</th>
-                    <th className="px-3 py-2 font-semibold whitespace-nowrap">CMP</th>
-                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Wall</th>
-                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Distance</th>
-                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Bias</th>
-                    <th className="px-3 py-2 font-semibold whitespace-nowrap">OI @ Wall</th>
+                    <SortTh label="Stock" col="symbol" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <SortTh label="Stage" col="stage" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <SortTh label="CMP" col="cmp" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <SortTh label="Wall" col="wall" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <SortTh label="Distance" col="distance" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <SortTh label="Bias" col="bias" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <SortTh label="OI @ Wall" col="oi" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
                   </tr>
                 </thead>
                 <tbody>
                   {closestToTrigger.map(r => {
-                    const useCall = r.pct_to_call_wall !== null && (r.pct_to_put_wall === null || Math.abs(r.pct_to_call_wall) <= Math.abs(r.pct_to_put_wall))
-                    const wallStrike = useCall ? r.call_wall_strike : r.put_wall_strike
-                    const wallSide = useCall ? 'CE' : 'PE'
-                    const dist = useCall ? r.pct_to_call_wall : r.pct_to_put_wall
+                    const { wallStrike, wallSide, dist } = closestWallInfo(r)
                     return (
                       <tr key={r.symbol} className={`border-t border-gray-800/60 hover:bg-gray-900/30 ${r.stage === 'ACTIVE_SQUEEZE' ? 'bg-yellow-500/5' : ''}`}>
                         <td className="px-3 py-2 font-bold text-white">

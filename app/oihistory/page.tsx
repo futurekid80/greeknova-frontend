@@ -112,6 +112,11 @@ export default function OIHistory() {
   const totalPEBuilt   = data?.rows.filter(r => r.pe_chg > 0).reduce((s, r) => s + r.pe_chg, 0) || 0
   const totalPEUnwound = data?.rows.filter(r => r.pe_chg < 0).reduce((s, r) => s + r.pe_chg, 0) || 0
   const bullish = totalPEBuilt + totalCEUnwound > totalCEBuilt + totalPEUnwound
+  // "Major buildup" rows -- top quartile by |net_chg|, so the biggest
+  // moves are visually obvious instead of requiring the reader to scan
+  // every row's numbers. Needs a real spread of values to bother ranking.
+  const maxAbsNetChg = data?.rows.length ? Math.max(...data.rows.map(r => Math.abs(r.net_chg))) : 0
+  const majorThreshold = maxAbsNetChg * 0.6
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -284,6 +289,12 @@ export default function OIHistory() {
               </div>
             ) : (
               <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden mb-6">
+                <div className="flex flex-wrap items-center gap-4 px-4 py-2.5 border-b border-gray-800 text-[11px] text-gray-500">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-950/60 border border-emerald-800/50"/>Major bullish buildup</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-950/60 border border-red-800/50"/>Major bearish buildup</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-950/60 border border-amber-800/50"/>ATM strike</span>
+                  <span className="text-gray-600">Net Bias = 🐂 Bullish (PE-led) / 🐻 Bearish (CE-led) for that strike</span>
+                </div>
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-800 text-gray-500">
@@ -300,13 +311,24 @@ export default function OIHistory() {
                   <tbody>
                     {data.rows.map(row => {
                       const isATM = row.strike === atm
+                      const isMajor = maxAbsNetChg > 0 && Math.abs(row.net_chg) >= majorThreshold
+                      const rowBias = row.net_chg > 0 ? 'bullish' : row.net_chg < 0 ? 'bearish' : 'neutral'
+                      // Row background: ATM keeps its amber highlight regardless; otherwise
+                      // a major buildup gets a stronger bullish/bearish tint so it's visible
+                      // at a glance, a minor one gets none.
+                      const rowBg = isATM
+                        ? 'bg-amber-950/20 border-amber-800/30'
+                        : isMajor
+                          ? (rowBias === 'bullish' ? 'bg-emerald-950/25' : rowBias === 'bearish' ? 'bg-red-950/25' : '')
+                          : 'hover:bg-gray-800/20'
                       return (
-                        <tr key={row.strike} className={`border-b border-gray-800/50 transition-colors ${isATM ? 'bg-amber-950/20 border-amber-800/30' : 'hover:bg-gray-800/20'}`}>
+                        <tr key={row.strike} className={`border-b border-gray-800/50 transition-colors ${rowBg}`}>
                           <td className="py-2 px-4 text-center font-bold">
                             <span className={isATM ? 'text-amber-400' : 'text-amber-400/70'}>
                               {isATM && '⭐ '}{row.strike.toLocaleString()}
                               {isATM && <span className="ml-1 text-xs text-amber-500/70 font-normal">ATM</span>}
                             </span>
+                            {isMajor && !isATM && <span className="ml-1.5 text-[9px] font-bold text-white/70 bg-white/10 rounded px-1 py-0.5 align-middle">MAJOR</span>}
                           </td>
                           <td className="py-2 px-3 text-right text-gray-300">{fmtOI(row.ce_a)}</td>
                           <td className="py-2 px-3 text-right text-gray-500">{fmtOI(row.ce_b)}</td>
@@ -318,8 +340,8 @@ export default function OIHistory() {
                           <td className={`py-2 px-3 text-right font-semibold ${row.pe_chg > 0 ? 'text-emerald-400' : row.pe_chg < 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
                             {row.pe_chg > 0 ? '+' : ''}{fmtOI(row.pe_chg)}
                           </td>
-                          <td className={`py-2 px-3 text-right font-bold ${row.net_chg > 0 ? 'text-emerald-400' : row.net_chg < 0 ? 'text-red-400' : 'text-gray-600'}`}>
-                            {row.net_chg > 0 ? '🐂' : row.net_chg < 0 ? '🐻' : '—'}
+                          <td className={`py-2 px-3 text-right font-bold whitespace-nowrap ${row.net_chg > 0 ? 'text-emerald-400' : row.net_chg < 0 ? 'text-red-400' : 'text-gray-600'}`}>
+                            {row.net_chg > 0 ? '🐂 Bullish' : row.net_chg < 0 ? '🐻 Bearish' : '— Neutral'}
                           </td>
                         </tr>
                       )

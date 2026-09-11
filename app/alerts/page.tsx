@@ -90,7 +90,7 @@ export default function Alerts() {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="bg-orange-950/20 rounded-xl p-4 border border-orange-800/30">
               <p className="text-xs text-gray-500 mb-1">🔥 OI Spikes</p>
               <p className="text-sm text-gray-300">OI changes &gt;{spikeThreshold}% in 5 mins — Options Jungle</p>
@@ -102,6 +102,10 @@ export default function Alerts() {
             <div className="bg-blue-950/20 rounded-xl p-4 border border-blue-800/30">
               <p className="text-xs text-gray-500 mb-1">🐋 UOA Whales</p>
               <p className="text-sm text-gray-300">High conviction signals (score 4+) from UOA scanner</p>
+            </div>
+            <div className="bg-fuchsia-950/20 rounded-xl p-4 border border-fuchsia-500/40">
+              <p className="text-xs text-gray-500 mb-1">💥 Near-Strike Unwind</p>
+              <p className="text-sm text-gray-300">Near-ATM strike OI drops &gt;40% in 20 mins — support/resistance breaking</p>
             </div>
           </div>
 
@@ -120,6 +124,57 @@ export default function Alerts() {
             )}
           </div>
         </div>
+
+        {alerts.some(a => a.signal === 'NEAR_STRIKE_UNWIND') && (
+          <div className="mb-6">
+            <h2 className="text-lg font-bold text-fuchsia-300 flex items-center gap-2 mb-1">
+              💥 Near-Strike Unwind — Tradeable Breaks
+            </h2>
+            <p className="text-xs text-gray-500 mb-3">Near-ATM OI collapsing fast — a support/resistance wall is breaking right now. Higher conviction than routine OI spikes.</p>
+            <div className="space-y-2">
+              {alerts
+                .filter(a => a.signal === 'NEAR_STRIKE_UNWIND')
+                .sort((a, b) => b.id - a.id)
+                .slice(0, 8)
+                .map(alert => (
+                  <div key={alert.id}
+                    className="flex items-start justify-between p-4 rounded-xl border-2 border-fuchsia-500/60 bg-fuchsia-950/30 shadow-[0_0_20px_-8px_rgba(217,70,239,0.5)]">
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-fuchsia-900/40 flex items-center justify-center text-lg flex-shrink-0">
+                        💥
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-base font-black text-white">{alert.symbol}</span>
+                          {alert.strike && (
+                            <span className="text-sm font-bold text-amber-400">{alert.strike}</span>
+                          )}
+                          {alert.optionType && (
+                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${alert.optionType === 'CE' ? 'bg-red-950/50 text-red-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
+                              {alert.optionType}
+                            </span>
+                          )}
+                          {alert.direction && (
+                            <span className={`text-xs font-semibold ${alert.direction === 'bullish' ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {alert.direction === 'bullish' ? '↑ Bullish' : '↓ Bearish'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-fuchsia-100/90 leading-relaxed">{alert.message}</p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-4">
+                      <p className="text-xs text-gray-500 mb-1">{alert.receivedAt}</p>
+                      <a href={alert.url}
+                        className="flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 transition-colors justify-end">
+                        View <ExternalLink size={10}/>
+                      </a>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">

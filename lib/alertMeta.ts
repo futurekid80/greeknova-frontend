@@ -8,6 +8,7 @@ export const SIGNAL_META: Record<string, { color: string; bg: string; border: st
   SHORT_COVERING: { color: 'text-cyan-400',   bg: 'bg-cyan-950/40',   border: 'border-cyan-800/50',   icon: '🔄', label: 'Short Covering' },
   LONG_UNWINDING: { color: 'text-amber-400',  bg: 'bg-amber-950/40',  border: 'border-amber-800/50',  icon: '⚠️', label: 'Long Unwinding' },
   VOLUME_SURGE:   { color: 'text-blue-400',   bg: 'bg-blue-950/40',   border: 'border-blue-800/50',   icon: '⚡', label: 'Volume Surge' },
+  NEAR_STRIKE_UNWIND: { color: 'text-fuchsia-300', bg: 'bg-fuchsia-950/50', border: 'border-fuchsia-500/70', icon: '💥', label: 'Near-Strike Unwind' },
 }
 
 export const DEFAULT_META = { color: 'text-gray-400', bg: 'bg-gray-900/40', border: 'border-gray-800', icon: '🔔', label: 'Alert' }

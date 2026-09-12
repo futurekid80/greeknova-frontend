@@ -549,7 +549,7 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
 
 // ── Market Pulse Feed ─────────────────────────────────────────────────────────
 function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
-  const [tab, setTab] = useState<'warzone'|'oi_build'|'oi_unwind'|'all'>('warzone')
+  const [tab, setTab] = useState<'warzone'|'oi_build'|'oi_unwind'|'week52'|'all'>('warzone')
   const [search, setSearch] = useState('')
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))
   const enriched = stocks.map(s => ({
@@ -575,7 +575,13 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
     if (aW !== bW) return aW - bW
     return Math.abs(b.oi_chg_pct||0) - Math.abs(a.oi_chg_pct||0)
   })
-  const tabData: Record<string, PulseStock[]> = { warzone: warZone, oi_build: oiBuild, oi_unwind: oiUnwind, all }
+  // Near/at 52-week high -- within 5% of the high, closest first, so the
+  // stocks actually worth watching aren't buried in a column across all
+  // 120 rows.
+  const week52 = enriched
+    .filter(s => s.pct_from_52w_high !== undefined && s.pct_from_52w_high !== null && s.pct_from_52w_high >= -5)
+    .sort((a,b) => (b.pct_from_52w_high||-100) - (a.pct_from_52w_high||-100))
+  const tabData: Record<string, PulseStock[]> = { warzone: warZone, oi_build: oiBuild, oi_unwind: oiUnwind, week52, all }
   const filtered = (tabData[tab] || all).filter(s => search ? s.symbol.includes(search.toUpperCase()) : true)
   const signalColors: Record<string, string> = {
     LONG_BUILDUP:'text-emerald-400', SHORT_BUILDUP:'text-red-400',
@@ -586,6 +592,7 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
     { key: 'warzone',   label: `⚡ War Zone`,                                      count: warZone.length },
     { key: 'oi_build',  label: isMarketData ? `📈 OI Builders` : `📈 Narrow CPR`, count: oiBuild.length },
     { key: 'oi_unwind', label: isMarketData ? `📉 OI Unwinders` : `📉 Below CPR`, count: oiUnwind.length },
+    { key: 'week52',    label: `🔥 52W High`,                                      count: week52.length },
     { key: 'all',       label: `📊 All`,                                            count: all.length },
   ]
   return (
@@ -608,6 +615,7 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
         {tab === 'warzone'   && 'Narrow CPR (<0.30%) + active OI signal — highest conviction setups'}
         {tab === 'oi_build'  && (isMarketData ? 'Stocks with increasing Open Interest today — fresh positioning' : 'OI change: previous close vs latest close')}
         {tab === 'oi_unwind' && (isMarketData ? 'Stocks with decreasing Open Interest today — positions being squared off' : 'Stocks below CPR with narrow range')}
+        {tab === 'week52'    && 'Trading within 5% of their 52-week high, closest first — 🔥 marks stocks at/within 0.5% of it'}
         {tab === 'all'       && 'All 66 F&O symbols ranked by War Zone status then OI activity'}
       </p>
       <div className="grid grid-cols-14 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">

@@ -575,11 +575,11 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
     if (aW !== bW) return aW - bW
     return Math.abs(b.oi_chg_pct||0) - Math.abs(a.oi_chg_pct||0)
   })
-  // Near/at 52-week high -- within 5% of the high, closest first, so the
+  // Near/at 52-week high -- within 2% of the high, closest first, so the
   // stocks actually worth watching aren't buried in a column across all
-  // 120 rows.
+  // 120 rows. (5% pulled in too many names to be useful as a watchlist.)
   const week52 = enriched
-    .filter(s => s.pct_from_52w_high !== undefined && s.pct_from_52w_high !== null && s.pct_from_52w_high >= -5)
+    .filter(s => s.pct_from_52w_high !== undefined && s.pct_from_52w_high !== null && s.pct_from_52w_high >= -2)
     .sort((a,b) => (b.pct_from_52w_high||-100) - (a.pct_from_52w_high||-100))
   const tabData: Record<string, PulseStock[]> = { warzone: warZone, oi_build: oiBuild, oi_unwind: oiUnwind, week52, all }
   const filtered = (tabData[tab] || all).filter(s => search ? s.symbol.includes(search.toUpperCase()) : true)
@@ -615,10 +615,10 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
         {tab === 'warzone'   && 'Narrow CPR (<0.30%) + active OI signal — highest conviction setups'}
         {tab === 'oi_build'  && (isMarketData ? 'Stocks with increasing Open Interest today — fresh positioning' : 'OI change: previous close vs latest close')}
         {tab === 'oi_unwind' && (isMarketData ? 'Stocks with decreasing Open Interest today — positions being squared off' : 'Stocks below CPR with narrow range')}
-        {tab === 'week52'    && 'Trading within 5% of their 52-week high, closest first — 🔥 marks stocks at/within 0.5% of it'}
+        {tab === 'week52'    && 'Trading within 2% of their 52-week high, closest first — 🔥 marks stocks at/within 0.5% of it'}
         {tab === 'all'       && 'All 66 F&O symbols ranked by War Zone status then OI activity'}
       </p>
-      <div className="grid grid-cols-14 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
+      <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
         <div className="col-span-2">Symbol</div>
         <div className="col-span-2 text-right">CMP</div>
         <div className="col-span-2 text-right">52W High</div>
@@ -638,7 +638,7 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
           const cprPosColor: Record<string,string> = { ABOVE_CPR:'text-emerald-400', BELOW_CPR:'text-red-400', INSIDE_CPR:'text-amber-400' }
           const cprPosShort: Record<string,string> = { ABOVE_CPR:'↑ Above', BELOW_CPR:'↓ Below', INSIDE_CPR:'⟷ Inside' }
           return (
-            <div key={s.symbol} className={`grid grid-cols-14 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors ${isIndex ? 'bg-gray-900/20' : ''}`}>
+            <div key={s.symbol} className={`grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors ${isIndex ? 'bg-gray-900/20' : ''}`}>
               <div className="col-span-2 flex items-center gap-1.5">
                 <span className="font-bold text-white text-xs">{s.symbol}</span>
                 {isIndex && <span className="text-[10px] text-gray-600 bg-gray-800 px-1 rounded">IDX</span>}

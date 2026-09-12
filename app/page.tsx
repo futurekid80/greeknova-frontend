@@ -961,6 +961,16 @@ export default function MarketPulse() {
     checkAuth()
   }, [])
 
+  // BUG FIX (Sep 12 2026): fetchData used to fetch cpr/oi-pulse/uoa/52wh
+  // with Promise.all and one shared try/catch around everything down to
+  // /index-data -- so if ANY single endpoint failed (e.g. a transient
+  // Supabase timeout during the 5-min capture cycle), the whole function
+  // bailed before ever calling setAnalyses(), leaving the homepage stuck
+  // on "Loading index data..." forever even after loading finished. Each
+  // fetch now degrades independently (Promise.allSettled) so one flaky
+  // endpoint no longer blanks the rest of the page, and /index-data (the
+  // data that unsticks "Loading index data...") is fetched unconditionally
+  // regardless of whether the other four succeeded.
   async function fetchData() {
     setLoading(true)
     try {
@@ -970,17 +980,23 @@ export default function MarketPulse() {
       if (cached && cacheAge < 5 * 60 * 1000) { setCprData(JSON.parse(cached)); setLoading(false) }
     } catch {}
     try {
-      const [cprRes, pulseRes, uoaRes, week52Res] = await Promise.all([
-        fetch(`${API}/cpr-scanner`),
-        fetch(`${API}/oi-pulse`),
-        fetch(`${API}/uoa`),
-        fetch(`${API}/52-week-high`)
+      const results = await Promise.allSettled([
+        fetch(`${API}/cpr-scanner`).then(r => r.json()),
+        fetch(`${API}/oi-pulse`).then(r => r.json()),
+        fetch(`${API}/uoa`).then(r => r.json()),
+        fetch(`${API}/52-week-high`).then(r => r.json()),
       ])
-      const [cprJson, pulseJson, uoaJson, week52Json] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json(), week52Res.json()])
+      const ok = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' ? r.value : null
+      const [cprJson, pulseJson, uoaJson, week52Json] = results.map(ok)
+      results.forEach((r, i) => {
+        if (r.status === 'rejected') {
+          console.error(['cpr-scanner','oi-pulse','uoa','52-week-high'][i], 'failed:', r.reason)
+        }
+      })
       const week52Map = Object.fromEntries((week52Json?.rows || []).map((r: any) => [r.symbol, r]))
       setUoaSignals(uoaJson?.signals || [])
       const cprRows: CPRRow[] = cprJson?.data || []
-      setCprData(cprRows)
+      if (cprJson) setCprData(cprRows)
       try {
         sessionStorage.setItem('gn_cpr_cache', JSON.stringify(cprRows))
         sessionStorage.setItem('gn_cpr_time', String(Date.now()))
@@ -1020,6 +1036,11 @@ export default function MarketPulse() {
           sessionStorage.setItem('gn_breadth_stocks', JSON.stringify(pulseItems))
         } catch {}
       }
+    } catch(e) { console.error('cpr/oi-pulse/uoa/52wh block failed:', e) }
+    // Fetched unconditionally (outside the try above) so a failure in any
+    // of the other four endpoints can no longer prevent this from running
+    // and clearing "Loading index data...".
+    try {
       const indexRes = await fetch(`${API}/index-data`)
       const indexJson = await indexRes.json()
       if (indexJson?.timestamp) {
@@ -1029,20 +1050,26 @@ export default function MarketPulse() {
         const seen = new Set<string>()
         ;(indexJson.cmps || []).forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
         setCmps(cmpMap2)
-        const indexBatches = [{ data: indexJson.rows }]
         const indexData = indexJson.rows || []
-        const results = ['NIFTY','BANKNIFTY','FINNIFTY']
+        const idxResults = ['NIFTY','BANKNIFTY','FINNIFTY']
           .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
           .filter(Boolean) as IndexAnalysis[]
-        setAnalyses(results)
+        setAnalyses(idxResults)
       }
-    } catch(e) { console.error(e) }
+    } catch(e) { console.error('index-data failed:', e) }
     setLoading(false)
   }
 
   const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)
   useEffect(() => {
     fetchData()
+    // BUG FIX (Sep 12 2026): a page load landing in the ~few-second window
+    // every 5 min when run_full_capture is writing to oi_snapshots can hit
+    // a transient timeout on cpr-scanner/oi-pulse/uoa/index-data. Auto
+    // refresh is opt-in and off by default, so a first-load failure here
+    // had no safety net -- a single silent retry a few seconds later
+    // covers that narrow window without needing a manual refresh.
+    const retryTimer = setTimeout(() => { fetchData() }, 4000)
     // Fetch IV range for index cards
     supabase.from('iv_history')
       .select('symbol, atm_iv, trade_date')
@@ -1062,6 +1089,7 @@ export default function MarketPulse() {
         })
         setIvData(result)
       })
+    return () => clearTimeout(retryTimer)
   }, [])
 
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))

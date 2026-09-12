@@ -33,7 +33,7 @@ const ALL_SYMBOLS = [
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
 interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }
 interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
-interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean; vol_ratio?:number }
+interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean; vol_ratio?:number; week52_high?:number; pct_from_52w_high?:number; at_52w_high?:boolean }
 
 // ── Sector Performance ────────────────────────────────────────────────────────
 const SECTOR_MAP: Record<string, string[]> = {
@@ -610,9 +610,10 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
         {tab === 'oi_unwind' && (isMarketData ? 'Stocks with decreasing Open Interest today — positions being squared off' : 'Stocks below CPR with narrow range')}
         {tab === 'all'       && 'All 66 F&O symbols ranked by War Zone status then OI activity'}
       </p>
-      <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
+      <div className="grid grid-cols-14 gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
         <div className="col-span-2">Symbol</div>
         <div className="col-span-2 text-right">CMP</div>
+        <div className="col-span-2 text-right">52W High</div>
         <div className="col-span-2 text-right">OI Chg</div>
         <div className="col-span-2">Signal</div>
         <div className="col-span-2">CPR</div>
@@ -629,7 +630,7 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
           const cprPosColor: Record<string,string> = { ABOVE_CPR:'text-emerald-400', BELOW_CPR:'text-red-400', INSIDE_CPR:'text-amber-400' }
           const cprPosShort: Record<string,string> = { ABOVE_CPR:'↑ Above', BELOW_CPR:'↓ Below', INSIDE_CPR:'⟷ Inside' }
           return (
-            <div key={s.symbol} className={`grid grid-cols-12 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors ${isIndex ? 'bg-gray-900/20' : ''}`}>
+            <div key={s.symbol} className={`grid grid-cols-14 gap-2 px-3 py-2.5 rounded-lg items-center hover:bg-gray-800/30 transition-colors ${isIndex ? 'bg-gray-900/20' : ''}`}>
               <div className="col-span-2 flex items-center gap-1.5">
                 <span className="font-bold text-white text-xs">{s.symbol}</span>
                 {isIndex && <span className="text-[10px] text-gray-600 bg-gray-800 px-1 rounded">IDX</span>}
@@ -641,6 +642,20 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
                     {s.price_chg_pct >= 0 ? '+' : ''}{s.price_chg_pct?.toFixed(1)}%
                   </div>
                 )}
+              </div>
+              <div className="col-span-2 text-right">
+                {s.week52_high ? (
+                  <>
+                    <span className={`text-xs font-bold ${s.at_52w_high ? 'text-fuchsia-400' : 'text-gray-400'}`}>
+                      {s.at_52w_high && '🔥 '}₹{s.week52_high.toLocaleString()}
+                    </span>
+                    {s.pct_from_52w_high !== undefined && s.pct_from_52w_high !== null && (
+                      <div className={`text-[10px] ${s.at_52w_high ? 'text-fuchsia-500 font-semibold' : 'text-gray-600'}`}>
+                        {s.at_52w_high ? 'At 52W High' : `${s.pct_from_52w_high.toFixed(1)}% away`}
+                      </div>
+                    )}
+                  </>
+                ) : <span className="text-gray-700 text-xs">—</span>}
               </div>
               <div className="col-span-2 text-right">
                 {s.oi_chg_pct !== undefined && s.oi_chg_pct !== 0 ? (
@@ -966,12 +981,14 @@ export default function MarketPulse() {
       if (cached && cacheAge < 5 * 60 * 1000) { setCprData(JSON.parse(cached)); setLoading(false) }
     } catch {}
     try {
-      const [cprRes, pulseRes, uoaRes] = await Promise.all([
+      const [cprRes, pulseRes, uoaRes, week52Res] = await Promise.all([
         fetch(`${API}/cpr-scanner`),
         fetch(`${API}/oi-pulse`),
-        fetch(`${API}/uoa`)
+        fetch(`${API}/uoa`),
+        fetch(`${API}/52-week-high`)
       ])
-      const [cprJson, pulseJson, uoaJson] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json()])
+      const [cprJson, pulseJson, uoaJson, week52Json] = await Promise.all([cprRes.json(), pulseRes.json(), uoaRes.json(), week52Res.json()])
+      const week52Map = Object.fromEntries((week52Json?.rows || []).map((r: any) => [r.symbol, r]))
       setUoaSignals(uoaJson?.signals || [])
       const cprRows: CPRRow[] = cprJson?.data || []
       setCprData(cprRows)
@@ -992,6 +1009,9 @@ export default function MarketPulse() {
         width_emoji: (cprMap[p.symbol] as CPRRow)?.width_emoji,
         cpr_position: (cprMap[p.symbol] as CPRRow)?.cpr_position,
         confluence: (cprMap[p.symbol] as CPRRow)?.confluence || false,
+        week52_high: week52Map[p.symbol]?.week52_high,
+        pct_from_52w_high: week52Map[p.symbol]?.pct_from_52w_high,
+        at_52w_high: week52Map[p.symbol]?.at_52w_high || false,
       }))
       setPulseStocks(enrichedPulse)
       setLoading(false)

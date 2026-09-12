@@ -6,29 +6,10 @@ import { supabase } from '@/lib/supabase'
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X, Zap, Eye, Moon, ChevronDown, ChevronUp, Flame, BarChart2, Volume2 } from 'lucide-react'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 
+import { ALL_SYMBOLS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
 
-const ALL_SYMBOLS = [
-  'NIFTY','BANKNIFTY','FINNIFTY',
-  'RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BHARTIARTL',
-  'KOTAKBANK','LT','AXISBANK','ASIANPAINT','MARUTI','TITAN','SUNPHARMA','ULTRACEMCO',
-  'BAJFINANCE','WIPRO','HCLTECH','TATACONSUM','TATASTEEL','ADANIENT','POWERGRID','NTPC',
-  'ONGC','JSWSTEEL','COALINDIA','BAJAJFINSV','TECHM','APOLLOHOSP','BAJAJ-AUTO','BPCL',
-  'BRITANNIA','CIPLA','DRREDDY','EICHERMOT','GRASIM','HEROMOTOCO','HINDALCO','HDFCLIFE',
-  'INDUSINDBK','JIOFIN','M&M','NESTLEIND','SBILIFE','SHRIRAMFIN','TRENT','ADANIPORTS',
-  'BANKBARODA','BEL','CANBK','CHOLAFIN','DLF','GAIL','HAVELLS','HAL','INDIGO','PFC',
-  'RECLTD','SAIL','TATAPOWER','VEDL',
-  'DIXON','NYKAA','PAYTM','PERSISTENT',
-  'BSE','MCX','TMPV','GODREJPROP','DIVISLAB','COFORGE','ANGELONE','CDSL','OIL',
-  'TVSMOTOR','BHARATFORG','MOTHERSON','LUPIN','TORNTPHARM','AUROPHARMA',
-  'GODREJCP','MARICO','DABUR','PIDILITIND','MUTHOOTFIN','SBICARD','ICICIPRULI',
-  'IDFCFIRSTB','FEDERALBNK','ETERNAL','POLYCAB','VOLTAS','IEX','ASTRAL',
-  // (Aug 28 2026): 21 symbols added Aug 27 -- this array was missed at
-  // the time, same pattern as several backend files fixed that day
-  'PNB','ADANIPOWER','IOC','ASHOKLEY','BANDHANBNK','INDUSTOWER','IREDA','UNIONBANK',
-  'AMBUJACEM','BANKINDIA','BHEL','SWIGGY','CROMPTON','VBL','MANAPPURAM','BIOCON',
-  'VMM','LICI','LTF','HINDPETRO','SIEMENS',
-]
+const ALL_SYMBOLS = _CANON_SYMBOLS
 
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
 interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }

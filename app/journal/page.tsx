@@ -4,22 +4,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, X, TrendingUp, TrendingDown, BookOpen, Brain, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
+import { ALL_SYMBOLS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
 
-const SYMBOLS = [
-  "NIFTY", "BANKNIFTY", "FINNIFTY",
-  "RELIANCE","TCS","HDFCBANK","INFY","ICICIBANK","HINDUNILVR","ITC","SBIN",
-  "BHARTIARTL","KOTAKBANK","LT","AXISBANK","ASIANPAINT","MARUTI","TITAN",
-  "SUNPHARMA","ULTRACEMCO","BAJFINANCE","WIPRO","HCLTECH","TATACONSUM",
-  "TATASTEEL","ADANIENT","POWERGRID","NTPC","ONGC","JSWSTEEL","COALINDIA",
-  "BAJAJFINSV","TECHM","APOLLOHOSP","BAJAJ-AUTO","BPCL","BRITANNIA","CIPLA",
-  "DRREDDY","EICHERMOT","GRASIM","HEROMOTOCO","HINDALCO","HDFCLIFE",
-  "INDUSINDBK","JIOFIN","M&M","NESTLEIND","SBILIFE","SHRIRAMFIN","TRENT",
-  "ADANIPORTS","BANKBARODA","BEL","CANBK","CHOLAFIN","DLF","GAIL","HAVELLS",
-  "HAL","INDIGO","PFC","RECLTD","SAIL","TATAPOWER","VEDL",
-    "PAYTM","NYKAA","PERSISTENT","DIXON",
-    "BSE","MCX","TMPV","LTIM","GODREJPROP","DIVISLAB","COFORGE","ANGELONE","CDSL","OIL",
-]
+const SYMBOLS = _CANON_SYMBOLS
 
 const LOT_SIZES: Record<string, number> = {
   NIFTY: 65, BANKNIFTY: 30, FINNIFTY: 60,

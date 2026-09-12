@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar'
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { Send, RefreshCw, AlertTriangle, ChevronDown } from 'lucide-react'
 
+import { STOCKS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
 
 // ── Simple markdown renderer — no external library needed ────────────────────
@@ -107,28 +108,7 @@ function renderInline(text: string): React.ReactNode {
 }
 
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
-const STOCKS = [
-  'ADANIENT','ADANIPORTS','ADANIPOWER','AMBUJACEM','ANGELONE','APOLLOHOSP',
-  'ASHOKLEY','ASIANPAINT','ASTRAL','AUROPHARMA','AXISBANK','BAJAJ-AUTO',
-  'BAJAJFINSV','BAJFINANCE','BANDHANBNK','BANKBARODA','BANKINDIA','BEL',
-  'BHARATFORG','BHARTIARTL','BHEL','BIOCON','BPCL','BRITANNIA',
-  'BSE','CANBK','CDSL','CHOLAFIN','CIPLA','COALINDIA',
-  'COFORGE','CROMPTON','DABUR','DIVISLAB','DIXON','DLF',
-  'DRREDDY','EICHERMOT','ETERNAL','FEDERALBNK','GAIL','GODREJCP',
-  'GODREJPROP','GRASIM','HAL','HAVELLS','HCLTECH','HDFCBANK',
-  'HDFCLIFE','HEROMOTOCO','HINDALCO','HINDPETRO','HINDUNILVR','ICICIBANK',
-  'ICICIPRULI','IDFCFIRSTB','IEX','INDIGO','INDUSINDBK','INDUSTOWER',
-  'INFY','IOC','IREDA','ITC','JIOFIN','JSWSTEEL',
-  'KOTAKBANK','LICI','LT','LTF','LUPIN','M&M',
-  'MANAPPURAM','MARICO','MARUTI','MCX','MOTHERSON','MUTHOOTFIN',
-  'NESTLEIND','NTPC','NYKAA','OIL','ONGC','PAYTM',
-  'PERSISTENT','PFC','PIDILITIND','PNB','POLYCAB','POWERGRID',
-  'RECLTD','RELIANCE','SAIL','SBICARD','SBILIFE','SBIN',
-  'SHRIRAMFIN','SIEMENS','SUNPHARMA','SWIGGY','TATACONSUM','TATAPOWER',
-  'TATASTEEL','TCS','TECHM','TITAN','TMPV','TORNTPHARM',
-  'TRENT','TVSMOTOR','ULTRACEMCO','UNIONBANK','VBL','VEDL',
-  'VMM','VOLTAS','WIPRO',
-]
+const STOCKS = _CANON_SYMBOLS
 
 const SYSTEM_PROMPT = `You are GreekNova's market data analyst. You help traders understand options market structure using NSE F&O data.
 

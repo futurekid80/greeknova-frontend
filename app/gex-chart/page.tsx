@@ -104,7 +104,7 @@ export default function GexByStrikePage() {
               <span className="text-xs text-gray-500">as of {data.as_of?.slice(11, 16)} UTC</span>
             </div>
             <ResponsiveContainer width="100%" height={420}>
-              <ComposedChart data={data.strikes} margin={{ top: 30, right: 20, left: 0, bottom: 0 }}>
+              <ComposedChart data={data.strikes} margin={{ top: 75, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
                 <XAxis
                   dataKey="strike"

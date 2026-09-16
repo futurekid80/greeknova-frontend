@@ -42,9 +42,17 @@ interface GexRow {
   oi_current: number | null
   oi_trend_pct: number | null
   oi_trend_label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null
+  next_wall_strike: number | null
+  next_wall_gamma_oi: number | null
+  runway_pct: number | null
+  runway_clear: boolean | null
   bias: 'BULLISH' | 'BEARISH' | null
   label: string
   desc: string
+}
+
+function runwaySign(v: number) {
+  return v > 0 ? '+' : v < 0 ? '-' : ''
 }
 
 type RegimeFilter = 'ALL' | 'SHORT_GAMMA' | 'LONG_GAMMA'
@@ -434,6 +442,7 @@ export default function GammaSqueeze() {
                     <SortTh label="Distance" col="distance" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
                     <SortTh label="Bias" col="bias" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
                     <SortTh label="OI @ Wall" col="oi" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <th className="px-3 py-2 font-semibold">Runway</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -460,6 +469,15 @@ export default function GammaSqueeze() {
                         </td>
                         <td className="px-3 py-2">
                           <OiTrendBadge label={r.oi_trend_label} pct={r.oi_trend_pct} />
+                        </td>
+                        <td className="px-3 py-2">
+                          {r.next_wall_strike !== null && r.runway_pct !== null ? (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.runway_clear ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400'}`}>
+                              {r.runway_clear ? 'CLEAR' : 'BLOCKED'} · {fmtStrike(r.next_wall_strike)} ({runwaySign(r.runway_pct)}{Math.abs(r.runway_pct).toFixed(1)}%)
+                            </span>
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
                         </td>
                       </tr>
                     )

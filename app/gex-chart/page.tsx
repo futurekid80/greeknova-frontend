@@ -119,20 +119,20 @@ export default function GexByStrikePage() {
                   labelFormatter={(v) => `Strike ${Number(v).toLocaleString()}`}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="ce_gex" name="Call GEX" fill="#34d399" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="pe_gex" name="Put GEX" fill="#f87171" radius={[0, 0, 2, 2]} />
+                <Bar dataKey="ce_gex" name="Call GEX" fill="#34d399" radius={[2, 2, 0, 0]} barSize={8} isAnimationActive={false} />
+                <Bar dataKey="pe_gex" name="Put GEX" fill="#f87171" radius={[0, 0, 2, 2]} barSize={8} isAnimationActive={false} />
 
                 {data.spot && (
                   <ReferenceLine x={data.spot} stroke="#fbbf24" strokeDasharray="4 3"
-                    label={{ value: `SPOT ${data.spot.toLocaleString()}`, position: 'top', fill: '#fbbf24', fontSize: 11 }} />
+                    label={{ value: `SPOT ${data.spot.toLocaleString()}`, position: 'top', offset: 10, fill: '#fbbf24', fontSize: 11 }} />
                 )}
                 {data.call_wall_strike && (
                   <ReferenceLine x={data.call_wall_strike} stroke="#34d399" strokeDasharray="4 3"
-                    label={{ value: `CALL WALL ${data.call_wall_strike.toLocaleString()}`, position: 'insideTopRight', fill: '#34d399', fontSize: 11 }} />
+                    label={{ value: `CALL WALL ${data.call_wall_strike.toLocaleString()}`, position: 'top', offset: 32, fill: '#34d399', fontSize: 11 }} />
                 )}
                 {data.put_wall_strike && (
                   <ReferenceLine x={data.put_wall_strike} stroke="#f87171" strokeDasharray="4 3"
-                    label={{ value: `PUT WALL ${data.put_wall_strike.toLocaleString()}`, position: 'insideTopLeft', fill: '#f87171', fontSize: 11 }} />
+                    label={{ value: `PUT WALL ${data.put_wall_strike.toLocaleString()}`, position: 'top', offset: 54, fill: '#f87171', fontSize: 11 }} />
                 )}
                 {data.flip_point && (
                   <ReferenceLine x={data.flip_point} stroke="#a78bfa" strokeDasharray="2 2"

@@ -8,13 +8,12 @@ export function useAutoRefresh(
   intervalMs: number = 5 * 60 * 1000,
   autoStart: boolean = false
 ) {
-  const [enabled, setEnabled] = useState(() => {
-    // Read persisted state on mount
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(STORAGE_KEY) === 'true'
-    }
-    return autoStart
-  })
+  // Always start from the same value on server and client to avoid a
+  // hydration mismatch (reading localStorage here made SSR say "off" and
+  // the client's very first paint say "on", which crashed hydration for
+  // everything below it). The effect below re-syncs from localStorage
+  // right after mount instead.
+  const [enabled, setEnabled] = useState(autoStart)
   const [countdown, setCountdown] = useState(intervalMs / 1000)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)

@@ -608,7 +608,7 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
         {tab === 'oi_build'  && (isMarketData ? 'Stocks with increasing Open Interest today — fresh positioning' : 'OI change: previous close vs latest close')}
         {tab === 'oi_unwind' && (isMarketData ? 'Stocks with decreasing Open Interest today — positions being squared off' : 'Stocks below CPR with narrow range')}
         {tab === 'week52'    && 'Trading within 2% of their 52-week high, closest first — 🔥 marks stocks at/within 0.5% of it'}
-        {tab === 'all'       && 'All 66 F&O symbols ranked by War Zone status then OI activity'}
+        {tab === 'all'       && `All ${all.length} F&O symbols ranked by War Zone status then OI activity`}
       </p>
       <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 px-3 py-2 text-xs text-gray-600 font-medium border-b border-gray-800/50 mb-1">
         <div className="col-span-2">Symbol</div>
@@ -1386,7 +1386,7 @@ export default function MarketPulse() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-black text-white">Market Pulse Feed</h2>
-              <p className="text-xs text-gray-500 mt-0.5">All 66 F&O symbols · CPR + OI combined · War Zone ranked first · OI = prev close vs latest close</p>
+              <p className="text-xs text-gray-500 mt-0.5">All {all.length} F&O symbols · CPR + OI combined · War Zone ranked first · OI = prev close vs latest close</p>
             </div>
             {warZoneCount > 0 && (
               <div className="flex items-center gap-1.5 bg-orange-950/40 border border-orange-800/50 rounded-lg px-3 py-1.5">

@@ -1386,7 +1386,7 @@ export default function MarketPulse() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-black text-white">Market Pulse Feed</h2>
-              <p className="text-xs text-gray-500 mt-0.5">All {all.length} F&O symbols · CPR + OI combined · War Zone ranked first · OI = prev close vs latest close</p>
+              <p className="text-xs text-gray-500 mt-0.5">All {breadth.total} F&O symbols · CPR + OI combined · War Zone ranked first · OI = prev close vs latest close</p>
             </div>
             {warZoneCount > 0 && (
               <div className="flex items-center gap-1.5 bg-orange-950/40 border border-orange-800/50 rounded-lg px-3 py-1.5">

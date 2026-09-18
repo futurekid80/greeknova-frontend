@@ -55,6 +55,40 @@ const FALLBACK_STOCKS = [
 export const STOCKS: string[] = [...FALLBACK_STOCKS]
 export const ALL_SYMBOLS: string[] = [...INDICES, ...STOCKS]
 
+// Fallback only -- NSE lot sizes as of Sep 18 2026, used until the live
+// fetch below resolves or if it fails. NSE revises these quarterly, which
+// is exactly why the live fetch (from Kite's own instrument data via the
+// backend) is the real source of truth from here on, not this list.
+const FALLBACK_LOT_SIZES: Record<string, number> = {
+  NIFTY: 65, BANKNIFTY: 30, FINNIFTY: 60,
+  RELIANCE: 500, TCS: 225, HDFCBANK: 650, INFY: 400, ICICIBANK: 700,
+  HINDUNILVR: 300, ITC: 1725, SBIN: 750, BHARTIARTL: 475,
+  KOTAKBANK: 2000, LT: 175, AXISBANK: 625, ASIANPAINT: 250,
+  MARUTI: 50, TITAN: 175, SUNPHARMA: 350, ULTRACEMCO: 50,
+  BAJFINANCE: 750, WIPRO: 3000, HCLTECH: 350, TATACONSUM: 550,
+  TATASTEEL: 2750, ADANIENT: 309, POWERGRID: 1900, NTPC: 1500,
+  ONGC: 2250, JSWSTEEL: 675, COALINDIA: 1350, BAJAJFINSV: 250,
+  TECHM: 600, APOLLOHOSP: 125, 'BAJAJ-AUTO': 75, BPCL: 1975,
+  BRITANNIA: 125, CIPLA: 425, DRREDDY: 625, EICHERMOT: 100,
+  GRASIM: 250, HEROMOTOCO: 150, HINDALCO: 700, HDFCLIFE: 1100,
+  INDUSINDBK: 700, JIOFIN: 2350, 'M&M': 200, NESTLEIND: 500,
+  SBILIFE: 375, SHRIRAMFIN: 825, TRENT: 225, ADANIPORTS: 475,
+  BANKBARODA: 2925, BEL: 1425, CANBK: 6750, CHOLAFIN: 625,
+  DLF: 950, GAIL: 3550, HAVELLS: 500, HAL: 150, INDIGO: 150,
+  PFC: 1300, RECLTD: 1575, SAIL: 4700, TATAPOWER: 1450, VEDL: 1150,
+  PAYTM: 725, NYKAA: 3125, PERSISTENT: 100, DIXON: 50,
+  BSE: 100, MCX: 75, TMPV: 1425, GODREJPROP: 475,
+  DIVISLAB: 150, COFORGE: 150, ANGELONE: 250, CDSL: 1500, OIL: 1900,
+}
+
+// Live, mutable export -- consumers get the same object reference, its
+// contents get replaced in place once the live fetch resolves.
+export const LOT_SIZES: Record<string, number> = { ...FALLBACK_LOT_SIZES }
+
+export function getLotSize(symbol: string): number {
+  return LOT_SIZES[symbol] || 500
+}
+
 const API = 'https://api.greeknova.com'
 
 function applyLiveStocks(liveStocks: string[]) {
@@ -68,9 +102,12 @@ function applyLiveStocks(liveStocks: string[]) {
 if (typeof window !== 'undefined') {
   fetch(`${API}/symbols`)
     .then(res => (res.ok ? res.json() : Promise.reject(new Error(`/symbols returned ${res.status}`))))
-    .then((data: { stocks?: string[] }) => {
+    .then((data: { stocks?: string[]; lot_sizes?: Record<string, number> }) => {
       if (Array.isArray(data.stocks) && data.stocks.length > 0) {
         applyLiveStocks(data.stocks)
+      }
+      if (data.lot_sizes && Object.keys(data.lot_sizes).length > 0) {
+        Object.assign(LOT_SIZES, data.lot_sizes)
       }
     })
     .catch(err => {

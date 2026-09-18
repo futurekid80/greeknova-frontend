@@ -4,36 +4,15 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, X, TrendingUp, TrendingDown, BookOpen, Brain, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
-import { ALL_SYMBOLS as _CANON_SYMBOLS } from '@/lib/symbols'
+import { ALL_SYMBOLS as _CANON_SYMBOLS, getLotSize } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
 
 const SYMBOLS = _CANON_SYMBOLS
 
-const LOT_SIZES: Record<string, number> = {
-  NIFTY: 65, BANKNIFTY: 30, FINNIFTY: 60,
-  RELIANCE: 500, TCS: 225, HDFCBANK: 650, INFY: 400, ICICIBANK: 700,
-  HINDUNILVR: 300, ITC: 1725, SBIN: 750, BHARTIARTL: 475,
-  KOTAKBANK: 2000, LT: 175, AXISBANK: 625, ASIANPAINT: 250,
-  MARUTI: 50, TITAN: 175, SUNPHARMA: 350, ULTRACEMCO: 50,
-  BAJFINANCE: 750, WIPRO: 3000, HCLTECH: 350, TATACONSUM: 550,
-  TATASTEEL: 2750, ADANIENT: 309, POWERGRID: 1900, NTPC: 1500,
-  ONGC: 2250, JSWSTEEL: 675, COALINDIA: 1350, BAJAJFINSV: 250,
-  TECHM: 600, APOLLOHOSP: 125, 'BAJAJ-AUTO': 75, BPCL: 1975,
-  BRITANNIA: 125, CIPLA: 425, DRREDDY: 625, EICHERMOT: 100,
-  GRASIM: 250, HEROMOTOCO: 150, HINDALCO: 700, HDFCLIFE: 1100,
-  INDUSINDBK: 700, JIOFIN: 2350, 'M&M': 200, NESTLEIND: 500,
-  SBILIFE: 375, SHRIRAMFIN: 825, TRENT: 225, ADANIPORTS: 475,
-  BANKBARODA: 2925, BEL: 1425, CANBK: 6750, CHOLAFIN: 625,
-  DLF: 950, GAIL: 3550, HAVELLS: 500, HAL: 150, INDIGO: 150,
-  PFC: 1300, RECLTD: 1575, SAIL: 4700, TATAPOWER: 1450, VEDL: 1150,
-  PAYTM: 725, NYKAA: 3125, PERSISTENT: 100, DIXON: 50,
-  BSE: 100, MCX: 75, TMPV: 1425, LTIM: 100, GODREJPROP: 475,
-  DIVISLAB: 150, COFORGE: 150, ANGELONE: 250, CDSL: 1500, OIL: 1900,
-}
-
-function getLotSize(symbol: string): number {
-  return LOT_SIZES[symbol] || 500
-}
+// LOT_SIZES/getLotSize used to be hardcoded here (stale, missing newer
+// F&O stocks) -- now centralized in lib/symbols.ts, live-fetched from the
+// backend's real NSE lot sizes, with the same-quality fallback if that
+// fetch fails. See lib/symbols.ts for details.
 
 interface Trade {
   id: string

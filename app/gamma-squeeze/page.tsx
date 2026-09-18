@@ -437,6 +437,7 @@ export default function GammaSqueeze() {
                   <tr className="bg-gray-900/60 text-gray-500 text-left">
                     <SortTh label="Stock" col="symbol" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
                     <SortTh label="Stage" col="stage" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <th className="px-3 py-2 font-semibold">Regime</th>
                     <SortTh label="CMP" col="cmp" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
                     <SortTh label="Wall" col="wall" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
                     <SortTh label="Distance" col="distance" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
@@ -455,6 +456,11 @@ export default function GammaSqueeze() {
                           {r.confirmed_by_alerts && <CheckCircle2 size={11} className="inline ml-1.5 text-sky-400" />}
                         </td>
                         <td className="px-3 py-2"><StageBadge stage={r.stage} /></td>
+                        <td className="px-3 py-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.regime === 'SHORT_GAMMA' ? 'bg-red-900/60 text-red-300' : 'bg-emerald-900/60 text-emerald-300'}`}>
+                            {r.regime === 'SHORT_GAMMA' ? 'SG' : 'LG'}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-gray-300">₹{r.cmp.toLocaleString('en-IN')}</td>
                         <td className="px-3 py-2 text-gray-300">{fmtStrike(wallStrike)} {wallSide}</td>
                         <td className="px-3 py-2">

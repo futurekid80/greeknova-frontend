@@ -1,40 +1,80 @@
 // Shared symbol universe — single source of truth.
-// Added Jul 22 2026: every page up to this point (dashboard search, sector
-// map, OI Profile, OI Heatmap, OI History, EOD, Ask, Watchlist) maintains
-// its own separate hardcoded copy of this list, which is exactly why it
-// kept drifting out of sync (missing new symbols, delisted tickers left
-// in). New pages should import from here instead of adding another copy.
-// Existing pages can be migrated to this file in a future cleanup pass.
+// Every page (dashboard search, sector map, OI Profile, OI Heatmap,
+// OI History, EOD, Ask, Watchlist, Journal, Historical Chain) imports
+// ALL_SYMBOLS/STOCKS/INDICES from here.
+//
+// Sep 18 2026: this used to be a hand-copied static snapshot that silently
+// drifted out of sync with the backend's live F&O universe (new stocks like
+// INDHOTEL/NAUKRI missing, delisted ones like RAYMONDLSL still listed).
+// Now it fetches the live universe from the backend's /symbols endpoint on
+// load and mutates these arrays in place, so every importer picks up the
+// live list automatically with zero changes on their end. The lists below
+// are only the bundled fallback -- used until that fetch resolves, or if
+// it fails outright (offline, backend down, etc).
 
 export const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
 
-export const STOCKS = [
-  // Regenerated Sep 17 2026 from the confirmed-live backend F&O universe.
-  '360ONE','AARTIIND','ABB','ABCAPITAL','ABFRL','ADANIENSOL','ADANIENT','ADANIGREEN',
-  'ADANIPORTS','ADANIPOWER','ALKEM','AMBUJACEM','ANGELONE','APOLLOHOSP','APOLLOTYRE',
+// Fallback only -- regenerated Sep 18 2026 from the confirmed-live backend
+// F&O universe. Kept only as a safety net; the live fetch below is the
+// real source of truth from here on.
+const FALLBACK_STOCKS = [
+  '360ONE','ABB','ABCAPITAL','ADANIENSOL','ADANIENT','ADANIGREEN','ADANIPORTS',
+  'ADANIPOWER','ALKEM','AMBER','AMBUJACEM','ANGELONE','APLAPOLLO','APOLLOHOSP',
   'ASHOKLEY','ASIANPAINT','ASTRAL','ATHERENERG','AUBANK','AUROPHARMA','AXISBANK',
-  'BAJAJ-AUTO','BAJAJFINSV','BAJFINANCE','BALKRISIND','BANDHANBNK','BANKBARODA',
-  'BANKINDIA','BDL','BEL','BHARATFORG','BHARTIARTL','BHEL','BIOCON','BOSCHLTD','BPCL',
-  'BRITANNIA','BSE','CAMS','CANBK','CANFINHOME','CDSL','CHOLAFIN','CIPLA','COALINDIA',
-  'COFORGE','CONCOR','COROMANDEL','CROMPTON','DABUR','DALBHARAT','DEEPAKNTR','DELHIVERY',
-  'DIVISLAB','DIXON','DLF','DRREDDY','EICHERMOT','ETERNAL','EXIDEIND','FEDERALBNK',
-  'FORCEMOT','FORTIS','GAIL','GLENMARK','GMRAIRPORT','GNFC','GODFRYPHLP','GODREJCP',
-  'GODREJPROP','GRANULES','GRASIM','GUJGASLTD','GVT&D','HAL','HAVELLS','HCLTECH',
-  'HDFCAMC','HDFCBANK','HDFCLIFE','HEROMOTOCO','HINDALCO','HINDCOPPER','HINDPETRO',
-  'HINDUNILVR','HINDZINC','HUDCO','HYUNDAI','ICICIBANK','ICICIGI','ICICIPRULI','IDEA',
-  'IDFCFIRSTB','IEX','IGL','INDIGO','INDUSINDBK','INDUSTOWER','INFY','IOC','IPCALAB',
-  'IREDA','IRFC','ITC','JINDALSTEL','JIOFIN','JKCEMENT','JSWENERGY','JSWSTEEL',
-  'KALYANKJIL','KAYNES','KEI','KFINTECH','KOTAKBANK','KPITTECH','LAURUSLABS','LICHSGFIN',
-  'LICI','LODHA','LT','LTF','LTM','LTTS','LUPIN','M&M','MANAPPURAM','MANKIND','MARICO',
-  'MARUTI','MAZDOCK','MCX','MFSL','MGL','MOTHERSON','MPHASIS','MUTHOOTFIN','NAM-INDIA',
-  'NATIONALUM','NAVINFLUOR','NBCC','NESTLEIND','NHPC','NLCINDIA','NMDC','NTPC','NYKAA',
-  'OIL','ONGC','PATANJALI','PAYTM','PERSISTENT','PETRONET','PFC','PGEL','PIDILITIND',
-  'PIIND','PNB','PNBHOUSING','POLYCAB','POWERGRID','POWERINDIA','PREMIERENE','PVRINOX',
-  'RAMCOCEM','RAYMONDLSL','RBLBANK','RECLTD','RELIANCE','RRKABEL','RVNL','SAGILITY',
-  'SAIL','SBICARD','SBILIFE','SBIN','SHRIRAMFIN','SIEMENS','SOLARINDS','SRF','SUNPHARMA',
-  'SUZLON','SWIGGY','TATACONSUM','TATAELXSI','TATAPOWER','TATASTEEL','TCS','TECHM',
-  'TITAN','TMPV','TORNTPHARM','TORNTPOWER','TRENT','TVSMOTOR','ULTRACEMCO','UNIONBANK',
-  'UNOMINDA','UPL','VBL','VEDL','VMM','VOLTAS','WAAREEENER','WIPRO','YESBANK','ZYDUSLIFE',
+  'BAJAJ-AUTO','BAJAJFINSV','BAJAJHLDNG','BAJFINANCE','BANDHANBNK','BANKBARODA',
+  'BANKINDIA','BDL','BEL','BHARATFORG','BHARTIARTL','BHEL','BIOCON','BLUESTARCO',
+  'BOSCHLTD','BPCL','BRITANNIA','BSE','CAMS','CANBK','CDSL','CGPOWER','CHOLAFIN',
+  'CIPLA','COALINDIA','COCHINSHIP','COFORGE','COLPAL','CONCOR','CROMPTON',
+  'CUMMINSIND','DABUR','DELHIVERY','DIVISLAB','DIXON','DLF','DMART','DRREDDY',
+  'EICHERMOT','ETERNAL','FEDERALBNK','FORCEMOT','FORTIS','GAIL','GLENMARK',
+  'GMRAIRPORT','GODFRYPHLP','GODREJCP','GODREJPROP','GRASIM','GVT&D','HAL',
+  'HAVELLS','HCLTECH','HDFCAMC','HDFCBANK','HDFCLIFE','HEROMOTOCO','HINDALCO',
+  'HINDPETRO','HINDUNILVR','HINDZINC','HYUNDAI','ICICIBANK','ICICIGI','ICICIPRULI',
+  'IDEA','IDFCFIRSTB','IEX','INDHOTEL','INDIANB','INDIGO','INDUSINDBK',
+  'INDUSTOWER','INFY','INOXWIND','IOC','IREDA','IRFC','ITC','JINDALSTEL','JIOFIN',
+  'JSWENERGY','JSWSTEEL','JUBLFOOD','KALYANKJIL','KAYNES','KEI','KFINTECH',
+  'KOTAKBANK','KPITTECH','LAURUSLABS','LICHSGFIN','LICI','LODHA','LT','LTF','LTM',
+  'LUPIN','M&M','MAHABANK','MANAPPURAM','MANKIND','MARICO','MARUTI','MAXHEALTH',
+  'MAZDOCK','MCX','MFSL','MOTHERSON','MOTILALOFS','MPHASIS','MUTHOOTFIN',
+  'NAM-INDIA','NATIONALUM','NAUKRI','NBCC','NESTLEIND','NHPC','NMDC','NTPC',
+  'NYKAA','OBEROIRLTY','OFSS','OIL','ONGC','PAGEIND','PATANJALI','PAYTM',
+  'PERSISTENT','PETRONET','PFC','PGEL','PHOENIXLTD','PIDILITIND','PIIND','PNB',
+  'PNBHOUSING','POLICYBZR','POLYCAB','POWERGRID','POWERINDIA','PREMIERENE',
+  'PRESTIGE','RADICO','RBLBANK','RECLTD','RELIANCE','RVNL','SAGILITY','SAIL',
+  'SBICARD','SBILIFE','SBIN','SHREECEM','SHRIRAMFIN','SIEMENS','SOLARINDS',
+  'SONACOMS','SRF','SUNPHARMA','SUPREMEIND','SUZLON','SWIGGY','TATACONSUM',
+  'TATAELXSI','TATAPOWER','TATASTEEL','TCS','TECHM','TIINDIA','TITAN','TMPV',
+  'TORNTPHARM','TRENT','TVSMOTOR','ULTRACEMCO','UNIONBANK','UNITDSPR','UNOMINDA',
+  'UPL','VBL','VEDL','VMM','VOLTAS','WAAREEENER','WIPRO','YESBANK','ZYDUSLIFE',
 ].sort()
 
-export const ALL_SYMBOLS = [...INDICES, ...STOCKS]
+// Live, mutable exports -- consumers keep importing these same names.
+// Start out as the fallback; get overwritten in place once the live fetch
+// below resolves (arrays are mutated, not reassigned, so every importer's
+// reference stays valid and up to date).
+export const STOCKS: string[] = [...FALLBACK_STOCKS]
+export const ALL_SYMBOLS: string[] = [...INDICES, ...STOCKS]
+
+const API = 'https://api.greeknova.com'
+
+function applyLiveStocks(liveStocks: string[]) {
+  const sorted = [...new Set(liveStocks)].sort()
+  STOCKS.length = 0
+  STOCKS.push(...sorted)
+  ALL_SYMBOLS.length = 0
+  ALL_SYMBOLS.push(...INDICES, ...STOCKS)
+}
+
+if (typeof window !== 'undefined') {
+  fetch(`${API}/symbols`)
+    .then(res => (res.ok ? res.json() : Promise.reject(new Error(`/symbols returned ${res.status}`))))
+    .then((data: { stocks?: string[] }) => {
+      if (Array.isArray(data.stocks) && data.stocks.length > 0) {
+        applyLiveStocks(data.stocks)
+      }
+    })
+    .catch(err => {
+      // Bundled fallback list stays in place -- stale is far better than empty.
+      console.warn('[symbols] live /symbols fetch failed, using bundled fallback list:', err)
+    })
+}

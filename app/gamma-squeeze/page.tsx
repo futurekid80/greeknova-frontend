@@ -28,6 +28,9 @@ interface GexRow {
   flip_point: number | null
   net_gex: number
   net_gex_near_spot: number
+  lot_size: number | null
+  net_gex_rupees_cr: number | null
+  net_gex_near_spot_rupees_cr: number | null
   regime: 'SHORT_GAMMA' | 'LONG_GAMMA'
   pct_to_call_wall: number | null
   pct_to_put_wall: number | null
@@ -69,6 +72,12 @@ function fmtNum(n: number | null) {
 
 function fmtStrike(n: number | null) {
   return n === null || n === undefined ? '—' : n.toLocaleString('en-IN')
+}
+
+function fmtRupeesCr(n: number | null) {
+  if (n === null || n === undefined) return '—'
+  const sign = n > 0 ? '+' : ''
+  return `${sign}₹${n.toLocaleString('en-IN', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}Cr`
 }
 
 function closestWallPct(r: GexRow): number {
@@ -207,7 +216,7 @@ export default function GammaSqueeze() {
     arr.sort((a: any, b: any) => {
       let av = a[sortCol]
       let bv = b[sortCol]
-      if (['pct_to_call_wall', 'pct_to_put_wall', 'pct_to_flip', 'net_gex_near_spot'].includes(sortCol)) {
+      if (['pct_to_call_wall', 'pct_to_put_wall', 'pct_to_flip', 'net_gex_near_spot', 'net_gex_near_spot_rupees_cr'].includes(sortCol)) {
         av = Math.abs(av ?? 0)
         bv = Math.abs(bv ?? 0)
       }
@@ -686,6 +695,7 @@ export default function GammaSqueeze() {
                         <SortTh label="% to Put Wall" col="pct_to_put_wall" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                         <SortTh label="Flip Point" col="flip_point" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                         <SortTh label="Net GEX" col="net_gex_near_spot" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                        <SortTh label="Notional GEX" col="net_gex_near_spot_rupees_cr" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                         <SortTh label="Regime" col="regime" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       </tr>
                     </thead>
@@ -721,6 +731,15 @@ export default function GammaSqueeze() {
                           <td className="px-3 py-2 text-gray-400">{fmtStrike(w.flip_point)}</td>
                           <td className="px-3 py-2">
                             <span className={w.net_gex_near_spot < 0 ? 'text-red-400' : 'text-emerald-400'}>{fmtNum(w.net_gex_near_spot)}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            {w.net_gex_near_spot_rupees_cr !== null ? (
+                              <span className={`font-bold ${w.net_gex_near_spot_rupees_cr < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {fmtRupeesCr(w.net_gex_near_spot_rupees_cr)}
+                              </span>
+                            ) : (
+                              <span className="text-gray-600" title="No live lot size for this symbol yet">—</span>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${w.regime === 'SHORT_GAMMA' ? 'bg-red-900/40 text-red-400' : 'bg-emerald-900/40 text-emerald-400'}`}>
@@ -766,8 +785,9 @@ export default function GammaSqueeze() {
             approaching it, <span className="text-yellow-400 font-semibold">🔥 Active Squeeze</span> means price has already pushed through the wall and the move
             may still be accelerating. A <span className="text-sky-400">Confirmed by live order flow</span> tag means the live Alerts feed picked up a real OI/volume
             event at that exact strike in the last 45 minutes — the modeled squeeze lining up with actual order flow, not just the math.
-            No lot-size table is wired in yet, so Net GEX is shown in relative "gamma × OI" units, not rupees — still exactly right for comparing walls and regime
-            within one stock, just not for ranking absolute size across stocks · Not investment advice
+            Net GEX is shown in relative "gamma × OI" units — exactly right for comparing walls and regime within one stock. <span className="text-gray-400">Notional GEX</span> converts
+            that into real rupees (gamma × OI × live lot size × spot² × 1%), so it's the one to use for ranking squeeze magnitude across different stocks — a bigger notional number
+            means a bigger dealer-hedging flow for the same 1% move, regardless of share price or lot size · Not investment advice
           </p>
         </div>
       </div>

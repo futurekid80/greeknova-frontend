@@ -77,6 +77,12 @@ function fmtStrike(n: number | null) {
 function fmtRupeesCr(n: number | null) {
   if (n === null || n === undefined) return '—'
   const sign = n > 0 ? '+' : ''
+  const abs = Math.abs(n)
+  // Index-level notional GEX can run into tens of thousands of Crores, while
+  // most stocks sit under a few hundred — scale the precision so both stay
+  // readable in a narrow table column instead of a long string of digits.
+  if (abs >= 10000) return `${sign}₹${(n / 1000).toFixed(1)}K Cr`
+  if (abs >= 100) return `${sign}₹${Math.round(n).toLocaleString('en-IN')}Cr`
   return `${sign}₹${n.toLocaleString('en-IN', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}Cr`
 }
 

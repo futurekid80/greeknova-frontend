@@ -32,6 +32,10 @@ interface GexRow {
   net_gex_rupees_cr: number | null
   net_gex_near_spot_rupees_cr: number | null
   regime: 'SHORT_GAMMA' | 'LONG_GAMMA'
+  atm_iv: number | null
+  realized_vol: number | null
+  iv_rv_ratio: number | null
+  iv_regime: 'RICH' | 'FAIR' | 'CHEAP' | null
   pct_to_call_wall: number | null
   pct_to_put_wall: number | null
   pct_to_flip: number | null
@@ -145,6 +149,32 @@ function StageBadge({ stage }: { stage: 'ACTIVE_SQUEEZE' | 'ON_THE_VERGE' | null
   return null
 }
 
+function IvRegimeBadge({ regime, ratio }: { regime: 'RICH' | 'FAIR' | 'CHEAP' | null, ratio: number | null }) {
+  if (!regime) return null
+  const ratioStr = ratio !== null ? ` ${ratio.toFixed(1)}x` : ''
+  if (regime === 'RICH') {
+    return (
+      <span title="ATM IV is running well above realized vol — likely pricing in event risk (earnings, corporate action), expensive premium, and IV-crush risk on resolution. Not the clean mechanical squeeze setup."
+        className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-900/50 text-amber-300 whitespace-nowrap">
+        ⚠️ IV RICH{ratioStr}
+      </span>
+    )
+  }
+  if (regime === 'CHEAP') {
+    return (
+      <span title="ATM IV is at or below realized vol — the mechanically clean setup: real gamma amplification without paying a rich premium."
+        className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-900/50 text-sky-300 whitespace-nowrap">
+        💎 IV CHEAP{ratioStr}
+      </span>
+    )
+  }
+  return (
+    <span title="ATM IV is roughly in line with realized vol." className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-800/70 text-gray-400 whitespace-nowrap">
+      IV FAIR{ratioStr}
+    </span>
+  )
+}
+
 export default function GammaSqueeze() {
   const [watchlist, setWatchlist] = useState<GexRow[]>([])
   const [signals, setSignals]     = useState<GexRow[]>([])
@@ -160,6 +190,7 @@ export default function GammaSqueeze() {
   const [stageFilter, setStageFilter] = useState<StageFilter>('ALL')
   const [maxWallDist, setMaxWallDist] = useState<number>(100) // % — 100 = no filter
   const [confirmedOnly, setConfirmedOnly] = useState(false)
+  const [hideIvRich, setHideIvRich] = useState(false)
   const [page, setPage] = useState(1)
   const [showAllSignals, setShowAllSignals] = useState(false)
 
@@ -204,7 +235,7 @@ export default function GammaSqueeze() {
   }
 
   const searchTerm = search.trim().toUpperCase()
-  const filtersActive = searchTerm !== '' || regimeFilter !== 'ALL' || stageFilter !== 'ALL' || maxWallDist < 100 || confirmedOnly
+  const filtersActive = searchTerm !== '' || regimeFilter !== 'ALL' || stageFilter !== 'ALL' || maxWallDist < 100 || confirmedOnly || hideIvRich
 
   const filteredWatchlist = useMemo(() => {
     return watchlist.filter(r => {
@@ -213,9 +244,10 @@ export default function GammaSqueeze() {
       if (stageFilter !== 'ALL' && r.stage !== stageFilter) return false
       if (maxWallDist < 100 && closestWallPct(r) > maxWallDist) return false
       if (confirmedOnly && !r.confirmed_by_alerts) return false
+      if (hideIvRich && r.iv_regime === 'RICH') return false
       return true
     })
-  }, [watchlist, searchTerm, regimeFilter, stageFilter, maxWallDist, confirmedOnly])
+  }, [watchlist, searchTerm, regimeFilter, stageFilter, maxWallDist, confirmedOnly, hideIvRich])
 
   const sortedWatchlist = useMemo(() => {
     const arr = [...filteredWatchlist]
@@ -237,7 +269,7 @@ export default function GammaSqueeze() {
   }, [filteredWatchlist, sortCol, sortDir])
 
   // Reset to page 1 whenever the filtered set or sort changes underneath the current page
-  useEffect(() => { setPage(1) }, [searchTerm, regimeFilter, stageFilter, maxWallDist, confirmedOnly, sortCol, sortDir])
+  useEffect(() => { setPage(1) }, [searchTerm, regimeFilter, stageFilter, maxWallDist, confirmedOnly, hideIvRich, sortCol, sortDir])
 
   const totalPages = Math.max(1, Math.ceil(sortedWatchlist.length / PAGE_SIZE))
   const pageSafe = Math.min(page, totalPages)
@@ -249,9 +281,10 @@ export default function GammaSqueeze() {
       if (regimeFilter === 'LONG_GAMMA') return false // signals are always short-gamma
       if (stageFilter !== 'ALL' && r.stage !== stageFilter) return false
       if (confirmedOnly && !r.confirmed_by_alerts) return false
+      if (hideIvRich && r.iv_regime === 'RICH') return false
       return true
     })
-  }, [signals, searchTerm, regimeFilter, stageFilter, confirmedOnly])
+  }, [signals, searchTerm, regimeFilter, stageFilter, confirmedOnly, hideIvRich])
 
   // Active squeezes (already through the wall) surface above ones still on the verge
   const sortedSignals = useMemo(() => {
@@ -341,6 +374,7 @@ export default function GammaSqueeze() {
     setStageFilter('ALL')
     setMaxWallDist(100)
     setConfirmedOnly(false)
+    setHideIvRich(false)
   }
 
   return (
@@ -559,6 +593,13 @@ export default function GammaSqueeze() {
               }`}>
               <CheckCircle2 size={12} /> Confirmed by order flow
             </button>
+            <button onClick={() => setHideIvRich(v => !v)}
+              title="Hide names where ATM IV is running well above realized vol — likely event risk / expensive premium rather than a clean mechanical squeeze"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
+                hideIvRich ? 'bg-amber-900/50 text-amber-300 border-amber-700/60' : 'bg-gray-900/60 text-gray-500 border-gray-800 hover:text-gray-300'
+              }`}>
+              ⚠️ Hide IV-rich
+            </button>
             {filtersActive && (
               <button onClick={clearFilters} className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-white px-2 py-1.5">
                 <X size={12} /> Clear
@@ -606,6 +647,7 @@ export default function GammaSqueeze() {
                             <CheckCircle2 size={11} /> Confirmed by live order flow
                           </span>
                         )}
+                        <IvRegimeBadge regime={r.iv_regime} ratio={r.iv_rv_ratio} />
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
                       {r.squeeze_strike !== null && (
@@ -622,7 +664,7 @@ export default function GammaSqueeze() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-400 mb-3">{r.desc}</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
                     <div>
                       <p className="text-gray-600">Call Wall</p>
                       <p className="text-white font-semibold">{fmtStrike(r.call_wall_strike)}</p>
@@ -644,6 +686,10 @@ export default function GammaSqueeze() {
                     <div>
                       <p className="text-gray-600">Days to Expiry</p>
                       <p className="text-white font-semibold">{r.days_to_expiry ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">IV vs RV</p>
+                      <p className="text-white font-semibold">{r.atm_iv !== null ? `${r.atm_iv.toFixed(0)}%` : '—'} / {r.realized_vol !== null ? `${r.realized_vol.toFixed(0)}%` : '—'}</p>
                     </div>
                   </div>
                   {r.confirmations.length > 0 && (
@@ -702,6 +748,7 @@ export default function GammaSqueeze() {
                         <SortTh label="Flip Point" col="flip_point" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                         <SortTh label="Net GEX" col="net_gex_near_spot" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                         <SortTh label="Notional GEX" col="net_gex_near_spot_rupees_cr" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                        <SortTh label="IV / RV" col="iv_rv_ratio" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                         <SortTh label="Regime" col="regime" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       </tr>
                     </thead>
@@ -746,6 +793,9 @@ export default function GammaSqueeze() {
                             ) : (
                               <span className="text-gray-600" title="No live lot size for this symbol yet">—</span>
                             )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <IvRegimeBadge regime={w.iv_regime} ratio={w.iv_rv_ratio} />
                           </td>
                           <td className="px-3 py-2">
                             <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${w.regime === 'SHORT_GAMMA' ? 'bg-red-900/40 text-red-400' : 'bg-emerald-900/40 text-emerald-400'}`}>
@@ -793,7 +843,10 @@ export default function GammaSqueeze() {
             event at that exact strike in the last 45 minutes — the modeled squeeze lining up with actual order flow, not just the math.
             Net GEX is shown in relative "gamma × OI" units — exactly right for comparing walls and regime within one stock. <span className="text-gray-400">Notional GEX</span> converts
             that into real rupees (gamma × OI × live lot size × spot² × 1%), so it's the one to use for ranking squeeze magnitude across different stocks — a bigger notional number
-            means a bigger dealer-hedging flow for the same 1% move, regardless of share price or lot size · Not investment advice
+            means a bigger dealer-hedging flow for the same 1% move, regardless of share price or lot size. <span className="text-amber-300">IV / RV</span> compares ATM implied vol to the
+            stock's own 10-session realized vol — <span className="text-amber-300">⚠️ IV RICH</span> means the option premium is pricing in more move than the stock's actually been making
+            (often event risk like earnings, and expensive besides), while <span className="text-sky-300">💎 IV CHEAP</span> is the mechanically clean setup: real gamma amplification without
+            an inflated premium or IV-crush risk on resolution · Not investment advice
           </p>
         </div>
       </div>

@@ -105,6 +105,23 @@ function closestWallInfo(r: GexRow) {
   }
 }
 
+// The wall tied to this row's bias/stage/OI-trend badge (squeeze_strike,
+// squeeze_option_type from the backend) -- NOT necessarily the nearer of the
+// two walls by raw distance. Closest to Trigger must show this one, so the
+// "Wall" cell and the "OI @ Wall" badge next to it are always describing the
+// same strike (previously they could silently mismatch: e.g. bias BULLISH ->
+// OI-trend computed off the call wall, while the Wall cell showed whichever
+// wall happened to be physically closer, sometimes the put wall instead).
+function squeezeWallInfo(r: GexRow) {
+  if (r.squeeze_option_type === 'CE') {
+    return { wallStrike: r.call_wall_strike, wallSide: 'CE' as const, dist: r.pct_to_call_wall }
+  }
+  if (r.squeeze_option_type === 'PE') {
+    return { wallStrike: r.put_wall_strike, wallSide: 'PE' as const, dist: r.pct_to_put_wall }
+  }
+  return closestWallInfo(r)
+}
+
 const CT_STAGE_RANK: Record<string, number> = { ACTIVE_SQUEEZE: 0, ON_THE_VERGE: 1 }
 
 function OiTrendBadge({ label, pct }: { label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null, pct: number | null }) {
@@ -351,15 +368,17 @@ export default function GammaSqueeze() {
           case 'cmp':
             return dir * (a.cmp - b.cmp)
           case 'wall': {
-            const wa = closestWallInfo(a).wallStrike, wb = closestWallInfo(b).wallStrike
+            const wa = squeezeWallInfo(a).wallStrike, wb = squeezeWallInfo(b).wallStrike
             if (nullsLast(wa) && nullsLast(wb)) return 0
             if (nullsLast(wa)) return 1
             if (nullsLast(wb)) return -1
             return dir * (wa! - wb!)
           }
           case 'distance': {
-            const da = closestWallPct(a), db = closestWallPct(b)
-            return dir * (da - db)
+            const da = squeezeWallInfo(a).dist, db = squeezeWallInfo(b).dist
+            const absA = da === null ? 999 : Math.abs(da)
+            const absB = db === null ? 999 : Math.abs(db)
+            return dir * (absA - absB)
           }
           case 'bias':
             return dir * (a.bias ?? '').localeCompare(b.bias ?? '')
@@ -507,7 +526,7 @@ export default function GammaSqueeze() {
                 </thead>
                 <tbody>
                   {closestToTrigger.map(r => {
-                    const { wallStrike, wallSide, dist } = closestWallInfo(r)
+                    const { wallStrike, wallSide, dist } = squeezeWallInfo(r)
                     return (
                       <tr key={r.symbol} className={`border-t border-gray-800/60 hover:bg-gray-900/30 ${r.stage === 'ACTIVE_SQUEEZE' ? 'bg-yellow-500/5' : ''}`}>
                         <td className="px-3 py-2 font-bold text-white">

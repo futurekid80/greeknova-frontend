@@ -149,12 +149,15 @@ function StageBadge({ stage }: { stage: 'ACTIVE_SQUEEZE' | 'ON_THE_VERGE' | null
   return null
 }
 
-function IvRegimeBadge({ regime, ratio }: { regime: 'RICH' | 'FAIR' | 'CHEAP' | null, ratio: number | null }) {
+function IvRegimeBadge({ regime, ratio, atmIv, realizedVol }: { regime: 'RICH' | 'FAIR' | 'CHEAP' | null, ratio: number | null, atmIv?: number | null, realizedVol?: number | null }) {
   if (!regime) return null
   const ratioStr = ratio !== null ? ` ${ratio.toFixed(1)}x` : ''
+  const numbers = (atmIv !== undefined && atmIv !== null && realizedVol !== undefined && realizedVol !== null)
+    ? `ATM IV ${atmIv.toFixed(1)}% vs RV ${realizedVol.toFixed(1)}% — `
+    : ''
   if (regime === 'RICH') {
     return (
-      <span title="ATM IV is running well above realized vol — likely pricing in event risk (earnings, corporate action), expensive premium, and IV-crush risk on resolution. Not the clean mechanical squeeze setup."
+      <span title={`${numbers}ATM IV is running well above realized vol — likely pricing in event risk (earnings, corporate action), expensive premium, and IV-crush risk on resolution. Not the clean mechanical squeeze setup.`}
         className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-900/50 text-amber-300 whitespace-nowrap">
         ⚠️ IV RICH{ratioStr}
       </span>
@@ -162,14 +165,14 @@ function IvRegimeBadge({ regime, ratio }: { regime: 'RICH' | 'FAIR' | 'CHEAP' | 
   }
   if (regime === 'CHEAP') {
     return (
-      <span title="ATM IV is at or below realized vol — the mechanically clean setup: real gamma amplification without paying a rich premium."
+      <span title={`${numbers}ATM IV is at or below realized vol — the mechanically clean setup: real gamma amplification without paying a rich premium.`}
         className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-900/50 text-sky-300 whitespace-nowrap">
         💎 IV CHEAP{ratioStr}
       </span>
     )
   }
   return (
-    <span title="ATM IV is roughly in line with realized vol." className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-800/70 text-gray-400 whitespace-nowrap">
+    <span title={`${numbers}ATM IV is roughly in line with realized vol.`} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-800/70 text-gray-400 whitespace-nowrap">
       IV FAIR{ratioStr}
     </span>
   )
@@ -512,7 +515,7 @@ export default function GammaSqueeze() {
                           {r.confirmed_by_alerts && <CheckCircle2 size={11} className="inline ml-1.5 text-sky-400" />}
                         </td>
                         <td className="px-3 py-2"><StageBadge stage={r.stage} /></td>
-                        <td className="px-3 py-2"><IvRegimeBadge regime={r.iv_regime} ratio={r.iv_rv_ratio} /></td>
+                        <td className="px-3 py-2"><IvRegimeBadge regime={r.iv_regime} ratio={r.iv_rv_ratio} atmIv={r.atm_iv} realizedVol={r.realized_vol} /></td>
                         <td className="px-3 py-2">
                           {r.pct_to_flip !== null ? (
                             <span className={`font-bold ${Math.abs(r.pct_to_flip) <= 1.5 ? 'text-yellow-400' : 'text-gray-400'}`}>
@@ -669,7 +672,7 @@ export default function GammaSqueeze() {
                             <CheckCircle2 size={11} /> Confirmed by live order flow
                           </span>
                         )}
-                        <IvRegimeBadge regime={r.iv_regime} ratio={r.iv_rv_ratio} />
+                        <IvRegimeBadge regime={r.iv_regime} ratio={r.iv_rv_ratio} atmIv={r.atm_iv} realizedVol={r.realized_vol} />
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
                       {r.squeeze_strike !== null && (
@@ -817,7 +820,7 @@ export default function GammaSqueeze() {
                             )}
                           </td>
                           <td className="px-3 py-2">
-                            <IvRegimeBadge regime={w.iv_regime} ratio={w.iv_rv_ratio} />
+                            <IvRegimeBadge regime={w.iv_regime} ratio={w.iv_rv_ratio} atmIv={w.atm_iv} realizedVol={w.realized_vol} />
                           </td>
                           <td className="px-3 py-2">
                             <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${w.regime === 'SHORT_GAMMA' ? 'bg-red-900/40 text-red-400' : 'bg-emerald-900/40 text-emerald-400'}`}>

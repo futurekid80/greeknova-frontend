@@ -492,6 +492,7 @@ export default function GammaSqueeze() {
                   <tr className="bg-gray-900/60 text-gray-500 text-left">
                     <SortTh label="Stock" col="symbol" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
                     <SortTh label="Stage" col="stage" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
+                    <th className="px-3 py-2 font-semibold">IV / RV</th>
                     <th className="px-3 py-2 font-semibold">Flip</th>
                     <SortTh label="CMP" col="cmp" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
                     <SortTh label="Wall" col="wall" sortCol={ctSortCol} sortDir={ctSortDir} onSort={handleCtSort} />
@@ -511,6 +512,7 @@ export default function GammaSqueeze() {
                           {r.confirmed_by_alerts && <CheckCircle2 size={11} className="inline ml-1.5 text-sky-400" />}
                         </td>
                         <td className="px-3 py-2"><StageBadge stage={r.stage} /></td>
+                        <td className="px-3 py-2"><IvRegimeBadge regime={r.iv_regime} ratio={r.iv_rv_ratio} /></td>
                         <td className="px-3 py-2">
                           {r.pct_to_flip !== null ? (
                             <span className={`font-bold ${Math.abs(r.pct_to_flip) <= 1.5 ? 'text-yellow-400' : 'text-gray-400'}`}>

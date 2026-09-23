@@ -408,6 +408,13 @@ export default function GammaSqueeze() {
     }
   }
 
+  const ladderStocks = useMemo(() => {
+    return [...watchlist]
+      .filter(r => closestWallPct(r) <= 3)
+      .sort((a, b) => closestWallPct(a) - closestWallPct(b))
+      .slice(0, 12)
+  }, [watchlist])
+
   const closestToTrigger = useMemo(() => {
     const rows = [...watchlist]
       .filter(r => r.regime === 'SHORT_GAMMA' && closestWallPct(r) <= 3)
@@ -503,16 +510,16 @@ export default function GammaSqueeze() {
           </div>
         </div>
 
-        {closestToTrigger.length > 0 && (
+        {ladderStocks.length > 0 && (
           <div className="mb-5 bg-fuchsia-950/25 border-2 border-fuchsia-500/50 rounded-2xl p-4">
             <h2 className="text-sm font-black text-fuchsia-300 flex items-center gap-2 mb-1">
               🪜 Strike Ladder — ATM ±3, every nearby strike
             </h2>
             <p className="text-[11px] text-fuchsia-100/60 mb-2.5">
-              For each stock closest to its wall: the 7 nearest strikes (including ones price has already crossed), CE on the left / PE on the right. Amber = the wall strike, dot = building (amber) or unwinding (green).
+              Every stock closest to a wall, any regime (short or long gamma): the 7 nearest strikes (including ones price has already crossed), CE on the left / PE on the right. Amber = the wall strike, dot = building (amber) or unwinding (green).
             </p>
             <div className="flex gap-2.5 overflow-x-auto pb-1">
-              {closestToTrigger.map(r => <StrikeLadderCard key={r.symbol} r={r} />)}
+              {ladderStocks.map(r => <StrikeLadderCard key={r.symbol} r={r} />)}
             </div>
           </div>
         )}

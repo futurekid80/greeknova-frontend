@@ -144,20 +144,18 @@ function fmtOi(n: number | null): string {
   return `${n}`
 }
 
-function LadderTrendBar({ pct, label }: { pct: number | null, label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null }) {
-  if (!label || pct === null) return null
-  const fillPct = Math.max(Math.min(Math.abs(pct), 100), 10)  // floor so even a small move is visible as a sliver
-  const cls =
-    label === 'BUILDING' ? 'bg-amber-400' :
-    label === 'UNWINDING' ? 'bg-emerald-400' :
-    'bg-gray-600'
-  const title =
-    label === 'BUILDING' ? `OI +${pct}% since open — building, level still being defended` :
-    label === 'UNWINDING' ? `OI ${pct}% since open — unwinding, writers leaving, level weakening` :
-    `OI ${pct > 0 ? '+' : ''}${pct}% since open — roughly steady`
+function LadderMovePill({ pct, label }: { pct: number | null, label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null }) {
+  if (label !== 'BUILDING' && label !== 'UNWINDING') return null
+  const isDrop = label === 'UNWINDING'
+  const title = isDrop
+    ? `OI ${pct}% since open — unwinding, writers leaving, level weakening`
+    : `OI +${pct}% since open — building, level still being defended`
   return (
-    <span title={title} className="block h-1 w-full bg-gray-800 rounded-full overflow-hidden mt-0.5">
-      <span className={`block h-full rounded-full ${cls}`} style={{ width: `${fillPct}%` }} />
+    <span title={title}
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-black leading-none ${
+        isDrop ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+      }`}>
+      {isDrop ? '▼' : '▲'}{Math.abs(pct as number)}%
     </span>
   )
 }
@@ -179,22 +177,30 @@ function StrikeLadderCard({ r }: { r: GexRow }) {
           </tr>
         </thead>
         <tbody>
-          {[...r.strike_ladder].reverse().map(rung => (
-            <tr key={rung.strike}
-              className={`${rung.is_atm ? 'bg-sky-950/40' : ''}`}>
-              <td className="py-1 text-left align-top">
-                <span className={rung.is_call_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.call_oi)}</span>
-                <LadderTrendBar pct={rung.call_oi_trend_pct} label={rung.call_oi_trend_label} />
-              </td>
-              <td className={`py-1 text-center font-semibold align-top ${rung.is_atm ? 'text-sky-300' : 'text-gray-300'}`}>
-                {fmtStrike(rung.strike)}{rung.is_atm && <span className="text-[9px] text-sky-500 ml-1">ATM</span>}
-              </td>
-              <td className="py-1 text-right align-top">
-                <span className={rung.is_put_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.put_oi)}</span>
-                <LadderTrendBar pct={rung.put_oi_trend_pct} label={rung.put_oi_trend_label} />
-              </td>
-            </tr>
-          ))}
+          {[...r.strike_ladder].reverse().map(rung => {
+            const ceMoved = rung.call_oi_trend_label === 'BUILDING' || rung.call_oi_trend_label === 'UNWINDING'
+            const peMoved = rung.put_oi_trend_label === 'BUILDING' || rung.put_oi_trend_label === 'UNWINDING'
+            return (
+              <tr key={rung.strike}
+                className={`${rung.is_atm ? 'bg-sky-950/40' : ''}`}>
+                <td className="py-1 text-left align-top">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className={ceMoved ? 'text-gray-500' : rung.is_call_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.call_oi)}</span>
+                    <LadderMovePill pct={rung.call_oi_trend_pct} label={rung.call_oi_trend_label} />
+                  </div>
+                </td>
+                <td className={`py-1 text-center font-semibold align-top ${rung.is_atm ? 'text-sky-300' : 'text-gray-300'}`}>
+                  {fmtStrike(rung.strike)}{rung.is_atm && <span className="text-[9px] text-sky-500 ml-1">ATM</span>}
+                </td>
+                <td className="py-1 text-right align-top">
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    <LadderMovePill pct={rung.put_oi_trend_pct} label={rung.put_oi_trend_label} />
+                    <span className={peMoved ? 'text-gray-500' : rung.is_put_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.put_oi)}</span>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -526,7 +532,7 @@ export default function GammaSqueeze() {
               🪜 Strike Ladder — ATM ±3, every nearby strike
             </h2>
             <p className="text-[11px] text-fuchsia-100/60 mb-2.5">
-              Only stocks with a real OI drop (40%+ since open) somewhere nearby — writers actually leaving a strike. The 7 nearest strikes (including ones price has already crossed), CE on the left / PE on the right. Amber text = the wall strike; the bar under each number shows the size of the move — green = OI dropping (unwinding), amber = OI building.
+              Only stocks with a real OI drop (40%+ since open) somewhere nearby — writers actually leaving a strike. The 7 nearest strikes (including ones price has already crossed), CE on the left / PE on the right. A pill only appears on strikes that actually moved 40%+: ▼ green = OI dropping (unwinding), ▲ amber = OI building. No pill = roughly steady. Amber text = the wall strike.
             </p>
             <div className="flex gap-2.5 overflow-x-auto pb-1">
               {ladderStocks.map(r => <StrikeLadderCard key={r.symbol} r={r} />)}

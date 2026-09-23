@@ -3,7 +3,6 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { RefreshCw, Zap, ArrowUp, ArrowDown, Search, X, CheckCircle2 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
-import { useAlerts } from '@/contexts/AlertsContext'
 
 const API = 'https://api.greeknova.com'
 const PAGE_SIZE = 20
@@ -14,6 +13,19 @@ interface AlertConfirmation {
   vol_pct: number | null
   ltp: number | null
   created_at: string | null
+}
+
+interface StrikeRung {
+  strike: number
+  is_atm: boolean
+  is_call_wall: boolean
+  is_put_wall: boolean
+  call_oi: number | null
+  call_oi_trend_pct: number | null
+  call_oi_trend_label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null
+  put_oi: number | null
+  put_oi_trend_pct: number | null
+  put_oi_trend_label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null
 }
 
 interface GexRow {
@@ -56,6 +68,7 @@ interface GexRow {
   bias: 'BULLISH' | 'BEARISH' | null
   label: string
   desc: string
+  strike_ladder: StrikeRung[]
 }
 
 function runwaySign(v: number) {
@@ -123,6 +136,69 @@ function squeezeWallInfo(r: GexRow) {
 }
 
 const CT_STAGE_RANK: Record<string, number> = { ACTIVE_SQUEEZE: 0, ON_THE_VERGE: 1 }
+
+function fmtOi(n: number | null): string {
+  if (n === null || n === undefined) return '—'
+  if (Math.abs(n) >= 100000) return `${(n / 100000).toFixed(1)}L`
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(1)}K`
+  return `${n}`
+}
+
+function LadderTrendDot({ label }: { label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null }) {
+  if (!label) return null
+  const cls =
+    label === 'BUILDING' ? 'bg-amber-400' :
+    label === 'UNWINDING' ? 'bg-emerald-400' :
+    'bg-gray-600'
+  const title =
+    label === 'BUILDING' ? 'OI building here — level still being defended' :
+    label === 'UNWINDING' ? 'OI unwinding here — writers leaving, level weakening' :
+    'OI roughly steady here'
+  return <span title={title} className={`inline-block w-1.5 h-1.5 rounded-full ${cls}`} />
+}
+
+function StrikeLadderCard({ r }: { r: GexRow }) {
+  if (!r.strike_ladder || r.strike_ladder.length === 0) return null
+  return (
+    <div className="bg-gray-900/60 border border-gray-800 rounded-xl px-3 py-2.5 min-w-[220px]">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-sm font-black text-white">{r.symbol}</span>
+        <span className="text-[11px] text-gray-500">₹{r.cmp.toLocaleString('en-IN')}</span>
+      </div>
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-gray-600">
+            <th className="text-left font-medium pb-1">CE</th>
+            <th className="text-center font-medium pb-1">Strike</th>
+            <th className="text-right font-medium pb-1">PE</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...r.strike_ladder].reverse().map(rung => (
+            <tr key={rung.strike}
+              className={`${rung.is_atm ? 'bg-sky-950/40' : ''}`}>
+              <td className="py-0.5 text-left">
+                <span className="inline-flex items-center gap-1">
+                  <LadderTrendDot label={rung.call_oi_trend_label} />
+                  <span className={rung.is_call_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.call_oi)}</span>
+                </span>
+              </td>
+              <td className={`py-0.5 text-center font-semibold ${rung.is_atm ? 'text-sky-300' : 'text-gray-300'}`}>
+                {fmtStrike(rung.strike)}{rung.is_atm && <span className="text-[9px] text-sky-500 ml-1">ATM</span>}
+              </td>
+              <td className="py-0.5 text-right">
+                <span className="inline-flex items-center gap-1 justify-end">
+                  <span className={rung.is_put_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.put_oi)}</span>
+                  <LadderTrendDot label={rung.put_oi_trend_label} />
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 function OiTrendBadge({ label, pct }: { label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null, pct: number | null }) {
   if (!label) return null
@@ -214,11 +290,6 @@ export default function GammaSqueeze() {
   const [page, setPage] = useState(1)
   const [showAllSignals, setShowAllSignals] = useState(false)
 
-  const { priorityAlerts } = useAlerts()
-  const nearStrikeAlerts = useMemo(
-    () => priorityAlerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND').sort((a, b) => b.id - a.id).slice(0, 6),
-    [priorityAlerts]
-  )
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -432,29 +503,16 @@ export default function GammaSqueeze() {
           </div>
         </div>
 
-        {nearStrikeAlerts.length > 0 && (
+        {closestToTrigger.length > 0 && (
           <div className="mb-5 bg-fuchsia-950/25 border-2 border-fuchsia-500/50 rounded-2xl p-4">
-            <h2 className="text-sm font-black text-fuchsia-300 flex items-center gap-2 mb-2">
-              💥 Near-Strike Unwind — a wall is breaking right now
+            <h2 className="text-sm font-black text-fuchsia-300 flex items-center gap-2 mb-1">
+              🪜 Strike Ladder — ATM ±3, every nearby strike
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {nearStrikeAlerts.map(alert => (
-                <div key={alert.id} className="flex items-start gap-2 bg-fuchsia-950/30 border border-fuchsia-500/40 rounded-xl px-3 py-2">
-                  <span className="text-base flex-shrink-0">💥</span>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-black text-white">{alert.symbol}</span>
-                      {alert.strike && <span className="text-xs font-bold text-amber-400">{alert.strike}</span>}
-                      {alert.optionType && (
-                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${alert.optionType === 'CE' ? 'bg-red-950/50 text-red-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
-                          {alert.optionType}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-fuchsia-100/80 leading-snug line-clamp-2">{alert.message}</p>
-                  </div>
-                </div>
-              ))}
+            <p className="text-[11px] text-fuchsia-100/60 mb-2.5">
+              For each stock closest to its wall: the 7 nearest strikes (including ones price has already crossed), CE on the left / PE on the right. Amber = the wall strike, dot = building (amber) or unwinding (green).
+            </p>
+            <div className="flex gap-2.5 overflow-x-auto pb-1">
+              {closestToTrigger.map(r => <StrikeLadderCard key={r.symbol} r={r} />)}
             </div>
           </div>
         )}

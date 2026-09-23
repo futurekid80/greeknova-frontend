@@ -144,17 +144,22 @@ function fmtOi(n: number | null): string {
   return `${n}`
 }
 
-function LadderTrendDot({ label }: { label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null }) {
-  if (!label) return null
+function LadderTrendBar({ pct, label }: { pct: number | null, label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null }) {
+  if (!label || pct === null) return null
+  const fillPct = Math.max(Math.min(Math.abs(pct), 100), 10)  // floor so even a small move is visible as a sliver
   const cls =
     label === 'BUILDING' ? 'bg-amber-400' :
     label === 'UNWINDING' ? 'bg-emerald-400' :
     'bg-gray-600'
   const title =
-    label === 'BUILDING' ? 'OI building here — level still being defended' :
-    label === 'UNWINDING' ? 'OI unwinding here — writers leaving, level weakening' :
-    'OI roughly steady here'
-  return <span title={title} className={`inline-block w-1.5 h-1.5 rounded-full ${cls}`} />
+    label === 'BUILDING' ? `OI +${pct}% since open — building, level still being defended` :
+    label === 'UNWINDING' ? `OI ${pct}% since open — unwinding, writers leaving, level weakening` :
+    `OI ${pct > 0 ? '+' : ''}${pct}% since open — roughly steady`
+  return (
+    <span title={title} className="block h-1 w-full bg-gray-800 rounded-full overflow-hidden mt-0.5">
+      <span className={`block h-full rounded-full ${cls}`} style={{ width: `${fillPct}%` }} />
+    </span>
+  )
 }
 
 function StrikeLadderCard({ r }: { r: GexRow }) {
@@ -177,20 +182,16 @@ function StrikeLadderCard({ r }: { r: GexRow }) {
           {[...r.strike_ladder].reverse().map(rung => (
             <tr key={rung.strike}
               className={`${rung.is_atm ? 'bg-sky-950/40' : ''}`}>
-              <td className="py-0.5 text-left">
-                <span className="inline-flex items-center gap-1">
-                  <LadderTrendDot label={rung.call_oi_trend_label} />
-                  <span className={rung.is_call_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.call_oi)}</span>
-                </span>
+              <td className="py-1 text-left align-top">
+                <span className={rung.is_call_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.call_oi)}</span>
+                <LadderTrendBar pct={rung.call_oi_trend_pct} label={rung.call_oi_trend_label} />
               </td>
-              <td className={`py-0.5 text-center font-semibold ${rung.is_atm ? 'text-sky-300' : 'text-gray-300'}`}>
+              <td className={`py-1 text-center font-semibold align-top ${rung.is_atm ? 'text-sky-300' : 'text-gray-300'}`}>
                 {fmtStrike(rung.strike)}{rung.is_atm && <span className="text-[9px] text-sky-500 ml-1">ATM</span>}
               </td>
-              <td className="py-0.5 text-right">
-                <span className="inline-flex items-center gap-1 justify-end">
-                  <span className={rung.is_put_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.put_oi)}</span>
-                  <LadderTrendDot label={rung.put_oi_trend_label} />
-                </span>
+              <td className="py-1 text-right align-top">
+                <span className={rung.is_put_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.put_oi)}</span>
+                <LadderTrendBar pct={rung.put_oi_trend_pct} label={rung.put_oi_trend_label} />
               </td>
             </tr>
           ))}
@@ -409,9 +410,18 @@ export default function GammaSqueeze() {
   }
 
   const ladderStocks = useMemo(() => {
+    const hasUnwind = (r: GexRow) =>
+      (r.strike_ladder || []).some(k => k.call_oi_trend_label === 'UNWINDING' || k.put_oi_trend_label === 'UNWINDING')
+    const biggestDrop = (r: GexRow) =>
+      Math.min(
+        0,
+        ...(r.strike_ladder || [])
+          .flatMap(k => [k.call_oi_trend_pct, k.put_oi_trend_pct])
+          .filter((p): p is number => p !== null)
+      )
     return [...watchlist]
-      .filter(r => closestWallPct(r) <= 3)
-      .sort((a, b) => closestWallPct(a) - closestWallPct(b))
+      .filter(hasUnwind)
+      .sort((a, b) => biggestDrop(a) - biggestDrop(b))  // biggest drop (most negative) first
       .slice(0, 12)
   }, [watchlist])
 
@@ -516,7 +526,7 @@ export default function GammaSqueeze() {
               🪜 Strike Ladder — ATM ±3, every nearby strike
             </h2>
             <p className="text-[11px] text-fuchsia-100/60 mb-2.5">
-              Every stock closest to a wall, any regime (short or long gamma): the 7 nearest strikes (including ones price has already crossed), CE on the left / PE on the right. Amber = the wall strike, dot = building (amber) or unwinding (green).
+              Only stocks with a real OI drop (40%+ since open) somewhere nearby — writers actually leaving a strike. The 7 nearest strikes (including ones price has already crossed), CE on the left / PE on the right. Amber text = the wall strike; the bar under each number shows the size of the move — green = OI dropping (unwinding), amber = OI building.
             </p>
             <div className="flex gap-2.5 overflow-x-auto pb-1">
               {ladderStocks.map(r => <StrikeLadderCard key={r.symbol} r={r} />)}

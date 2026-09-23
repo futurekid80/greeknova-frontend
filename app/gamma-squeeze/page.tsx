@@ -184,7 +184,7 @@ function StrikeLadderCard({ r }: { r: GexRow }) {
               <tr key={rung.strike}
                 className={`${rung.is_atm ? 'bg-sky-950/40' : ''}`}>
                 <td className="py-1 text-left align-top">
-                  <div className="flex items-center gap-1 flex-wrap">
+                  <div className="flex flex-col gap-0.5 items-start">
                     <span className={ceMoved ? 'text-gray-500' : rung.is_call_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.call_oi)}</span>
                     <LadderMovePill pct={rung.call_oi_trend_pct} label={rung.call_oi_trend_label} />
                   </div>
@@ -193,9 +193,9 @@ function StrikeLadderCard({ r }: { r: GexRow }) {
                   {fmtStrike(rung.strike)}{rung.is_atm && <span className="text-[9px] text-sky-500 ml-1">ATM</span>}
                 </td>
                 <td className="py-1 text-right align-top">
-                  <div className="flex items-center gap-1 flex-wrap justify-end">
-                    <LadderMovePill pct={rung.put_oi_trend_pct} label={rung.put_oi_trend_label} />
+                  <div className="flex flex-col gap-0.5 items-end">
                     <span className={peMoved ? 'text-gray-500' : rung.is_put_wall ? 'text-amber-300 font-bold' : 'text-gray-400'}>{fmtOi(rung.put_oi)}</span>
+                    <LadderMovePill pct={rung.put_oi_trend_pct} label={rung.put_oi_trend_label} />
                   </div>
                 </td>
               </tr>

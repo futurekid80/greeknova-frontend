@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { RefreshCw, Zap, ArrowUp, ArrowDown, Search, X, CheckCircle2 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
+import { useAlerts } from '@/contexts/AlertsContext'
 
 const API = 'https://api.greeknova.com'
 const PAGE_SIZE = 20
@@ -297,6 +298,12 @@ export default function GammaSqueeze() {
   const [page, setPage] = useState(1)
   const [showAllSignals, setShowAllSignals] = useState(false)
 
+  const { priorityAlerts } = useAlerts()
+  const nearStrikeAlerts = useMemo(
+    () => priorityAlerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND').sort((a, b) => b.id - a.id).slice(0, 6),
+    [priorityAlerts]
+  )
+
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -526,16 +533,29 @@ export default function GammaSqueeze() {
           </div>
         </div>
 
-        {ladderStocks.length > 0 && (
+        {nearStrikeAlerts.length > 0 && (
           <div className="mb-5 bg-fuchsia-950/25 border-2 border-fuchsia-500/50 rounded-2xl p-4">
-            <h2 className="text-sm font-black text-fuchsia-300 flex items-center gap-2 mb-1">
-              🪜 Strike Ladder — ATM ±3, every nearby strike
+            <h2 className="text-sm font-black text-fuchsia-300 flex items-center gap-2 mb-2">
+              💥 Near-Strike Unwind — a wall is breaking right now
             </h2>
-            <p className="text-[11px] text-fuchsia-100/60 mb-2.5">
-              Only stocks with a real OI drop (40%+ since open) somewhere nearby — writers actually leaving a strike. The 7 nearest strikes (including ones price has already crossed), CE on the left / PE on the right. A pill only appears on strikes that actually moved 40%+: ▼ green = OI dropping (unwinding), ▲ amber = OI building. No pill = roughly steady. Amber text = the wall strike.
-            </p>
-            <div className="flex gap-2.5 overflow-x-auto pb-1">
-              {ladderStocks.map(r => <StrikeLadderCard key={r.symbol} r={r} />)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {nearStrikeAlerts.map(alert => (
+                <div key={alert.id} className="flex items-start gap-2 bg-fuchsia-950/30 border border-fuchsia-500/40 rounded-xl px-3 py-2">
+                  <span className="text-base flex-shrink-0">💥</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-black text-white">{alert.symbol}</span>
+                      {alert.strike && <span className="text-xs font-bold text-amber-400">{alert.strike}</span>}
+                      {alert.optionType && (
+                        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${alert.optionType === 'CE' ? 'bg-red-950/50 text-red-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
+                          {alert.optionType}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-fuchsia-100/80 leading-snug line-clamp-2">{alert.message}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

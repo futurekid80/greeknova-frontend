@@ -23,6 +23,7 @@ type Row = {
   theta_peak_strike?: number | null
   iv_pctile?: number | null
   iv_hist_days?: number | null
+  iv_pctile_basis?: 'iv_history' | 'realized_range' | null
   em_pct?: number | null
   em_low?: number | null
   em_high?: number | null
@@ -208,7 +209,10 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2.5 text-right"><span className={dot(r.tScore)}>● </span>{fmt(r.atm_theta_pct)}</td>
                     {more && <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.atm_theta_per_lot, 0)}</td>}
                     {more && <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.atm_vega_per_lot, 0)}</td>}
-                    <td className="px-3 py-2.5 text-right" title={r.iv_hist_days ? `Based on ${r.iv_hist_days} past sessions` : 'Not enough history yet'}>{r.iv_pctile !== null && r.iv_pctile !== undefined ? `${r.iv_pctile}` : '—'}<span className="text-gray-600 text-[10px] ml-1">{r.iv_hist_days ? `(${r.iv_hist_days}d)` : ''}</span></td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap" title={r.iv_pctile_basis === 'realized_range' ? 'Stand-in: today\'s IV ranked against this stock\'s own realized-volatility range over the past year, because its option history is still short' : r.iv_hist_days ? `Based on ${r.iv_hist_days} past sessions of this stock's own IV` : 'Not enough history yet'}>
+                      {r.iv_pctile !== null && r.iv_pctile !== undefined ? <span className={r.iv_pctile_basis === 'realized_range' ? 'text-sky-300' : ''}>{r.iv_pctile_basis === 'realized_range' ? '~' : ''}{r.iv_pctile}</span> : '—'}
+                      <span className="text-gray-600 text-[10px] ml-1">{r.iv_pctile_basis === 'realized_range' ? '(RV range)' : r.iv_hist_days ? `(${r.iv_hist_days}d)` : ''}</span>
+                    </td>
                     <td className="px-3 py-2.5 text-right text-gray-300" title={r.em_low && r.em_high ? `Range ${fmt(r.em_low)} to ${fmt(r.em_high)}` : ''}>{fmt(r.em_pct)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-300 whitespace-nowrap">{r.call_1sd_strike ? <>{fmt(r.call_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.call_1sd_prob_itm, 0)}% · ₹{fmt(r.call_1sd_per_lot, 0)}</span></> : '—'}</td>
                     <td className="px-3 py-2.5 text-right text-gray-300 whitespace-nowrap">{r.put_1sd_strike ? <>{fmt(r.put_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.put_1sd_prob_itm, 0)}% · ₹{fmt(r.put_1sd_per_lot, 0)}</span></> : '—'}</td>
@@ -237,7 +241,7 @@ export default function SellerScreenPage() {
             <summary className="cursor-pointer text-gray-300 font-semibold">How the score works</summary>
             <ul className="mt-3 space-y-2 list-disc pl-5">
               <li><b>Vega (45 points):</b> how expensive options are versus what the stock actually moved (IV/RV of 0.9 scores zero, 1.8 or more scores full), blended with IV percentile, meaning how high today's IV is against this stock's own past readings.</li>
-              <li><b>IV percentile:</b> the share of past sessions with lower IV. The number in brackets is how many sessions it is based on. History is still short, so treat it as indicative and hover for details.</li>
+              <li><b>IV percentile:</b> the share of past sessions with lower IV. The number in brackets is how many sessions it is based on. For stocks whose option history is still short, a blue number with a ~ and (RV range) is a stand-in: today's IV ranked against the range of realized volatility the stock has shown over the past year. It will switch to the true IV percentile as history builds.</li>
               <li><b>1SD move %:</b> the one-standard-deviation move the options imply until expiry. About two thirds of the time price is expected to finish inside that range. The Call and Put beyond 1SD columns show the first strike outside it, its probability of finishing in the money, and the premium per lot. Probabilities are model estimates from implied volatility.</li>
               <li><b>ATM vol (lots) and Thin liquidity:</b> options volume at the at-the-money strike. Thin means fills may be poor and spreads wide.</li>
               <li><b>Flags:</b> IV crush = rich IV with expiry within 10 days. Results = results date falls before expiry. Thin = low ATM liquidity. Short γ = short gamma, moves can amplify. Near flip = gamma flip within 1.5% of price. Delivery = expiry within 5 days, and stock options settle by delivery in India, so in-the-money positions carry delivery and higher margin implications.</li>

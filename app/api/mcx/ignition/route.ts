@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://api.greeknova.com";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const response = await fetch(`${BACKEND_URL}/mcx/ignition`, {
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(request.headers.get("authorization") ? { Authorization: request.headers.get("authorization") as string } : {}),
+      },
       cache: "no-store",
     });
 

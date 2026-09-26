@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.8'
+const SW_VERSION = 'v2.0.9'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
@@ -27,6 +27,10 @@ let spikeThreshold = 10
 let enabled        = false
 let schedulerTimer = null
 let previousKeys   = new Set()  // dedup alerts
+let authToken      = null       // sign-in token handed over by the page
+function authHeaders() {
+  return authToken ? { Authorization: `Bearer ${authToken}` } : {}
+}
 
 // ── Market hours check (IST) ──────────────────────────────────────────────────
 function isMarketOpen() {
@@ -141,6 +145,10 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('message', async (event) => {
   const { type, data } = event.data || {}
 
+  if (type === 'TOKEN') {
+    authToken = data?.token || null
+  }
+
   if (type === 'ENABLE') {
     enabled = true
     spikeThreshold = data?.spikeThreshold ?? 10
@@ -229,7 +237,8 @@ function broadcastAlert(alert) {
 // ── Options Jungle alerts (OI spikes + Vol fresh builds) ──────────────────────
 async function checkOptionsJungle() {
   const res = await fetch(
-    `${API}/options-jungle?oi_threshold=${spikeThreshold}&vol_threshold=50`
+    `${API}/options-jungle?oi_threshold=${spikeThreshold}&vol_threshold=50`,
+    { headers: authHeaders() }
   )
   const json = await res.json()
 
@@ -309,7 +318,7 @@ async function checkOptionsJungle() {
 
 // ── UOA Whale alerts ──────────────────────────────────────────────────────────
 async function checkUOAWhales() {
-  const res  = await fetch(`${API}/uoa`)
+  const res  = await fetch(`${API}/uoa`, { headers: authHeaders() })
   const json = await res.json()
 
   for (const sig of (json.signals || [])) {

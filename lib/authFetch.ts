@@ -20,7 +20,9 @@ if (typeof window !== 'undefined' && !window.__gnAuthFetchInstalled) {
       const rawUrl =
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const u = new URL(rawUrl, window.location.href)
-      if (API_HOSTS.includes(u.hostname) && !u.pathname.startsWith('/public/')) {
+      const isApi = API_HOSTS.includes(u.hostname)
+      const isOwnProxy = u.origin === window.location.origin && u.pathname.startsWith('/api/')
+      if ((isApi || isOwnProxy) && !u.pathname.startsWith('/public/')) {
         const { data } = await supabase.auth.getSession()
         const token = data.session?.access_token
         if (token) {
@@ -38,6 +40,27 @@ if (typeof window !== 'undefined' && !window.__gnAuthFetchInstalled) {
     }
     return originalFetch(input, init)
   }
+}
+
+// Hand the current token to the background alert worker (it cannot read the
+// browser session itself). Re-sent on every sign-in change and every 4 minutes.
+async function pushTokenToWorker() {
+  try {
+    if (!('serviceWorker' in navigator)) return
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    const reg = await navigator.serviceWorker.ready
+    reg.active?.postMessage({ type: 'TOKEN', data: { token } })
+  } catch (e) {
+    // ignore
+  }
+}
+
+if (typeof window !== 'undefined') {
+  pushTokenToWorker()
+  supabase.auth.onAuthStateChange(() => { pushTokenToWorker() })
+  setInterval(pushTokenToWorker, 4 * 60 * 1000)
 }
 
 export {}

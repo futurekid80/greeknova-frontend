@@ -9,7 +9,10 @@ export async function GET(
 
   try {
     const res = await fetch(`${backendUrl}/mcx/oi-map/${commodity}`, {
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(request.headers.get("authorization") ? { Authorization: request.headers.get("authorization") as string } : {}),
+      },
       cache: "no-store",
     });
     const data = await res.json();

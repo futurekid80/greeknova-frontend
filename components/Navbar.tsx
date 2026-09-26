@@ -38,6 +38,7 @@ const NAV_GROUPS = [
       { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' },
       { href: '/theta', label: 'Θ Theta Decay' },
       { href: '/vega', label: 'ν Vega Exposure' },
+      { href: '/seller-screen', label: '🧭 Premium Screen' },
     ]
   },
   {

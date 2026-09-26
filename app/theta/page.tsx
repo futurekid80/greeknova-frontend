@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Navbar from '@/components/Navbar'
 
 const API = 'https://api.greeknova.com'
 
@@ -21,7 +22,7 @@ type Row = {
   lot_size?: number | null
 }
 
-type SortKey = 'symbol' | 'days_to_expiry' | 'atm_theta_pct' | 'atm_theta' | 'atm_theta_per_lot' | 'theta_total_cr'
+type SortKey = 'symbol' | 'cmp' | 'days_to_expiry' | 'atm_strike' | 'atm_straddle_premium' | 'atm_theta_pct' | 'atm_theta' | 'atm_theta_per_lot' | 'theta_total_cr' | 'theta_ce_cr' | 'theta_pe_cr' | 'theta_peak_strike'
 type Filter = 'ALL' | 'DTE3' | 'DTE7'
 
 const fmt = (n: number | null | undefined, d = 2) =>
@@ -88,7 +89,9 @@ export default function ThetaPage() {
     `px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${on ? 'bg-white text-gray-900 border-white' : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'}`
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-200 px-4 sm:px-8 py-8 max-w-[1500px] mx-auto">
+    <div className="min-h-screen bg-[#07070e] text-gray-200">
+    <Navbar active="/theta" />
+    <div className="px-4 sm:px-8 py-8 max-w-[1500px] mx-auto">
       <div className="flex items-start justify-between flex-wrap gap-3 mb-2">
         <div>
           <h1 className="text-2xl font-black text-white">Θ Theta Decay</h1>
@@ -144,16 +147,17 @@ export default function ThetaPage() {
               <thead className="bg-gray-900/60">
                 <tr>
                   <th className={th + ' !text-left'} onClick={() => sortBy('symbol')}>Stock{arrow('symbol')}</th>
-                  <th className={th}>CMP</th>
+                  <th className={th} onClick={() => sortBy('cmp')}>CMP{arrow('cmp')}</th>
                   <th className={th} onClick={() => sortBy('days_to_expiry')}>DTE{arrow('days_to_expiry')}</th>
-                  <th className={th}>ATM strike</th>
-                  <th className={th}>Straddle ₹</th>
+                  <th className={th} onClick={() => sortBy('atm_strike')}>ATM strike{arrow('atm_strike')}</th>
+                  <th className={th} onClick={() => sortBy('atm_straddle_premium')}>Straddle ₹{arrow('atm_straddle_premium')}</th>
                   <th className={th} onClick={() => sortBy('atm_theta')}>Theta ₹/day{arrow('atm_theta')}</th>
                   <th className={th} onClick={() => sortBy('atm_theta_pct')}>Decay %/day{arrow('atm_theta_pct')}</th>
                   <th className={th} onClick={() => sortBy('atm_theta_per_lot')}>₹/lot/day{arrow('atm_theta_per_lot')}</th>
                   <th className={th} onClick={() => sortBy('theta_total_cr')}>Chain decay ₹cr/day{arrow('theta_total_cr')}</th>
-                  <th className={th}>Calls / Puts ₹cr</th>
-                  <th className={th}>Peak strike</th>
+                  <th className={th} onClick={() => sortBy('theta_ce_cr')}>Calls ₹cr{arrow('theta_ce_cr')}</th>
+                  <th className={th} onClick={() => sortBy('theta_pe_cr')}>Puts ₹cr{arrow('theta_pe_cr')}</th>
+                  <th className={th} onClick={() => sortBy('theta_peak_strike')}>Peak strike{arrow('theta_peak_strike')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -168,7 +172,8 @@ export default function ThetaPage() {
                     <td className="px-3 py-2.5 text-right font-bold text-amber-400">{fmt(r.atm_theta_pct)}%</td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt0(r.atm_theta_per_lot)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-200">{fmt(r.theta_total_cr)}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.theta_ce_cr)} / {fmt(r.theta_pe_cr)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.theta_ce_cr)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.theta_pe_cr)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.theta_peak_strike, 0)}</td>
                   </tr>
                 ))}
@@ -184,6 +189,7 @@ export default function ThetaPage() {
         </>
       )}
       {!loading && !error && rows.length === 0 && <p className="text-gray-500 text-sm">No data available yet.</p>}
+    </div>
     </div>
   )
 }

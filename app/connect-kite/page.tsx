@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Navbar from '@/components/Navbar'
 
 const API = 'https://api.greeknova.com'
 const REDIRECT_URL = 'https://app.greeknova.com/kite-connect/callback'
@@ -67,7 +68,9 @@ export default function ConnectKitePage() {
   const input = 'w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 mb-4'
 
   return (
-    <div className="min-h-screen bg-gray-950 flex justify-center px-4 py-10">
+    <div className="min-h-screen bg-gray-950">
+    <Navbar active="/connect-kite" />
+    <div className="flex justify-center px-4 py-10">
       <div className="w-full max-w-xl">
         <h1 className="text-2xl font-bold text-white mb-1">Connect your Zerodha Kite</h1>
         <p className="text-gray-400 text-sm mb-6">
@@ -138,6 +141,7 @@ export default function ConnectKitePage() {
           </p>
         </div>
       </div>
+    </div>
     </div>
   )
 }

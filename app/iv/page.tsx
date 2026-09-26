@@ -1,5 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
+import SymbolResult from '@/components/SymbolResult'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, TrendingUp, TrendingDown } from 'lucide-react'
 
@@ -286,7 +287,7 @@ export default function IVAnalysis() {
                       {/* Symbol */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-black text-white">{r.symbol}</span>
+                          <span className="text-sm font-black text-white">{r.symbol}</span><SymbolResult symbol={r.symbol} />
                           {r.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
                         </div>
                         <p className="text-xs text-gray-600 mt-0.5">₹{r.cmp.toLocaleString('en-IN')}</p>

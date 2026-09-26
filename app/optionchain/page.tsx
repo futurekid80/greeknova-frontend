@@ -1,5 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
+import SymbolResult from '@/components/SymbolResult'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
@@ -94,6 +95,7 @@ export default function OptionChain() {
         {data?.expiries && data.expiries.length > 0 && (
           <div className="flex items-center gap-2 mb-6">
             <span className="text-xs text-gray-500 mr-1">Expiry:</span>
+            <SymbolResult symbol={symbol} expiry={expiry || data.expiries[0]} />
             {data.expiries.map((e, i) => (
               <button key={e} onClick={() => setExpiry(e)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${expiry === e ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>

@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { RefreshCw, Zap, ArrowUp, ArrowDown, Search, X, CheckCircle2 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
+import SymbolResult from '@/components/SymbolResult'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 import { useAlerts } from '@/contexts/AlertsContext'
 
@@ -631,7 +632,7 @@ export default function GammaSqueeze() {
                     return (
                       <tr key={r.symbol} className={`border-t border-gray-800/60 hover:bg-gray-900/30 ${r.stage === 'ACTIVE_SQUEEZE' ? 'bg-yellow-500/5' : ''}`}>
                         <td className="px-3 py-2 font-bold text-white">
-                          {r.symbol}
+                          {r.symbol}<SymbolResult symbol={r.symbol} />
                           {r.confirmed_by_alerts && <CheckCircle2 size={11} className="inline ml-1.5 text-sky-400" />}
                         </td>
                         <td className="px-3 py-2"><StageBadge stage={r.stage} /></td>
@@ -779,7 +780,7 @@ export default function GammaSqueeze() {
                   <div className="flex items-start justify-between flex-wrap gap-2 mb-2">
                     <div>
                       <p className="font-black text-white text-sm flex items-center flex-wrap gap-1.5">
-                        {r.symbol}
+                        {r.symbol}<SymbolResult symbol={r.symbol} />
                         <StageBadge stage={r.stage} />
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.bias === 'BULLISH' ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400'}`}>
                           {r.bias}

@@ -1,5 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
+import SymbolResult from '@/components/SymbolResult'
 import { useEffect, useState } from 'react'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import { RefreshCw, ArrowLeft } from 'lucide-react'
@@ -74,7 +75,7 @@ export default function StockDeepDive({ params }: { params: { symbol: string } }
             <ArrowLeft size={16}/>Back to Market Pulse
           </a>
           <div className="w-px h-5 bg-gray-800"/>
-          <h1 className="text-3xl font-black tracking-tight">{symbol}</h1>
+          <h1 className="text-3xl font-black tracking-tight">{symbol}</h1><SymbolResult symbol={symbol} />
           {data && <span className="text-2xl font-black text-amber-400">₹{data.cmp.toLocaleString()}</span>}
           {data && (
             <span className={`px-3 py-1 rounded-full text-sm font-bold border ${bull ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800' : 'bg-red-950/80 text-red-400 border-red-800'}`}>

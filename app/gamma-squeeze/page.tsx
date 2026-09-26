@@ -314,7 +314,7 @@ export default function GammaSqueeze() {
       const json = await res.json()
       setWatchlist(json.watchlist || [])
       setSignals(json.signals || [])
-      setAsOf(json.as_of || '')
+      setAsOf(json.as_of ? `${json.date ? json.date + ' ' : ''}${json.as_of}` : '')
     } catch (e: any) {
       console.error(e)
       setError(e?.message || 'Failed to load gamma exposure data')

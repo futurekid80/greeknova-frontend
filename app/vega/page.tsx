@@ -13,6 +13,9 @@ type Row = {
   atm_iv?: number | null
   realized_vol?: number | null
   iv_rv_ratio?: number | null
+  iv_month?: number | null
+  term_ratio?: number | null
+  term_state?: 'FRONT_SPIKE' | 'FRONT_CHEAP' | 'NORMAL' | null
   iv_regime?: 'RICH' | 'FAIR' | 'CHEAP' | null
   atm_vega?: number | null
   atm_vega_per_lot?: number | null
@@ -27,7 +30,7 @@ type Row = {
   iv_crush_watch?: boolean
 }
 
-type SortKey = 'symbol' | 'cmp' | 'days_to_expiry' | 'atm_iv' | 'realized_vol' | 'iv_rv_ratio' | 'atm_vega_per_lot' | 'vega_total_cr' | 'vega_ce_cr' | 'vega_pe_cr' | 'vega_peak_strike'
+type SortKey = 'symbol' | 'cmp' | 'days_to_expiry' | 'atm_iv' | 'realized_vol' | 'iv_rv_ratio' | 'iv_month' | 'term_ratio' | 'atm_vega_per_lot' | 'vega_total_cr' | 'vega_ce_cr' | 'vega_pe_cr' | 'vega_peak_strike'
 type Filter = 'ALL' | 'RICH' | 'CHEAP' | 'CRUSH'
 
 const fmt = (n: number | null | undefined, d = 2) =>
@@ -167,6 +170,8 @@ export default function VegaPage() {
                   <th className={th} onClick={() => sortBy('realized_vol')}>Realized vol{arrow('realized_vol')}</th>
                   <th className={th} onClick={() => sortBy('iv_rv_ratio')}>IV / RV{arrow('iv_rv_ratio')}</th>
                   <th className={th + ' !text-center'} onClick={() => sortBy('iv_rv_ratio')}>IV state</th>
+                  <th className={th} onClick={() => sortBy('iv_month')}>Month IV{arrow('iv_month')}</th>
+                  <th className={th} onClick={() => sortBy('term_ratio')}>Term (near / month){arrow('term_ratio')}</th>
                   <th className={th} onClick={() => sortBy('atm_vega_per_lot')}>₹/lot per IV pt{arrow('atm_vega_per_lot')}</th>
                   <th className={th} onClick={() => sortBy('vega_total_cr')}>Chain vega ₹cr/pt{arrow('vega_total_cr')}</th>
                   <th className={th} onClick={() => sortBy('vega_ce_cr')}>Calls ₹cr{arrow('vega_ce_cr')}</th>
@@ -186,6 +191,10 @@ export default function VegaPage() {
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.realized_vol, 1)}%</td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.iv_rv_ratio)}×</td>
                     <td className="px-3 py-2.5 text-center">{badge(r)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{r.iv_month ? `${fmt(r.iv_month, 1)}%` : '—'}</td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      {r.term_ratio ? <span className={r.term_state === 'FRONT_SPIKE' ? 'text-red-400 font-bold' : r.term_state === 'FRONT_CHEAP' ? 'text-sky-300' : 'text-gray-300'}>{fmt(r.term_ratio)}x{r.term_state === 'FRONT_SPIKE' ? ' spike' : r.term_state === 'FRONT_CHEAP' ? ' cheap' : ''}</span> : '—'}
+                    </td>
                     <td className="px-3 py-2.5 text-right text-gray-200">{fmt(r.atm_vega_per_lot, 0)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-200">{fmt(r.vega_total_cr)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.vega_ce_cr)}</td>
@@ -202,6 +211,7 @@ export default function VegaPage() {
             <ul className="mt-3 space-y-2 list-disc pl-5">
               <li><b>ATM IV and Realized vol:</b> what options price in versus what the stock actually moved. IV/RV above about 1.6 is labelled Rich, below 0.9 Cheap.</li>
               <li><b>₹/lot per IV pt:</b> how much one lot's ATM straddle changes if IV moves by one point. Larger means more sensitive to IV.</li>
+              <li><b>Month IV and Term:</b> Month IV is the ATM IV of the next expiry. Term is near-expiry IV divided by month IV. Above 1.15 the front month is expensive relative to next month (often an event or stress). Below 0.85 the front is cheap. Near-expiry IV normally drifts down as expiry approaches, so compare it with month IV, not with its own reading from a week ago.</li>
               <li><b>Chain vega:</b> total IV sensitivity of all open contracts, weighted by open interest. Calls and Puts show which side carries more of it.</li>
               <li><b>IV crush watch (warning sign):</b> IV is rich and expiry is within 10 days. Rich IV tends to fall as events pass, which hurts premium buyers and helps sellers, but it is not a guarantee.</li>
               <li><b>Peak strike:</b> the strike where open interest times vega is largest. It marks where positions are concentrated, often a round-number strike, so it can sit away from the current price. The % beside it is the distance from CMP.</li>

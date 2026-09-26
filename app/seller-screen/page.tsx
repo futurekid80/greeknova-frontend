@@ -15,6 +15,12 @@ type Row = {
   atm_iv?: number | null
   realized_vol?: number | null
   iv_rv_ratio?: number | null
+  iv_month?: number | null
+  iv_month_expiry?: string | null
+  term_ratio?: number | null
+  term_state?: 'FRONT_SPIKE' | 'FRONT_CHEAP' | 'NORMAL' | null
+  iv_basis?: 'month' | 'near' | null
+  iv_rv_basis?: number | null
   iv_regime?: 'RICH' | 'FAIR' | 'CHEAP' | null
   atm_theta_pct?: number | null
   atm_theta_per_lot?: number | null
@@ -42,7 +48,7 @@ type Row = {
 }
 
 type Scored = Row & { score: number; vScore: number; tScore: number; gScore: number }
-type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots'
+type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots' | 'term_ratio'
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
@@ -50,7 +56,8 @@ const clamp = (x: number) => Math.max(0, Math.min(1, x))
 
 function scoreRow(r: Row): Scored {
   // Vega: IV richer than realized vol scores higher (ratio 0.9 -> 0, 1.8 -> 1)
-  const ratioScore = r.iv_rv_ratio ? clamp((r.iv_rv_ratio - 0.9) / 0.9) : 0
+  const ratio = r.iv_rv_basis ?? r.iv_rv_ratio
+  const ratioScore = ratio ? clamp((ratio - 0.9) / 0.9) : 0
   // Blend with the stock's own IV percentile (when enough history) so a naturally high-IV stock is not always "rich"
   const vScore = r.iv_pctile !== null && r.iv_pctile !== undefined ? (ratioScore + r.iv_pctile / 100) / 2 : ratioScore
   // Theta: faster ATM decay scores higher (0.5%/day -> 0, 6%/day -> 1)
@@ -61,7 +68,9 @@ function scoreRow(r: Row): Scored {
   // Gamma: long gamma is calmer; short gamma scores low; a flip level close to spot reduces it
   let gScore = r.regime === 'LONG_GAMMA' ? 1 : 0
   if (gScore && r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5) gScore = 0.5
-  const score = Math.round(vScore * 45 + tScore * 20 + gScore * 35)
+  // Front premium: near-expiry IV rich versus next-month IV adds up to 8 points, a cheap front takes up to 8 away
+  const adj = r.term_ratio ? Math.max(-1, Math.min(1, (r.term_ratio - 1) / 0.3)) * 8 : 0
+  const score = Math.max(0, Math.min(100, Math.round(vScore * 45 + tScore * 20 + gScore * 35 + adj)))
   return { ...r, score, vScore, tScore, gScore }
 }
 
@@ -150,7 +159,8 @@ export default function SellerScreenPage() {
         </div>
         <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Refresh</button>
       </div>
-      {asOf && <p className="text-xs text-gray-600 mb-5">As of {asOf} IST · scores are a data ranking, not a recommendation</p>}
+      {asOf && <p className="text-xs text-gray-600 mb-1">As of {asOf} IST · scores are a data ranking, not a recommendation</p>}
+      <p className="text-xs text-gray-600 mb-5">Within 7 days of expiry, IV/RV and IV percentile use next-month IV (marked M) so they stay comparable. The Term column compares near-expiry IV with month IV, so a front-month spike is never hidden.</p>
 
       {error && <div className="mb-4 bg-red-950/30 border border-red-800/40 rounded-xl px-4 py-3 text-sm text-red-400">{error}</div>}
       {loading && <p className="text-gray-500 text-sm">Loading…</p>}
@@ -187,6 +197,7 @@ export default function SellerScreenPage() {
                   <th className={th} onClick={() => sortBy('score')}>Score{arrow('score')}</th>
                   <th className={th} onClick={() => sortBy('days_to_expiry')}>DTE{arrow('days_to_expiry')}</th>
                   <th className={th} onClick={() => sortBy('iv_rv_ratio')}>IV/RV (Vega){arrow('iv_rv_ratio')}</th>
+                  <th className={th} onClick={() => sortBy('term_ratio')}>Term: near / month IV{arrow('term_ratio')}</th>
                   <th className={th} onClick={() => sortBy('atm_theta_pct')}>Decay %/day (Theta){arrow('atm_theta_pct')}</th>
                   {more && <th className={th} onClick={() => sortBy('atm_theta_per_lot')}>₹/lot/day{arrow('atm_theta_per_lot')}</th>}
                   {more && <th className={th} onClick={() => sortBy('atm_vega_per_lot')}>₹/lot per IV pt{arrow('atm_vega_per_lot')}</th>}
@@ -206,7 +217,10 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2 font-bold text-white whitespace-nowrap">{r.symbol}<span className="text-gray-600 text-[10px] ml-2">{fmt(r.cmp)}</span><ResultBadge days={r.days_to_result} beforeExpiry={r.result_before_expiry} /></td>
                     <td className="px-3 py-2.5 text-right font-black text-white">{r.score}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{r.days_to_expiry}</td>
-                    <td className="px-3 py-2.5 text-right"><span className={dot(r.vScore)}>● </span>{fmt(r.iv_rv_ratio)}</td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap"><span className={dot(r.vScore)}>● </span>{fmt(r.iv_rv_basis ?? r.iv_rv_ratio)}{r.iv_basis === 'month' && <span className="text-sky-300 text-[10px] ml-1" title={`Judged on next-month IV (${r.iv_month_expiry || ''}) because expiry is within 7 days`}>M</span>}</td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap text-gray-300" title="Near-expiry ATM IV, next-month ATM IV and their ratio">
+                      {r.term_ratio ? <>{fmt(r.term_ratio)}x<span className="text-gray-500 text-[10px] ml-1">{fmt(r.atm_iv, 1)} / {fmt(r.iv_month, 1)}</span></> : '—'}
+                    </td>
                     <td className="px-3 py-2.5 text-right"><span className={dot(r.tScore)}>● </span>{fmt(r.atm_theta_pct)}</td>
                     {more && <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.atm_theta_per_lot, 0)}</td>}
                     {more && <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.atm_vega_per_lot, 0)}</td>}
@@ -223,6 +237,8 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2.5 text-left text-[10px] whitespace-nowrap">
                       {[
                         r.iv_crush_watch && 'IV crush',
+                        r.term_state === 'FRONT_SPIKE' && 'Front spike',
+                        r.term_state === 'FRONT_CHEAP' && 'Front cheap',
                         r.result_before_expiry && 'Results',
                         r.liq_thin && 'Thin',
                         r.regime === 'SHORT_GAMMA' && 'Short γ',
@@ -242,6 +258,8 @@ export default function SellerScreenPage() {
             <summary className="cursor-pointer text-gray-300 font-semibold">How the score works</summary>
             <ul className="mt-3 space-y-2 list-disc pl-5">
               <li><b>Vega (45 points):</b> how expensive options are versus what the stock actually moved (IV/RV of 0.9 scores zero, 1.8 or more scores full), blended with IV percentile, meaning how high today's IV is against this stock's own past readings.</li>
+              <li><b>Month IV and Term:</b> the Term column shows near-expiry IV divided by next-month IV, with both IV values. Above 1.15 (Front spike) the front month is expensive relative to next month, which usually means an event or stress, and it adds up to 8 points. Below 0.85 (Front cheap) it takes points away. Within 7 days of expiry, IV/RV and the IV percentile are judged on next-month IV, shown with M, because a contract a few days from expiry is not comparable with a year of history. Decay, gamma and the 1SD columns still describe the near expiry.</li>
+              <li><b>To flip %:</b> the distance from price to the gamma flip level. Negative means price is below the flip level and positive means above. Within 1.5% is tagged Near flip.</li>
               <li><b>IV percentile:</b> the share of past sessions with lower IV. The number in brackets is how many sessions it is based on. For stocks whose option history is still short, a blue number with a ~ and (RV range) is a stand-in: today's IV ranked against the range of realized volatility the stock has shown over the past year. It will switch to the true IV percentile as history builds.</li>
               <li><b>1SD move %:</b> the one-standard-deviation move the options imply until expiry. About two thirds of the time price is expected to finish inside that range. The Call and Put beyond 1SD columns show the first strike outside it, its probability of finishing in the money, and the premium per lot. Probabilities are model estimates from implied volatility.</li>
               <li><b>ATM vol (lots) and Thin liquidity:</b> options volume at the at-the-money strike. Thin means fills may be poor and spreads wide.</li>

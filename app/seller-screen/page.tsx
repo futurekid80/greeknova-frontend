@@ -50,7 +50,7 @@ export default function SellerScreenPage() {
   const [minIvRv, setMinIvRv] = useState(1.0)
   const [minDecay, setMinDecay] = useState(0)
   const [maxDte, setMaxDte] = useState(30)
-  const [gammaPref, setGammaPref] = useState<'ANY' | 'LONG'>('ANY')
+  const [gammaPref, setGammaPref] = useState<'ANY' | 'LONG' | 'SHORT'>('ANY')
   const [sortKey, setSortKey] = useState<SortKey>('score')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -80,6 +80,7 @@ export default function SellerScreenPage() {
       if ((r.atm_theta_pct ?? 0) < minDecay) return false
       if (r.days_to_expiry > maxDte) return false
       if (gammaPref === 'LONG' && r.regime !== 'LONG_GAMMA') return false
+      if (gammaPref === 'SHORT' && r.regime !== 'SHORT_GAMMA') return false
       return true
     })
     const dir = sortDir === 'asc' ? 1 : -1
@@ -136,6 +137,7 @@ export default function SellerScreenPage() {
             <div className="flex gap-2">
               <button className={chip(gammaPref === 'ANY')} onClick={() => setGammaPref('ANY')}>Any gamma</button>
               <button className={chip(gammaPref === 'LONG')} onClick={() => setGammaPref('LONG')}>Long gamma only</button>
+              <button className={chip(gammaPref === 'SHORT')} onClick={() => setGammaPref('SHORT')}>Short gamma only</button>
             </div>
             <span className="text-xs text-gray-500 pb-2">{shown.length} of {rows.length} stocks</span>
           </div>
@@ -187,6 +189,19 @@ export default function SellerScreenPage() {
               <li>A high score means conditions that premium sellers typically look for are present. It says nothing about direction, event risk, margin or your position size. Always check results, news and open interest levels separately.</li>
               <li>Selling options carries unlimited-loss risk on the naked side. Use the sliders to build your own filter.</li>
             </ul>
+          </details>
+
+          <details className="mt-4 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
+            <summary className="cursor-pointer text-gray-300 font-semibold">Worked example: how to read one row</summary>
+            <div className="mt-3 space-y-2">
+              <p>Say a row shows <b>score 85, DTE 4, IV/RV 1.80, decay 12%/day, Gamma Long (amber), To flip -1.2%</b>, flags: IV crush watch, Near gamma flip.</p>
+              <p><b>IV/RV 1.80:</b> options price in about 1.8 times the movement the stock actually delivered, so premium is rich.</p>
+              <p><b>Decay 12%/day:</b> the ATM straddle loses about 12% of its value each day. High because expiry is near.</p>
+              <p><b>Long gamma, amber dot:</b> dealer hedging tends to calm moves, but the flip level is only about 1.2% away. Crossing it can turn calm into amplified moves.</p>
+              <p><b>Flags:</b> IV is rich with expiry close, so IV may fall after events. The flip is near, so a sharp move is possible.</p>
+              <p><b>Takeaway:</b> conditions are present, but check the option chain, OI walls, news and results dates, and your own risk before any decision. Short gamma rows are the opposite case: moves can amplify, so read them with more caution.</p>
+              <p>Near expiry every stock shows high decay, so IV/RV and gamma do most of the ranking that week.</p>
+            </div>
           </details>
 
           <p className="mt-4 text-[11px] text-gray-600">Informational and educational only. Not SEBI registered. Not investment advice.</p>

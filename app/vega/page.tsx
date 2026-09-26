@@ -186,12 +186,24 @@ export default function VegaPage() {
                     <td className="px-3 py-2.5 text-right text-gray-200">{fmt(r.vega_total_cr)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.vega_ce_cr)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.vega_pe_cr)}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.vega_peak_strike, 0)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.vega_peak_strike, 0)}{r.vega_peak_strike && r.cmp ? <span className="text-gray-500 text-[10px] ml-1">({(((r.vega_peak_strike - r.cmp) / r.cmp) * 100).toFixed(1)}%)</span> : null}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <details className="mt-6 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
+            <summary className="cursor-pointer text-gray-300 font-semibold">How to read this page</summary>
+            <ul className="mt-3 space-y-2 list-disc pl-5">
+              <li><b>ATM IV and Realized vol:</b> what options price in versus what the stock actually moved. IV/RV above about 1.6 is labelled Rich, below 0.9 Cheap.</li>
+              <li><b>₹/lot per IV pt:</b> how much one lot's ATM straddle changes if IV moves by one point. Larger means more sensitive to IV.</li>
+              <li><b>Chain vega:</b> total IV sensitivity of all open contracts, weighted by open interest. Calls and Puts show which side carries more of it.</li>
+              <li><b>IV crush watch (warning sign):</b> IV is rich and expiry is within 10 days. Rich IV tends to fall as events pass, which hurts premium buyers and helps sellers, but it is not a guarantee.</li>
+              <li><b>Peak strike:</b> the strike where open interest times vega is largest. It marks where positions are concentrated, often a round-number strike, so it can sit away from the current price. The % beside it is the distance from CMP.</li>
+              <li>Estimates only. Educational reading, not investment advice.</li>
+            </ul>
+          </details>
 
           <div className="mt-6 text-[11px] text-gray-600 leading-relaxed space-y-1">
             <p><b className="text-gray-500">₹/lot per IV pt</b> is how much the ATM straddle&apos;s value changes for one lot if implied volatility moves by one point. <b className="text-gray-500">IV rich / cheap</b> compares ATM IV with the stock&apos;s recent realized volatility. <b className="text-gray-500">⚠️ IV crush watch</b> marks rich IV with expiry inside 10 days, where premium can drop quickly once the event passes.</p>

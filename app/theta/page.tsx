@@ -174,12 +174,24 @@ export default function ThetaPage() {
                     <td className="px-3 py-2.5 text-right text-gray-200">{fmt(r.theta_total_cr)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.theta_ce_cr)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.theta_pe_cr)}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.theta_peak_strike, 0)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.theta_peak_strike, 0)}{r.theta_peak_strike && r.cmp ? <span className="text-gray-500 text-[10px] ml-1">({(((r.theta_peak_strike - r.cmp) / r.cmp) * 100).toFixed(1)}%)</span> : null}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <details className="mt-6 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
+            <summary className="cursor-pointer text-gray-300 font-semibold">How to read this page</summary>
+            <ul className="mt-3 space-y-2 list-disc pl-5">
+              <li><b>Straddle ₹ and Theta ₹/day:</b> the ATM call plus put price, and how much of it melts away per calendar day if nothing else moves.</li>
+              <li><b>Decay %/day:</b> daily loss as a share of the straddle price. Higher means faster decay, and it climbs steeply in the last few days to expiry.</li>
+              <li><b>₹/lot/day:</b> the same decay per lot, so you can compare stocks with different lot sizes.</li>
+              <li><b>Chain decay, Calls and Puts:</b> total time-decay of all open contracts, weighted by open interest. It shows where the premium is, not who holds it.</li>
+              <li><b>Peak strike:</b> the strike where open interest times decay is largest. It is a concentration point and is often a round-number strike, so it can sit away from the current price. The % beside it is the distance from CMP. A large distance means the decay is concentrated in a far strike, not near the money.</li>
+              <li>Decay is an estimate from Black-Scholes and traded premiums. Big gap moves and IV changes can outweigh it. Educational reading only.</li>
+            </ul>
+          </details>
 
           <div className="mt-6 text-[11px] text-gray-600 leading-relaxed space-y-1">
             <p><b className="text-gray-500">Theta ₹/day</b> is the ATM straddle&apos;s value lost per share in one calendar day, all else equal. <b className="text-gray-500">Decay %/day</b> is that loss as a share of the straddle price, and it accelerates sharply as expiry nears. <b className="text-gray-500">₹/lot/day</b> multiplies by lot size.</p>

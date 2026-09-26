@@ -53,11 +53,14 @@ function scoreRow(r: Row): Scored {
   // Blend with the stock's own IV percentile (when enough history) so a naturally high-IV stock is not always "rich"
   const vScore = r.iv_pctile !== null && r.iv_pctile !== undefined ? (ratioScore + r.iv_pctile / 100) / 2 : ratioScore
   // Theta: faster ATM decay scores higher (0.5%/day -> 0, 6%/day -> 1)
-  const tScore = r.atm_theta_pct ? clamp((r.atm_theta_pct - 0.5) / 5.5) : 0
+  // Decay %/day rises naturally as expiry nears (about 50 / days-to-expiry for an ATM straddle), so compare
+  // it with that norm. 1.0 = normal for this expiry distance, so a stock only scores if it decays faster than normal.
+  const norm = r.atm_theta_pct ? (r.atm_theta_pct * Math.max(r.days_to_expiry, 1)) / 50 : 0
+  const tScore = norm ? clamp((norm - 0.8) / 0.6) : 0
   // Gamma: long gamma is calmer; short gamma scores low; a flip level close to spot reduces it
   let gScore = r.regime === 'LONG_GAMMA' ? 1 : 0
   if (gScore && r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5) gScore = 0.5
-  const score = Math.round(vScore * 35 + tScore * 35 + gScore * 30)
+  const score = Math.round(vScore * 45 + tScore * 20 + gScore * 35)
   return { ...r, score, vScore, tScore, gScore }
 }
 
@@ -207,10 +210,10 @@ export default function SellerScreenPage() {
                     {more && <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.atm_vega_per_lot, 0)}</td>}
                     <td className="px-3 py-2.5 text-right" title={r.iv_hist_days ? `Based on ${r.iv_hist_days} past sessions` : 'Not enough history yet'}>{r.iv_pctile !== null && r.iv_pctile !== undefined ? `${r.iv_pctile}` : '—'}<span className="text-gray-600 text-[10px] ml-1">{r.iv_hist_days ? `(${r.iv_hist_days}d)` : ''}</span></td>
                     <td className="px-3 py-2.5 text-right text-gray-300" title={r.em_low && r.em_high ? `Range ${fmt(r.em_low)} to ${fmt(r.em_high)}` : ''}>{fmt(r.em_pct)}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-300">{r.call_1sd_strike ? <>{fmt(r.call_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.call_1sd_prob_itm, 0)}% · ₹{fmt(r.call_1sd_per_lot, 0)}</span></> : '—'}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-300">{r.put_1sd_strike ? <>{fmt(r.put_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.put_1sd_prob_itm, 0)}% · ₹{fmt(r.put_1sd_per_lot, 0)}</span></> : '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300 whitespace-nowrap">{r.call_1sd_strike ? <>{fmt(r.call_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.call_1sd_prob_itm, 0)}% · ₹{fmt(r.call_1sd_per_lot, 0)}</span></> : '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300 whitespace-nowrap">{r.put_1sd_strike ? <>{fmt(r.put_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.put_1sd_prob_itm, 0)}% · ₹{fmt(r.put_1sd_per_lot, 0)}</span></> : '—'}</td>
                     {more && <td className="px-3 py-2.5 text-right text-gray-400">{r.atm_vol_lots !== null && r.atm_vol_lots !== undefined ? fmt(r.atm_vol_lots, 0) : '—'}</td>}
-                    <td className="px-3 py-2.5 text-right"><span className={dot(r.gScore)}>● </span>{r.regime === 'LONG_GAMMA' ? 'Long' : r.regime === 'SHORT_GAMMA' ? 'Short' : '—'}</td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap"><span className={dot(r.gScore)}>● </span>{r.regime === 'LONG_GAMMA' ? 'Long' : r.regime === 'SHORT_GAMMA' ? 'Short' : '—'}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.pct_to_flip)}</td>
                     <td className="px-3 py-2.5 text-left text-[10px] whitespace-nowrap">
                       {[
@@ -233,14 +236,14 @@ export default function SellerScreenPage() {
           <details className="mt-6 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
             <summary className="cursor-pointer text-gray-300 font-semibold">How the score works</summary>
             <ul className="mt-3 space-y-2 list-disc pl-5">
-              <li><b>Vega (35 points):</b> how expensive options are versus what the stock actually moved (IV/RV of 0.9 scores zero, 1.8 or more scores full), blended with IV percentile, meaning how high today's IV is against this stock's own past readings.</li>
+              <li><b>Vega (45 points):</b> how expensive options are versus what the stock actually moved (IV/RV of 0.9 scores zero, 1.8 or more scores full), blended with IV percentile, meaning how high today's IV is against this stock's own past readings.</li>
               <li><b>IV percentile:</b> the share of past sessions with lower IV. The number in brackets is how many sessions it is based on. History is still short, so treat it as indicative and hover for details.</li>
               <li><b>1SD move %:</b> the one-standard-deviation move the options imply until expiry. About two thirds of the time price is expected to finish inside that range. The Call and Put beyond 1SD columns show the first strike outside it, its probability of finishing in the money, and the premium per lot. Probabilities are model estimates from implied volatility.</li>
               <li><b>ATM vol (lots) and Thin liquidity:</b> options volume at the at-the-money strike. Thin means fills may be poor and spreads wide.</li>
               <li><b>Flags:</b> IV crush = rich IV with expiry within 10 days. Results = results date falls before expiry. Thin = low ATM liquidity. Short γ = short gamma, moves can amplify. Near flip = gamma flip within 1.5% of price. Delivery = expiry within 5 days, and stock options settle by delivery in India, so in-the-money positions carry delivery and higher margin implications.</li>
               <li><b>More columns:</b> adds ₹ per lot for decay and IV sensitivity, and ATM volume in lots.</li>
-              <li><b>Theta (35 points):</b> how fast the ATM straddle decays each day. 0.5%/day scores zero and 6%/day or more scores full.</li>
-              <li><b>Gamma (30 points):</b> long gamma (dealer hedging tends to dampen moves) scores full, halved when the gamma flip level is within 1.5% of price. Short gamma scores zero.</li>
+              <li><b>Theta (20 points):</b> whether the ATM straddle decays faster than is normal for how close expiry is. Decay %/day always rises near expiry, so being high in expiry week is normal and scores little on its own.</li>
+              <li><b>Gamma (35 points):</b> long gamma (dealer hedging tends to dampen moves) scores full, halved when the gamma flip level is within 1.5% of price. Short gamma scores zero.</li>
               <li>Green dot means strong, amber means middling, grey means weak for that Greek.</li>
               <li>A high score means conditions that premium sellers typically look for are present. It says nothing about direction, event risk, margin or your position size. Always check results, news and open interest levels separately.</li>
               <li>Selling options carries unlimited-loss risk on the naked side. Use the sliders to build your own filter.</li>

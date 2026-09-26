@@ -71,7 +71,7 @@ export default function SellerScreenPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [minIvRv, setMinIvRv] = useState(1.0)
+  const [minIvRv, setMinIvRv] = useState(0)
   const [minDecay, setMinDecay] = useState(0)
   const [maxDte, setMaxDte] = useState(30)
   const [minPctile, setMinPctile] = useState(0)
@@ -104,6 +104,7 @@ export default function SellerScreenPage() {
     const q = search.trim().toUpperCase()
     const list = scored.filter((r) => {
       if (q && !r.symbol.includes(q)) return false
+      if (q) return true  // a typed search always shows the stock, whatever the number filters say
       if ((r.iv_rv_ratio ?? 0) < minIvRv) return false
       if ((r.atm_theta_pct ?? 0) < minDecay) return false
       if (r.days_to_expiry > maxDte) return false

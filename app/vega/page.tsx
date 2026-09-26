@@ -1,0 +1,201 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+const API = 'https://api.greeknova.com'
+
+type Row = {
+  symbol: string
+  cmp: number
+  days_to_expiry: number
+  atm_iv?: number | null
+  realized_vol?: number | null
+  iv_rv_ratio?: number | null
+  iv_regime?: 'RICH' | 'FAIR' | 'CHEAP' | null
+  atm_vega?: number | null
+  atm_vega_per_lot?: number | null
+  vega_total_cr?: number | null
+  vega_ce_cr?: number | null
+  vega_pe_cr?: number | null
+  vega_peak_strike?: number | null
+  vega_pe_ce_ratio?: number | null
+  iv_crush_watch?: boolean
+}
+
+type SortKey = 'symbol' | 'days_to_expiry' | 'atm_iv' | 'iv_rv_ratio' | 'atm_vega_per_lot' | 'vega_total_cr'
+type Filter = 'ALL' | 'RICH' | 'CHEAP' | 'CRUSH'
+
+const fmt = (n: number | null | undefined, d = 2) =>
+  n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
+
+export default function VegaPage() {
+  const [rows, setRows] = useState<Row[]>([])
+  const [asOf, setAsOf] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<Filter>('ALL')
+  const [sortKey, setSortKey] = useState<SortKey>('vega_total_cr')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API}/gamma-squeeze?t=${Date.now()}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`Server returned ${res.status}`)
+      const j = await res.json()
+      setRows(j.watchlist || [])
+      setAsOf(j.as_of ? `${j.date ? j.date + ' ' : ''}${j.as_of}` : '')
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load data')
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const shown = useMemo(() => {
+    const q = search.trim().toUpperCase()
+    const list = rows.filter((r) => {
+      if (q && !r.symbol.includes(q)) return false
+      if (filter === 'RICH' && r.iv_regime !== 'RICH') return false
+      if (filter === 'CHEAP' && r.iv_regime !== 'CHEAP') return false
+      if (filter === 'CRUSH' && !r.iv_crush_watch) return false
+      return true
+    })
+    const dir = sortDir === 'asc' ? 1 : -1
+    return [...list].sort((a, b) => {
+      if (sortKey === 'symbol') return a.symbol.localeCompare(b.symbol) * dir
+      const av = (a as any)[sortKey]
+      const bv = (b as any)[sortKey]
+      if (av === null || av === undefined) return 1
+      if (bv === null || bv === undefined) return -1
+      return (av - bv) * dir
+    })
+  }, [rows, search, filter, sortKey, sortDir])
+
+  const rich = rows.filter((r) => r.iv_regime === 'RICH').length
+  const cheap = rows.filter((r) => r.iv_regime === 'CHEAP').length
+  const crush = rows.filter((r) => r.iv_crush_watch).length
+  const totalCr = rows.reduce((s, r) => s + (r.vega_total_cr || 0), 0)
+
+  function sortBy(k: SortKey) {
+    if (k === sortKey) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(k); setSortDir(k === 'symbol' ? 'asc' : 'desc') }
+  }
+  const arrow = (k: SortKey) => (k === sortKey ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
+  const th = 'px-3 py-3 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold cursor-pointer select-none whitespace-nowrap hover:text-gray-300'
+  const chip = (on: boolean) =>
+    `px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${on ? 'bg-white text-gray-900 border-white' : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'}`
+
+  const badge = (r: Row) => {
+    if (r.iv_regime === 'RICH') return <span className="px-2 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-900/50">IV rich</span>
+    if (r.iv_regime === 'CHEAP') return <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-900/50">IV cheap</span>
+    if (r.iv_regime === 'FAIR') return <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">Fair</span>
+    return <span className="text-gray-600">—</span>
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-gray-200 px-4 sm:px-8 py-8 max-w-[1500px] mx-auto">
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-2">
+        <div>
+          <h1 className="text-2xl font-black text-white">ν Vega Exposure</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            How much option premium moves when implied volatility moves, per stock. Nearest active expiry.
+          </p>
+        </div>
+        <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">
+          Refresh
+        </button>
+      </div>
+      {asOf && <p className="text-xs text-gray-600 mb-5">As of {asOf} IST · vega from IV-implied Black-Scholes on live premiums · chain figures weighted by open interest</p>}
+
+      {error && <div className="mb-4 bg-red-950/30 border border-red-800/40 rounded-xl px-4 py-3 text-sm text-red-400">{error}</div>}
+      {loading && <p className="text-gray-500 text-sm">Loading…</p>}
+
+      {!loading && !error && rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <button onClick={() => setFilter(filter === 'CRUSH' ? 'ALL' : 'CRUSH')} className={`text-left bg-orange-950/20 border rounded-xl px-4 py-3 ${filter === 'CRUSH' ? 'border-orange-400' : 'border-orange-900/40'}`}>
+              <p className="text-[10px] text-orange-500 uppercase tracking-wide mb-1">IV crush watch</p>
+              <p className="text-lg font-black text-orange-400">{crush}</p>
+            </button>
+            <button onClick={() => setFilter(filter === 'RICH' ? 'ALL' : 'RICH')} className={`text-left bg-red-950/20 border rounded-xl px-4 py-3 ${filter === 'RICH' ? 'border-red-400' : 'border-red-900/40'}`}>
+              <p className="text-[10px] text-red-500 uppercase tracking-wide mb-1">IV rich vs realized</p>
+              <p className="text-lg font-black text-red-400">{rich}</p>
+            </button>
+            <button onClick={() => setFilter(filter === 'CHEAP' ? 'ALL' : 'CHEAP')} className={`text-left bg-emerald-950/20 border rounded-xl px-4 py-3 ${filter === 'CHEAP' ? 'border-emerald-400' : 'border-emerald-900/40'}`}>
+              <p className="text-[10px] text-emerald-500 uppercase tracking-wide mb-1">IV cheap vs realized</p>
+              <p className="text-lg font-black text-emerald-400">{cheap}</p>
+            </button>
+            <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Total vega (₹ cr per IV pt)</p>
+              <p className="text-lg font-black text-white">₹{fmt(totalCr, 0)} cr</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search stock…"
+              className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white w-44 focus:outline-none focus:border-blue-500"
+            />
+            <button className={chip(filter === 'ALL')} onClick={() => setFilter('ALL')}>All</button>
+            <button className={chip(filter === 'CRUSH')} onClick={() => setFilter(filter === 'CRUSH' ? 'ALL' : 'CRUSH')}>IV crush watch</button>
+            <button className={chip(filter === 'RICH')} onClick={() => setFilter(filter === 'RICH' ? 'ALL' : 'RICH')}>IV rich</button>
+            <button className={chip(filter === 'CHEAP')} onClick={() => setFilter(filter === 'CHEAP' ? 'ALL' : 'CHEAP')}>IV cheap</button>
+            <span className="ml-auto text-[11px] text-gray-600">{shown.length} of {rows.length} stocks</span>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-gray-800">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-900/60">
+                <tr>
+                  <th className={th + ' !text-left'} onClick={() => sortBy('symbol')}>Stock{arrow('symbol')}</th>
+                  <th className={th}>CMP</th>
+                  <th className={th} onClick={() => sortBy('days_to_expiry')}>DTE{arrow('days_to_expiry')}</th>
+                  <th className={th} onClick={() => sortBy('atm_iv')}>ATM IV{arrow('atm_iv')}</th>
+                  <th className={th}>Realized vol</th>
+                  <th className={th} onClick={() => sortBy('iv_rv_ratio')}>IV / RV{arrow('iv_rv_ratio')}</th>
+                  <th className={th + ' !text-center'}>IV state</th>
+                  <th className={th} onClick={() => sortBy('atm_vega_per_lot')}>₹/lot per IV pt{arrow('atm_vega_per_lot')}</th>
+                  <th className={th} onClick={() => sortBy('vega_total_cr')}>Chain vega ₹cr/pt{arrow('vega_total_cr')}</th>
+                  <th className={th}>Calls / Puts ₹cr</th>
+                  <th className={th}>Peak strike</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((r) => (
+                  <tr key={r.symbol} className="border-t border-gray-800/70 hover:bg-gray-900/40">
+                    <td className="px-3 py-2.5 font-bold text-white text-left">
+                      {r.symbol} {r.iv_crush_watch && <span title="Rich IV and expiry within 10 days" className="ml-1">⚠️</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.cmp)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{r.days_to_expiry}d</td>
+                    <td className="px-3 py-2.5 text-right text-amber-400 font-bold">{fmt(r.atm_iv, 1)}%</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.realized_vol, 1)}%</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.iv_rv_ratio)}×</td>
+                    <td className="px-3 py-2.5 text-center">{badge(r)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-200">{fmt(r.atm_vega_per_lot, 0)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-200">{fmt(r.vega_total_cr)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.vega_ce_cr)} / {fmt(r.vega_pe_cr)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.vega_peak_strike, 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-6 text-[11px] text-gray-600 leading-relaxed space-y-1">
+            <p><b className="text-gray-500">₹/lot per IV pt</b> is how much the ATM straddle&apos;s value changes for one lot if implied volatility moves by one point. <b className="text-gray-500">IV rich / cheap</b> compares ATM IV with the stock&apos;s recent realized volatility. <b className="text-gray-500">⚠️ IV crush watch</b> marks rich IV with expiry inside 10 days, where premium can drop quickly once the event passes.</p>
+            <p><b className="text-gray-500">Chain vega</b> adds up vega across every open contract within 35% of spot (weighted by open interest). It shows where volatility sensitivity is concentrated, not who holds the positions.</p>
+            <p>Informational and educational only. Not SEBI registered. Not investment advice.</p>
+          </div>
+        </>
+      )}
+      {!loading && !error && rows.length === 0 && <p className="text-gray-500 text-sm">No data available yet.</p>}
+    </div>
+  )
+}

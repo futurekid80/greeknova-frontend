@@ -36,6 +36,8 @@ const NAV_GROUPS = [
       { href: '/maxpain',     label: 'Max Pain' },
       { href: '/iv',          label: 'IV Analysis' },
       { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' },
+      { href: '/theta', label: 'Θ Theta Decay' },
+      { href: '/vega', label: 'ν Vega Exposure' },
     ]
   },
   {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
+import ResultBadge from '@/components/ResultBadge'
 
 const API = 'https://api.greeknova.com'
 
@@ -34,6 +35,9 @@ type Row = {
   atm_oi_lots?: number | null
   atm_vol_lots?: number | null
   liq_thin?: boolean | null
+  result_date?: string | null
+  days_to_result?: number | null
+  result_before_expiry?: boolean | null
 }
 
 type Scored = Row & { score: number; vScore: number; tScore: number; gScore: number }
@@ -68,6 +72,7 @@ export default function SellerScreenPage() {
   const [maxDte, setMaxDte] = useState(30)
   const [minPctile, setMinPctile] = useState(0)
   const [hideThin, setHideThin] = useState(false)
+  const [noResults, setNoResults] = useState(false)
   const [gammaPref, setGammaPref] = useState<'ANY' | 'LONG' | 'SHORT'>('ANY')
   const [sortKey, setSortKey] = useState<SortKey>('score')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -99,6 +104,7 @@ export default function SellerScreenPage() {
       if (r.days_to_expiry > maxDte) return false
       if (minPctile > 0 && (r.iv_pctile ?? -1) < minPctile) return false
       if (hideThin && r.liq_thin) return false
+      if (noResults && r.result_before_expiry) return false
       if (gammaPref === 'LONG' && r.regime !== 'LONG_GAMMA') return false
       if (gammaPref === 'SHORT' && r.regime !== 'SHORT_GAMMA') return false
       return true
@@ -112,7 +118,7 @@ export default function SellerScreenPage() {
       if (bv === null || bv === undefined) return -1
       return (av - bv) * dir
     })
-  }, [scored, search, minIvRv, minDecay, maxDte, minPctile, hideThin, gammaPref, sortKey, sortDir])
+  }, [scored, search, minIvRv, minDecay, maxDte, minPctile, hideThin, noResults, gammaPref, sortKey, sortDir])
 
   function sortBy(k: SortKey) {
     if (k === sortKey) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -157,6 +163,7 @@ export default function SellerScreenPage() {
             <label className="text-[11px] text-gray-500">Min IV percentile
               <input type="number" step="10" value={minPctile} onChange={(e) => setMinPctile(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
             <button className={chip(hideThin)} onClick={() => setHideThin(!hideThin)}>Hide thin liquidity</button>
+            <button className={chip(noResults)} onClick={() => setNoResults(!noResults)}>Exclude results before expiry</button>
             <div className="flex gap-2">
               <button className={chip(gammaPref === 'ANY')} onClick={() => setGammaPref('ANY')}>Any gamma</button>
               <button className={chip(gammaPref === 'LONG')} onClick={() => setGammaPref('LONG')}>Long gamma only</button>
@@ -189,7 +196,7 @@ export default function SellerScreenPage() {
               <tbody>
                 {shown.map((r) => (
                   <tr key={r.symbol} className="border-t border-gray-800/70 hover:bg-gray-900/40">
-                    <td className="px-3 py-2.5 font-bold text-white">{r.symbol}<span className="text-gray-600 text-[10px] ml-2">{fmt(r.cmp)}</span></td>
+                    <td className="px-3 py-2.5 font-bold text-white">{r.symbol}<span className="text-gray-600 text-[10px] ml-2">{fmt(r.cmp)}</span><ResultBadge days={r.days_to_result} beforeExpiry={r.result_before_expiry} /></td>
                     <td className="px-3 py-2.5 text-right font-black text-white">{r.score}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{r.days_to_expiry}</td>
                     <td className="px-3 py-2.5 text-right"><span className={dot(r.vScore)}>● </span>{fmt(r.iv_rv_ratio)}</td>
@@ -204,7 +211,7 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2.5 text-right"><span className={dot(r.gScore)}>● </span>{r.regime === 'LONG_GAMMA' ? 'Long' : r.regime === 'SHORT_GAMMA' ? 'Short' : '—'}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.pct_to_flip)}</td>
                     <td className="px-3 py-2.5 text-left text-[11px] text-amber-400">
-                      {r.iv_crush_watch ? 'IV crush watch ' : ''}{r.liq_thin ? 'Thin liquidity ' : ''}{r.days_to_expiry <= 5 ? 'Expiry week: physical delivery if ITM ' : ''}{r.regime === 'SHORT_GAMMA' ? 'Short gamma: moves can amplify ' : ''}{r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5 ? 'Near gamma flip' : ''}
+                      {r.iv_crush_watch ? 'IV crush watch ' : ''}{r.result_before_expiry ? 'Results before expiry ' : ''}{r.liq_thin ? 'Thin liquidity ' : ''}{r.days_to_expiry <= 5 ? 'Expiry week: physical delivery if ITM ' : ''}{r.regime === 'SHORT_GAMMA' ? 'Short gamma: moves can amplify ' : ''}{r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5 ? 'Near gamma flip' : ''}
                     </td>
                   </tr>
                 ))}

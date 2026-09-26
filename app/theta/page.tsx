@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
+import ResultBadge from '@/components/ResultBadge'
 
 const API = 'https://api.greeknova.com'
 
@@ -20,6 +21,9 @@ type Row = {
   theta_pe_cr?: number | null
   theta_peak_strike?: number | null
   lot_size?: number | null
+  result_date?: string | null
+  days_to_result?: number | null
+  result_before_expiry?: boolean | null
 }
 
 type SortKey = 'symbol' | 'cmp' | 'days_to_expiry' | 'atm_strike' | 'atm_straddle_premium' | 'atm_theta_pct' | 'atm_theta' | 'atm_theta_per_lot' | 'theta_total_cr' | 'theta_ce_cr' | 'theta_pe_cr' | 'theta_peak_strike'
@@ -163,7 +167,7 @@ export default function ThetaPage() {
               <tbody>
                 {shown.map((r) => (
                   <tr key={r.symbol} className="border-t border-gray-800/70 hover:bg-gray-900/40">
-                    <td className="px-3 py-2.5 font-bold text-white text-left">{r.symbol}</td>
+                    <td className="px-3 py-2.5 font-bold text-white text-left">{r.symbol}<ResultBadge days={r.days_to_result} beforeExpiry={r.result_before_expiry} /></td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.cmp)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{r.days_to_expiry}d</td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.atm_strike, 0)}</td>

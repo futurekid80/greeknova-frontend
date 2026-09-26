@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
+import ResultBadge from '@/components/ResultBadge'
 
 const API = 'https://api.greeknova.com'
 
@@ -19,6 +20,9 @@ type Row = {
   vega_ce_cr?: number | null
   vega_pe_cr?: number | null
   vega_peak_strike?: number | null
+  result_date?: string | null
+  days_to_result?: number | null
+  result_before_expiry?: boolean | null
   vega_pe_ce_ratio?: number | null
   iv_crush_watch?: boolean
 }
@@ -174,7 +178,7 @@ export default function VegaPage() {
                 {shown.map((r) => (
                   <tr key={r.symbol} className="border-t border-gray-800/70 hover:bg-gray-900/40">
                     <td className="px-3 py-2.5 font-bold text-white text-left">
-                      {r.symbol} {r.iv_crush_watch && <span title="Rich IV and expiry within 10 days" className="ml-1">⚠️</span>}
+                      {r.symbol} {r.iv_crush_watch && <span title="Rich IV and expiry within 10 days" className="ml-1">⚠️</span>}<ResultBadge days={r.days_to_result} beforeExpiry={r.result_before_expiry} />
                     </td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.cmp)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{r.days_to_expiry}d</td>

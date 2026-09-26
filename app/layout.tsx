@@ -4,6 +4,7 @@ import DisclaimerModal from '@/components/DisclaimerModal'
 import AlertsSidebar from '@/components/AlertsSidebar'
 import { AlertsProvider } from '@/contexts/AlertsContext'
 import { useEffect, useState } from 'react'
+import '@/lib/authFetch'
 
 const API = 'https://api.greeknova.com'
 

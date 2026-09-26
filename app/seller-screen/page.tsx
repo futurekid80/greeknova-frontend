@@ -20,10 +20,24 @@ type Row = {
   atm_vega_per_lot?: number | null
   iv_crush_watch?: boolean | null
   theta_peak_strike?: number | null
+  iv_pctile?: number | null
+  iv_hist_days?: number | null
+  em_pct?: number | null
+  em_low?: number | null
+  em_high?: number | null
+  call_1sd_strike?: number | null
+  call_1sd_prob_itm?: number | null
+  call_1sd_per_lot?: number | null
+  put_1sd_strike?: number | null
+  put_1sd_prob_itm?: number | null
+  put_1sd_per_lot?: number | null
+  atm_oi_lots?: number | null
+  atm_vol_lots?: number | null
+  liq_thin?: boolean | null
 }
 
 type Scored = Row & { score: number; vScore: number; tScore: number; gScore: number }
-type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip'
+type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots'
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
@@ -31,7 +45,9 @@ const clamp = (x: number) => Math.max(0, Math.min(1, x))
 
 function scoreRow(r: Row): Scored {
   // Vega: IV richer than realized vol scores higher (ratio 0.9 -> 0, 1.8 -> 1)
-  const vScore = r.iv_rv_ratio ? clamp((r.iv_rv_ratio - 0.9) / 0.9) : 0
+  const ratioScore = r.iv_rv_ratio ? clamp((r.iv_rv_ratio - 0.9) / 0.9) : 0
+  // Blend with the stock's own IV percentile (when enough history) so a naturally high-IV stock is not always "rich"
+  const vScore = r.iv_pctile !== null && r.iv_pctile !== undefined ? (ratioScore + r.iv_pctile / 100) / 2 : ratioScore
   // Theta: faster ATM decay scores higher (0.5%/day -> 0, 6%/day -> 1)
   const tScore = r.atm_theta_pct ? clamp((r.atm_theta_pct - 0.5) / 5.5) : 0
   // Gamma: long gamma is calmer; short gamma scores low; a flip level close to spot reduces it
@@ -50,6 +66,8 @@ export default function SellerScreenPage() {
   const [minIvRv, setMinIvRv] = useState(1.0)
   const [minDecay, setMinDecay] = useState(0)
   const [maxDte, setMaxDte] = useState(30)
+  const [minPctile, setMinPctile] = useState(0)
+  const [hideThin, setHideThin] = useState(false)
   const [gammaPref, setGammaPref] = useState<'ANY' | 'LONG' | 'SHORT'>('ANY')
   const [sortKey, setSortKey] = useState<SortKey>('score')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -79,6 +97,8 @@ export default function SellerScreenPage() {
       if ((r.iv_rv_ratio ?? 0) < minIvRv) return false
       if ((r.atm_theta_pct ?? 0) < minDecay) return false
       if (r.days_to_expiry > maxDte) return false
+      if (minPctile > 0 && (r.iv_pctile ?? -1) < minPctile) return false
+      if (hideThin && r.liq_thin) return false
       if (gammaPref === 'LONG' && r.regime !== 'LONG_GAMMA') return false
       if (gammaPref === 'SHORT' && r.regime !== 'SHORT_GAMMA') return false
       return true
@@ -92,7 +112,7 @@ export default function SellerScreenPage() {
       if (bv === null || bv === undefined) return -1
       return (av - bv) * dir
     })
-  }, [scored, search, minIvRv, minDecay, maxDte, gammaPref, sortKey, sortDir])
+  }, [scored, search, minIvRv, minDecay, maxDte, minPctile, hideThin, gammaPref, sortKey, sortDir])
 
   function sortBy(k: SortKey) {
     if (k === sortKey) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -134,6 +154,9 @@ export default function SellerScreenPage() {
               <input type="number" step="0.5" value={minDecay} onChange={(e) => setMinDecay(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
             <label className="text-[11px] text-gray-500">Max days to expiry
               <input type="number" step="1" value={maxDte} onChange={(e) => setMaxDte(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+            <label className="text-[11px] text-gray-500">Min IV percentile
+              <input type="number" step="10" value={minPctile} onChange={(e) => setMinPctile(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+            <button className={chip(hideThin)} onClick={() => setHideThin(!hideThin)}>Hide thin liquidity</button>
             <div className="flex gap-2">
               <button className={chip(gammaPref === 'ANY')} onClick={() => setGammaPref('ANY')}>Any gamma</button>
               <button className={chip(gammaPref === 'LONG')} onClick={() => setGammaPref('LONG')}>Long gamma only</button>
@@ -153,6 +176,11 @@ export default function SellerScreenPage() {
                   <th className={th} onClick={() => sortBy('atm_theta_pct')}>Decay %/day (Theta){arrow('atm_theta_pct')}</th>
                   <th className={th} onClick={() => sortBy('atm_theta_per_lot')}>₹/lot/day{arrow('atm_theta_per_lot')}</th>
                   <th className={th} onClick={() => sortBy('atm_vega_per_lot')}>₹/lot per IV pt{arrow('atm_vega_per_lot')}</th>
+                  <th className={th} onClick={() => sortBy('iv_pctile')}>IV percentile{arrow('iv_pctile')}</th>
+                  <th className={th} onClick={() => sortBy('em_pct')}>1SD move %{arrow('em_pct')}</th>
+                  <th className={th}>Call beyond 1SD</th>
+                  <th className={th}>Put beyond 1SD</th>
+                  <th className={th} onClick={() => sortBy('atm_vol_lots')}>ATM vol (lots){arrow('atm_vol_lots')}</th>
                   <th className={th}>Gamma</th>
                   <th className={th} onClick={() => sortBy('pct_to_flip')}>To flip %{arrow('pct_to_flip')}</th>
                   <th className={th + ' !text-left'}>Flags</th>
@@ -168,10 +196,15 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2.5 text-right"><span className={dot(r.tScore)}>● </span>{fmt(r.atm_theta_pct)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.atm_theta_per_lot, 0)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-300">{fmt(r.atm_vega_per_lot, 0)}</td>
+                    <td className="px-3 py-2.5 text-right" title={r.iv_hist_days ? `Based on ${r.iv_hist_days} past sessions` : 'Not enough history yet'}>{r.iv_pctile !== null && r.iv_pctile !== undefined ? `${r.iv_pctile}` : '—'}<span className="text-gray-600 text-[10px] ml-1">{r.iv_hist_days ? `(${r.iv_hist_days}d)` : ''}</span></td>
+                    <td className="px-3 py-2.5 text-right text-gray-300" title={r.em_low && r.em_high ? `Range ${fmt(r.em_low)} to ${fmt(r.em_high)}` : ''}>{fmt(r.em_pct)}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{r.call_1sd_strike ? <>{fmt(r.call_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.call_1sd_prob_itm, 0)}% · ₹{fmt(r.call_1sd_per_lot, 0)}</span></> : '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-300">{r.put_1sd_strike ? <>{fmt(r.put_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.put_1sd_prob_itm, 0)}% · ₹{fmt(r.put_1sd_per_lot, 0)}</span></> : '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-400">{r.atm_vol_lots !== null && r.atm_vol_lots !== undefined ? fmt(r.atm_vol_lots, 0) : '—'}</td>
                     <td className="px-3 py-2.5 text-right"><span className={dot(r.gScore)}>● </span>{r.regime === 'LONG_GAMMA' ? 'Long' : r.regime === 'SHORT_GAMMA' ? 'Short' : '—'}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.pct_to_flip)}</td>
                     <td className="px-3 py-2.5 text-left text-[11px] text-amber-400">
-                      {r.iv_crush_watch ? 'IV crush watch ' : ''}{r.regime === 'SHORT_GAMMA' ? 'Short gamma: moves can amplify ' : ''}{r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5 ? 'Near gamma flip' : ''}
+                      {r.iv_crush_watch ? 'IV crush watch ' : ''}{r.liq_thin ? 'Thin liquidity ' : ''}{r.days_to_expiry <= 5 ? 'Expiry week: physical delivery if ITM ' : ''}{r.regime === 'SHORT_GAMMA' ? 'Short gamma: moves can amplify ' : ''}{r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5 ? 'Near gamma flip' : ''}
                     </td>
                   </tr>
                 ))}
@@ -182,7 +215,11 @@ export default function SellerScreenPage() {
           <details className="mt-6 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
             <summary className="cursor-pointer text-gray-300 font-semibold">How the score works</summary>
             <ul className="mt-3 space-y-2 list-disc pl-5">
-              <li><b>Vega (35 points):</b> how expensive options are versus what the stock actually moved. IV/RV of 0.9 scores zero and 1.8 or more scores full.</li>
+              <li><b>Vega (35 points):</b> how expensive options are versus what the stock actually moved (IV/RV of 0.9 scores zero, 1.8 or more scores full), blended with IV percentile, meaning how high today's IV is against this stock's own past readings.</li>
+              <li><b>IV percentile:</b> the share of past sessions with lower IV. The number in brackets is how many sessions it is based on. History is still short, so treat it as indicative and hover for details.</li>
+              <li><b>1SD move %:</b> the one-standard-deviation move the options imply until expiry. About two thirds of the time price is expected to finish inside that range. The Call and Put beyond 1SD columns show the first strike outside it, its probability of finishing in the money, and the premium per lot. Probabilities are model estimates from implied volatility.</li>
+              <li><b>ATM vol (lots) and Thin liquidity:</b> options volume at the at-the-money strike. Thin means fills may be poor and spreads wide.</li>
+              <li><b>Expiry week flag:</b> stock options settle by delivery in India, so in-the-money positions near expiry carry delivery and higher margin implications.</li>
               <li><b>Theta (35 points):</b> how fast the ATM straddle decays each day. 0.5%/day scores zero and 6%/day or more scores full.</li>
               <li><b>Gamma (30 points):</b> long gamma (dealer hedging tends to dampen moves) scores full, halved when the gamma flip level is within 1.5% of price. Short gamma scores zero.</li>
               <li>Green dot means strong, amber means middling, grey means weak for that Greek.</li>

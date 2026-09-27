@@ -97,10 +97,14 @@ function verdictFor(r: Scored): Verdict {
       cls: 'bg-gray-800/60 text-gray-300 border-gray-700',
     }
   }
-  if (r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5) {
+  // Flip is judged against the stock's own 1SD expected move (em_pct), not a flat number: close to
+  // expiry every stock's flip level sits near spot, so a fixed percent flags almost everything. A flip
+  // that is closer than roughly a third of a stock's own typical move to expiry is the one worth a flag.
+  const flipBand = r.em_pct ? r.em_pct * 0.35 : 1.5
+  if (r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < flipBand) {
     return {
       type: 'caution', emoji: '⚪', label: 'Caution: near gamma flip',
-      reason: `Price is within 1.5% of the gamma flip level (${fmt(r.pct_to_flip)}%) — a small move here can shift dealer hedging from calming moves to amplifying them.`,
+      reason: `The flip level is only ${fmt(r.pct_to_flip)}% away, closer than this stock's own expected move to expiry (${r.em_pct ? fmt(r.em_pct) : '—'}%) — a small move here can shift dealer hedging from calming moves to amplifying them.`,
       cls: 'bg-gray-800/60 text-gray-300 border-gray-700',
     }
   }
@@ -330,7 +334,7 @@ export default function SellerScreenPage() {
           <details className="mt-6 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
             <summary className="cursor-pointer text-gray-300 font-semibold">How the score works</summary>
             <ul className="mt-3 space-y-2 list-disc pl-5">
-              <li><b>Verdict:</b> 🟢 Favors sellers means at least two of (IV rich vs realized, decay faster than normal, long gamma, front-month IV spike) point the same way, and it isn't already flagged below. 🔵 Favors buyers is the mirror case (IV cheap, short gamma, front-month IV cheap). 🟠 Event risk always takes priority when results fall before this expiry — IV can swing either way around the announcement, so it overrides the sell/buy read. ⚪ Caution flags thin liquidity or a gamma flip level within 1.5% of price, both of which matter to buyers and sellers alike. ⚪ Neutral / mixed means the signals don't agree. Hover a verdict pill for the one-line reason. Use the Sellers/Buyers toggle above the table to hide rows that don't suit you (Event/Caution rows stay visible either way, since they're risk warnings for everyone).</li>
+              <li><b>Verdict:</b> 🟢 Favors sellers means at least two of (IV rich vs realized, decay faster than normal, long gamma, front-month IV spike) point the same way, and it isn't already flagged below. 🔵 Favors buyers is the mirror case (IV cheap, short gamma, front-month IV cheap). 🟠 Event risk always takes priority when results fall before this expiry — IV can swing either way around the announcement, so it overrides the sell/buy read. ⚪ Caution flags thin liquidity or a gamma flip level closer than roughly a third of the stock's own expected move to expiry, both of which matter to buyers and sellers alike. ⚪ Neutral / mixed means the signals don't agree. Hover a verdict pill for the one-line reason. Use the Sellers/Buyers toggle above the table to hide rows that don't suit you (Event/Caution rows stay visible either way, since they're risk warnings for everyone).</li>
               <li><b>Vega (45 points):</b> how expensive options are versus what the stock actually moved (IV/RV of 0.9 scores zero, 1.8 or more scores full), blended with IV percentile, meaning how high today's IV is against this stock's own past readings.</li>
               <li><b>Month IV and Term:</b> the Term column shows near-expiry IV divided by next-month IV, with both IV values. Above 1.15 (Front spike) the front month is expensive relative to next month, which usually means an event or stress, and it adds up to 8 points. Below 0.85 (Front cheap) it takes points away. Within 7 days of expiry, IV/RV and the IV percentile are judged on next-month IV, shown with M, because a contract a few days from expiry is not comparable with a year of history. Decay, gamma and the 1SD columns still describe the near expiry.</li>
               <li><b>To flip %:</b> the distance from price to the gamma flip level. Negative means price is below the flip level and positive means above. Within 1.5% is tagged Near flip.</li>

@@ -1,5 +1,6 @@
 'use client'
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 
 export interface Alert {
   id: number; signal: string; symbol: string; strike?: number
@@ -92,6 +93,20 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   const [marketOpen, setMarketOpen]   = useState(false)
   const [lastSeenId, setLastSeenId]   = useState(0)
   const audioCtxRef = useRef<AudioContext | null>(null)
+  // Alerts polling is member-only data -- wait for a real sign-in session before
+  // starting it, so a signed-out visitor or a stale tab left open after logout
+  // doesn't poll forever with nothing to send (Sep 27 2026: this was generating
+  // most of the gate's no-token traffic -- see /admin/gate-stats blocked_clients).
+  const [signedIn, setSignedIn] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    supabase.auth.getSession().then(({ data }) => { if (live) setSignedIn(!!data.session) })
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedIn(!!session)
+    })
+    return () => { live = false; sub.subscription.unsubscribe() }
+  }, [])
 
   const getAudioCtx = useCallback((): AudioContext => {
     if (!audioCtxRef.current) {
@@ -106,6 +121,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   }, [getAudioCtx])
 
   useEffect(() => {
+    if (!signedIn) return
     let localAlerts: Alert[] = []
     try {
       const saved = localStorage.getItem('gn_alerts')
@@ -141,7 +157,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {})
 
     return () => clearInterval(t)
-  }, [])
+  }, [signedIn])
 
   // Priority signals (currently just NEAR_STRIKE_UNWIND) are fetched on
   // their own, filtered server-side, so high-volume routine signal types
@@ -149,6 +165,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   // feed's plain top-100 window, this list only ever holds these rarer,
   // higher-conviction alerts.
   useEffect(() => {
+    if (!signedIn) return
     const fetchPriority = () => {
       fetch(`${API}/alerts?limit=20&signal=${PRIORITY_SIGNALS.join(',')}`)
         .then(r => r.json())
@@ -158,7 +175,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     fetchPriority()
     const t = setInterval(fetchPriority, 60 * 1000)
     return () => clearInterval(t)
-  }, [])
+  }, [signedIn])
 
   useEffect(() => {
     if ('Notification' in window) setPermission(Notification.permission)

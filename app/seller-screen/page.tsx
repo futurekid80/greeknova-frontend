@@ -74,6 +74,59 @@ function scoreRow(r: Row): Scored {
   return { ...r, score, vScore, tScore, gScore }
 }
 
+type Verdict = {
+  type: 'sellers' | 'buyers' | 'event' | 'caution' | 'neutral'
+  label: string
+  emoji: string
+  reason: string
+  cls: string
+}
+
+function verdictFor(r: Scored): Verdict {
+  if (r.result_before_expiry) {
+    return {
+      type: 'event', emoji: '🟠', label: 'Event risk',
+      reason: `Results due in ${r.days_to_result ?? '?'} day(s), before this expiry — expect IV swings around the announcement, in either direction.`,
+      cls: 'bg-orange-950/40 text-orange-300 border-orange-900/50',
+    }
+  }
+  if (r.liq_thin) {
+    return {
+      type: 'caution', emoji: '⚪', label: 'Caution: thin liquidity',
+      reason: 'Low ATM volume at this strike — fills may be poor and spreads wide. Trade smaller size or use limit orders.',
+      cls: 'bg-gray-800/60 text-gray-300 border-gray-700',
+    }
+  }
+  if (r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5) {
+    return {
+      type: 'caution', emoji: '⚪', label: 'Caution: near gamma flip',
+      reason: `Price is within 1.5% of the gamma flip level (${fmt(r.pct_to_flip)}%) — a small move here can shift dealer hedging from calming moves to amplifying them.`,
+      cls: 'bg-gray-800/60 text-gray-300 border-gray-700',
+    }
+  }
+  const reasons: string[] = []
+  let sellCount = 0, buyCount = 0
+  if (r.vScore >= 0.6) { sellCount++; reasons.push('IV is rich versus realized moves') }
+  if (r.vScore <= 0.3) { buyCount++; reasons.push('IV is cheap versus realized moves') }
+  if (r.tScore >= 0.6) { sellCount++; reasons.push('decay is faster than normal for this expiry') }
+  if (r.gScore >= 1) { sellCount++; reasons.push('long gamma keeps moves calmer') }
+  if (r.regime === 'SHORT_GAMMA') { buyCount++; reasons.push('short gamma can amplify moves') }
+  if (r.term_state === 'FRONT_SPIKE') { sellCount++; reasons.push('near-expiry IV is rich versus next month') }
+  if (r.term_state === 'FRONT_CHEAP') { buyCount++; reasons.push('near-expiry IV is cheap versus next month') }
+
+  if (sellCount >= 2 && sellCount > buyCount) {
+    return { type: 'sellers', emoji: '🟢', label: 'Favors sellers', reason: reasons.slice(0, 2).join('; ') + '.', cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900/50' }
+  }
+  if (buyCount >= 2 && buyCount > sellCount) {
+    return { type: 'buyers', emoji: '🔵', label: 'Favors buyers', reason: reasons.slice(0, 2).join('; ') + '.', cls: 'bg-sky-950/40 text-sky-300 border-sky-900/50' }
+  }
+  return {
+    type: 'neutral', emoji: '⚪', label: 'Neutral / mixed',
+    reason: reasons.length ? reasons.slice(0, 2).join('; ') + '.' : 'No strong signal either way right now.',
+    cls: 'bg-gray-800/60 text-gray-400 border-gray-700',
+  }
+}
+
 export default function SellerScreenPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [asOf, setAsOf] = useState('')
@@ -88,6 +141,7 @@ export default function SellerScreenPage() {
   const [noResults, setNoResults] = useState(false)
   const [more, setMore] = useState(false)
   const [gammaPref, setGammaPref] = useState<'ANY' | 'LONG' | 'SHORT'>('ANY')
+  const [audience, setAudience] = useState<'ALL' | 'SELLERS' | 'BUYERS'>('ALL')
   const [sortKey, setSortKey] = useState<SortKey>('score')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -107,7 +161,7 @@ export default function SellerScreenPage() {
   }, [])
   useEffect(() => { load() }, [load])
 
-  const scored = useMemo(() => rows.map(scoreRow), [rows])
+  const scored = useMemo(() => rows.map(scoreRow).map((s) => ({ ...s, verdict: verdictFor(s) })), [rows])
 
   const shown = useMemo(() => {
     const q = search.trim().toUpperCase()
@@ -122,6 +176,8 @@ export default function SellerScreenPage() {
       if (noResults && r.result_before_expiry) return false
       if (gammaPref === 'LONG' && r.regime !== 'LONG_GAMMA') return false
       if (gammaPref === 'SHORT' && r.regime !== 'SHORT_GAMMA') return false
+      if (audience === 'SELLERS' && r.verdict.type === 'buyers') return false
+      if (audience === 'BUYERS' && r.verdict.type === 'sellers') return false
       return true
     })
     const dir = sortDir === 'asc' ? 1 : -1
@@ -133,7 +189,7 @@ export default function SellerScreenPage() {
       if (bv === null || bv === undefined) return -1
       return (av - bv) * dir
     })
-  }, [scored, search, minIvRv, minDecay, maxDte, minPctile, hideThin, noResults, gammaPref, sortKey, sortDir])
+  }, [scored, search, minIvRv, minDecay, maxDte, minPctile, hideThin, noResults, gammaPref, audience, sortKey, sortDir])
 
   function sortBy(k: SortKey) {
     if (k === sortKey) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -154,7 +210,7 @@ export default function SellerScreenPage() {
         <div>
           <h1 className="text-2xl font-black text-white">Premium Conditions Screen</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Gamma, Theta and Vega combined into one ranked view of where option premium looks rich, decaying and calm. Nearest active expiry.
+            Gamma, Theta and Vega combined into a plain verdict for each stock — favors sellers, favors buyers, or a caution/event flag. Nearest active expiry.
           </p>
         </div>
         <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Refresh</button>
@@ -167,33 +223,47 @@ export default function SellerScreenPage() {
 
       {!loading && !error && rows.length > 0 && (
         <>
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <span className="text-[11px] text-gray-500 mr-1">Show for:</span>
+            <button className={chip(audience === 'ALL')} onClick={() => setAudience('ALL')}>Everyone</button>
+            <button className={chip(audience === 'SELLERS')} onClick={() => setAudience('SELLERS')}>🟢 Sellers</button>
+            <button className={chip(audience === 'BUYERS')} onClick={() => setAudience('BUYERS')}>🔵 Buyers</button>
+          </div>
+
           <div className="flex items-end gap-4 flex-wrap mb-4">
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search stock"
               className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-sm text-gray-200 w-40" />
-            <label className="text-[11px] text-gray-500">Min IV/RV
-              <input type="number" step="0.1" value={minIvRv} onChange={(e) => setMinIvRv(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
-            <label className="text-[11px] text-gray-500">Min decay %/day
-              <input type="number" step="0.5" value={minDecay} onChange={(e) => setMinDecay(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
-            <label className="text-[11px] text-gray-500">Max days to expiry
-              <input type="number" step="1" value={maxDte} onChange={(e) => setMaxDte(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
-            <label className="text-[11px] text-gray-500">Min IV percentile
-              <input type="number" step="10" value={minPctile} onChange={(e) => setMinPctile(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
             <button className={chip(hideThin)} onClick={() => setHideThin(!hideThin)}>Hide thin liquidity</button>
-            <button className={chip(more)} onClick={() => setMore(!more)}>{more ? 'Fewer columns' : 'More columns'}</button>
             <button className={chip(noResults)} onClick={() => setNoResults(!noResults)}>Exclude results before expiry</button>
             <div className="flex gap-2">
               <button className={chip(gammaPref === 'ANY')} onClick={() => setGammaPref('ANY')}>Any gamma</button>
               <button className={chip(gammaPref === 'LONG')} onClick={() => setGammaPref('LONG')}>Long gamma only</button>
               <button className={chip(gammaPref === 'SHORT')} onClick={() => setGammaPref('SHORT')}>Short gamma only</button>
             </div>
+            <button className={chip(more)} onClick={() => setMore(!more)}>{more ? 'Fewer columns' : 'More columns'}</button>
             <span className="text-xs text-gray-500 pb-2">{shown.length} of {rows.length} stocks</span>
           </div>
+
+          <details className="mb-4">
+            <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-gray-300">Advanced number filters</summary>
+            <div className="flex items-end gap-4 flex-wrap mt-3">
+              <label className="text-[11px] text-gray-500">Min IV/RV
+                <input type="number" step="0.1" value={minIvRv} onChange={(e) => setMinIvRv(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+              <label className="text-[11px] text-gray-500">Min decay %/day
+                <input type="number" step="0.5" value={minDecay} onChange={(e) => setMinDecay(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+              <label className="text-[11px] text-gray-500">Max days to expiry
+                <input type="number" step="1" value={maxDte} onChange={(e) => setMaxDte(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+              <label className="text-[11px] text-gray-500">Min IV percentile
+                <input type="number" step="10" value={minPctile} onChange={(e) => setMinPctile(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+            </div>
+          </details>
 
           <div className="overflow-x-auto rounded-xl border border-gray-800">
             <table className="w-full text-sm">
               <thead className="bg-gray-900/60">
                 <tr>
                   <th className={th + ' !text-left'} onClick={() => sortBy('symbol')}>Stock{arrow('symbol')}</th>
+                  <th className={th + ' !text-left'}>Verdict</th>
                   <th className={th} onClick={() => sortBy('score')}>Score{arrow('score')}</th>
                   <th className={th} onClick={() => sortBy('days_to_expiry')}>DTE{arrow('days_to_expiry')}</th>
                   <th className={th} onClick={() => sortBy('iv_rv_ratio')}>IV/RV (Vega){arrow('iv_rv_ratio')}</th>
@@ -215,6 +285,9 @@ export default function SellerScreenPage() {
                 {shown.map((r) => (
                   <tr key={r.symbol} className="border-t border-gray-800/70 hover:bg-gray-900/40">
                     <td className="px-3 py-2 font-bold text-white whitespace-nowrap">{r.symbol}<span className="text-gray-600 text-[10px] ml-2">{fmt(r.cmp)}</span><ResultBadge days={r.days_to_result} beforeExpiry={r.result_before_expiry} /></td>
+                    <td className="px-3 py-2.5 text-left whitespace-nowrap" title={r.verdict.reason}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border ${r.verdict.cls}`}>{r.verdict.emoji} {r.verdict.label}</span>
+                    </td>
                     <td className="px-3 py-2.5 text-right font-black text-white">{r.score}</td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{r.days_to_expiry}</td>
                     <td className="px-3 py-2.5 text-right whitespace-nowrap"><span className={dot(r.vScore)}>● </span>{fmt(r.iv_rv_basis ?? r.iv_rv_ratio)}{r.iv_basis === 'month' && <span className="text-sky-300 text-[10px] ml-1" title={`Judged on next-month IV (${r.iv_month_expiry || ''}) because expiry is within 7 days`}>M</span>}</td>
@@ -257,6 +330,7 @@ export default function SellerScreenPage() {
           <details className="mt-6 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
             <summary className="cursor-pointer text-gray-300 font-semibold">How the score works</summary>
             <ul className="mt-3 space-y-2 list-disc pl-5">
+              <li><b>Verdict:</b> 🟢 Favors sellers means at least two of (IV rich vs realized, decay faster than normal, long gamma, front-month IV spike) point the same way, and it isn't already flagged below. 🔵 Favors buyers is the mirror case (IV cheap, short gamma, front-month IV cheap). 🟠 Event risk always takes priority when results fall before this expiry — IV can swing either way around the announcement, so it overrides the sell/buy read. ⚪ Caution flags thin liquidity or a gamma flip level within 1.5% of price, both of which matter to buyers and sellers alike. ⚪ Neutral / mixed means the signals don't agree. Hover a verdict pill for the one-line reason. Use the Sellers/Buyers toggle above the table to hide rows that don't suit you (Event/Caution rows stay visible either way, since they're risk warnings for everyone).</li>
               <li><b>Vega (45 points):</b> how expensive options are versus what the stock actually moved (IV/RV of 0.9 scores zero, 1.8 or more scores full), blended with IV percentile, meaning how high today's IV is against this stock's own past readings.</li>
               <li><b>Month IV and Term:</b> the Term column shows near-expiry IV divided by next-month IV, with both IV values. Above 1.15 (Front spike) the front month is expensive relative to next month, which usually means an event or stress, and it adds up to 8 points. Below 0.85 (Front cheap) it takes points away. Within 7 days of expiry, IV/RV and the IV percentile are judged on next-month IV, shown with M, because a contract a few days from expiry is not comparable with a year of history. Decay, gamma and the 1SD columns still describe the near expiry.</li>
               <li><b>To flip %:</b> the distance from price to the gamma flip level. Negative means price is below the flip level and positive means above. Within 1.5% is tagged Near flip.</li>

@@ -39,6 +39,7 @@ const NAV_GROUPS = [
       { href: '/theta', label: 'Θ Theta Decay' },
       { href: '/vega', label: 'ν Vega Exposure' },
       { href: '/seller-screen', label: '🧭 Premium Screen' },
+      { href: '/strategy-builder', label: '🛠️ Strategy Builder' },
     ]
   },
   {

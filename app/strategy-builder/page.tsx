@@ -2,7 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ALL_SYMBOLS, getLotSize } from '@/lib/symbols'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 
 const API = 'https://api.greeknova.com'
 
@@ -317,7 +317,25 @@ export default function StrategyBuilder() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
                 <div className="lg:col-span-2 rounded-xl border border-gray-800 bg-gray-900/20 p-4 h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={analysis.points} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <AreaChart data={analysis.points} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <defs>
+                        {(() => {
+                          const yMax = Math.max(0, analysis.maxProfit)
+                          const yMin = Math.min(0, analysis.maxLoss)
+                          const span = yMax - yMin
+                          // fraction of the chart's height (0 = top) where the curve crosses zero,
+                          // so the fill can switch from green (profit) to red (loss) right at that line
+                          const zeroOffset = span <= 0 ? 0.5 : Math.max(0, Math.min(1, yMax / span))
+                          return (
+                            <linearGradient id="pnlSplit" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset={0} stopColor="#22c55e" stopOpacity={0.9} />
+                              <stop offset={zeroOffset} stopColor="#22c55e" stopOpacity={0.9} />
+                              <stop offset={zeroOffset} stopColor="#ef4444" stopOpacity={0.9} />
+                              <stop offset={1} stopColor="#ef4444" stopOpacity={0.9} />
+                            </linearGradient>
+                          )
+                        })()}
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                       <XAxis dataKey="spot" tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(v) => fmtNum(v)} />
                       <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(v) => fmtNum(v)} />
@@ -327,8 +345,8 @@ export default function StrategyBuilder() {
                         labelFormatter={(l) => `Spot ${fmtNum(Number(l))}`} />
                       <ReferenceLine y={0} stroke="#4b5563" />
                       <ReferenceLine x={data.spot} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: 'Spot', position: 'insideTopRight', fill: '#f59e0b', fontSize: 10 }} />
-                      <Line type="monotone" dataKey="pnl" stroke="#22d3ee" strokeWidth={2} dot={false} />
-                    </LineChart>
+                      <Area type="monotone" dataKey="pnl" stroke="url(#pnlSplit)" strokeWidth={2} fill="url(#pnlSplit)" fillOpacity={0.25} dot={false} />
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="space-y-3">

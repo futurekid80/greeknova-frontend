@@ -1,6 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ALL_SYMBOLS, getLotSize } from '@/lib/symbols'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
@@ -62,7 +62,7 @@ function payoffAt(spot: number, legs: Leg[], lotSize: number): number {
   return total
 }
 
-export default function StrategyBuilder() {
+function StrategyBuilderInner() {
   const searchParams = useSearchParams()
   const urlSymbol = searchParams.get('symbol')?.toUpperCase() || 'NIFTY'
   const urlSellCE = searchParams.get('sellCE')
@@ -422,5 +422,13 @@ export default function StrategyBuilder() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function StrategyBuilder() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#07070e]" />}>
+      <StrategyBuilderInner />
+    </Suspense>
   )
 }

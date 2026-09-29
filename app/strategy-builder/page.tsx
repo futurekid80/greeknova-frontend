@@ -1,6 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { ALL_SYMBOLS, getLotSize } from '@/lib/symbols'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 
@@ -62,8 +63,14 @@ function payoffAt(spot: number, legs: Leg[], lotSize: number): number {
 }
 
 export default function StrategyBuilder() {
-  const [symbol, setSymbol] = useState('NIFTY')
-  const [symbolInput, setSymbolInput] = useState('NIFTY')
+  const searchParams = useSearchParams()
+  const urlSymbol = searchParams.get('symbol')?.toUpperCase() || 'NIFTY'
+  const urlSellCE = searchParams.get('sellCE')
+  const urlSellPE = searchParams.get('sellPE')
+  const appliedFromUrl = useRef(false)
+
+  const [symbol, setSymbol] = useState(urlSymbol)
+  const [symbolInput, setSymbolInput] = useState(urlSymbol)
   const [expiry, setExpiry] = useState('')
   const [data, setData] = useState<ChainData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -86,6 +93,26 @@ export default function StrategyBuilder() {
 
   useEffect(() => { setExpiry(''); setLegs([]); setActiveTemplate(null) }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
+
+  // Coming from the Premium Screen's "Build" link: once the chain loads, sell the
+  // exact call-wall / put-wall strikes it linked to (nearest available strike),
+  // instead of an ATM-offset template. Runs once per page load.
+  useEffect(() => {
+    if (appliedFromUrl.current || !data?.chain.length || (!urlSellCE && !urlSellPE)) return
+    appliedFromUrl.current = true
+    const nearest = (target: number) =>
+      data.chain.reduce((best, row) => (Math.abs(row.strike - target) < Math.abs(best.strike - target) ? row : best), data.chain[0])
+    const built: Leg[] = []
+    if (urlSellCE) {
+      const row = nearest(Number(urlSellCE))
+      built.push({ id: newLegId(), action: 'SELL', optType: 'CE', strike: row.strike, premium: row.ce.ltp || 0, lots: 1 })
+    }
+    if (urlSellPE) {
+      const row = nearest(Number(urlSellPE))
+      built.push({ id: newLegId(), action: 'SELL', optType: 'PE', strike: row.strike, premium: row.pe.ltp || 0, lots: 1 })
+    }
+    if (built.length) { setLegs(built); setActiveTemplate(null) }
+  }, [data, urlSellCE, urlSellPE])
 
   const strikes = useMemo(() => data?.chain.map((r) => r.strike) ?? [], [data])
   const atmIndex = useMemo(() => {
@@ -198,6 +225,11 @@ export default function StrategyBuilder() {
         <p className="text-sm text-gray-500 mt-1 mb-5">
           Pick a premade strategy or build your own from the live option chain — see the payoff before you place anything.
         </p>
+        {(urlSellCE || urlSellPE) && (
+          <p className="text-xs text-cyan-400 mb-4 -mt-3">
+            Pre-filled from the Premium Screen: selling {urlSellPE ? `PE ${urlSellPE}` : ''}{urlSellPE && urlSellCE ? ' and ' : ''}{urlSellCE ? `CE ${urlSellCE}` : ''} — the strikes carrying the most gamma-weighted OI on each side.
+          </p>
+        )}
 
         {/* Symbol + expiry */}
         <div className="flex items-end gap-3 flex-wrap mb-5">

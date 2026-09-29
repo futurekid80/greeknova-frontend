@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import ResultBadge from '@/components/ResultBadge'
 
@@ -45,6 +46,12 @@ type Row = {
   result_date?: string | null
   days_to_result?: number | null
   result_before_expiry?: boolean | null
+  call_wall_strike?: number | null
+  call_wall_gamma_oi?: number | null
+  put_wall_strike?: number | null
+  put_wall_gamma_oi?: number | null
+  pct_to_call_wall?: number | null
+  pct_to_put_wall?: number | null
 }
 
 type Scored = Row & { score: number; vScore: number; tScore: number; gScore: number }
@@ -53,6 +60,32 @@ type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_thet
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
 const clamp = (x: number) => Math.max(0, Math.min(1, x))
+
+function strategyLink(r: Row) {
+  const params = new URLSearchParams({ symbol: r.symbol })
+  if (r.call_wall_strike) params.set('sellCE', String(r.call_wall_strike))
+  if (r.put_wall_strike) params.set('sellPE', String(r.put_wall_strike))
+  return `/strategy-builder?${params.toString()}`
+}
+
+function exportCsv(list: (Scored & { verdict: Verdict })[]) {
+  const headers = ['Symbol', 'CMP', 'Verdict', 'Score', 'DTE', 'IV/RV', 'Decay %/day', 'IV Percentile', '1SD Move %', 'Gamma Regime', 'To Flip %', 'Put Wall (support)', 'Call Wall (resistance)']
+  const rows = list.map((r) => [
+    r.symbol, r.cmp, r.verdict.label, r.score, r.days_to_expiry,
+    r.iv_rv_basis ?? r.iv_rv_ratio ?? '', r.atm_theta_pct ?? '', r.iv_pctile ?? '', r.em_pct ?? '',
+    r.regime ?? '', r.pct_to_flip ?? '', r.put_wall_strike ?? '', r.call_wall_strike ?? '',
+  ])
+  const lines = [headers, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `greeknova-seller-screen-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 function scoreRow(r: Row): Scored {
   // Vega: IV richer than realized vol scores higher (ratio 0.9 -> 0, 1.8 -> 1)
@@ -217,7 +250,10 @@ export default function SellerScreenPage() {
             Gamma, Theta and Vega combined into a plain verdict for each stock — favors sellers, favors buyers, or a caution/event flag. Nearest active expiry.
           </p>
         </div>
-        <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Refresh</button>
+        <div className="flex gap-2">
+          <button onClick={() => exportCsv(shown)} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Export CSV</button>
+          <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Refresh</button>
+        </div>
       </div>
       {asOf && <p className="text-xs text-gray-600 mb-1">As of {asOf} IST · scores are a data ranking, not a recommendation</p>}
       <p className="text-xs text-gray-600 mb-5">Within 7 days of expiry, IV/RV and IV percentile use next-month IV (marked M) so they stay comparable. The Term column compares near-expiry IV with month IV, so a front-month spike is never hidden.</p>
@@ -281,8 +317,10 @@ export default function SellerScreenPage() {
                   <th className={th}>Put beyond 1SD</th>
                   {more && <th className={th} onClick={() => sortBy('atm_vol_lots')}>ATM vol (lots){arrow('atm_vol_lots')}</th>}
                   <th className={th}>Gamma</th>
+                  <th className={th + ' !text-left'} title="Strikes carrying the most gamma-weighted OI on each side — where writers are concentrated, and the natural strikes to sell against">Strikes to write</th>
                   <th className={th} onClick={() => sortBy('pct_to_flip')}>To flip %{arrow('pct_to_flip')}</th>
                   <th className={th + ' !text-left'}>Flags</th>
+                  <th className={th + ' !text-left'}>Strategy</th>
                 </tr>
               </thead>
               <tbody>
@@ -310,6 +348,11 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2.5 text-right text-gray-300 whitespace-nowrap">{r.put_1sd_strike ? <>{fmt(r.put_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.put_1sd_prob_itm, 0)}% · ₹{fmt(r.put_1sd_per_lot, 0)}</span></> : '—'}</td>
                     {more && <td className="px-3 py-2.5 text-right text-gray-400">{r.atm_vol_lots !== null && r.atm_vol_lots !== undefined ? fmt(r.atm_vol_lots, 0) : '—'}</td>}
                     <td className="px-3 py-2.5 text-right whitespace-nowrap"><span className={dot(r.gScore)}>● </span>{r.regime === 'LONG_GAMMA' ? 'Long' : r.regime === 'SHORT_GAMMA' ? 'Short' : '—'}</td>
+                    <td className="px-3 py-2.5 text-left whitespace-nowrap text-[11px]">
+                      {r.put_wall_strike ? <span className="text-emerald-400" title={`Put wall — most gamma-weighted PE open interest, acting as support${r.pct_to_put_wall !== null && r.pct_to_put_wall !== undefined ? ` (${fmt(r.pct_to_put_wall)}% below spot)` : ''}`}>PE {fmt(r.put_wall_strike, 0)}</span> : <span className="text-gray-600">—</span>}
+                      {' / '}
+                      {r.call_wall_strike ? <span className="text-sky-400" title={`Call wall — most gamma-weighted CE open interest, acting as resistance${r.pct_to_call_wall !== null && r.pct_to_call_wall !== undefined ? ` (${fmt(r.pct_to_call_wall)}% above spot)` : ''}`}>CE {fmt(r.call_wall_strike, 0)}</span> : <span className="text-gray-600">—</span>}
+                    </td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.pct_to_flip)}</td>
                     <td className="px-3 py-2.5 text-left text-[10px] whitespace-nowrap">
                       {[
@@ -324,6 +367,11 @@ export default function SellerScreenPage() {
                       ].filter(Boolean).map((f) => (
                         <span key={String(f)} className="mr-1 px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-400 border border-amber-900/50">{f}</span>
                       ))}
+                    </td>
+                    <td className="px-3 py-2.5 text-left whitespace-nowrap">
+                      <Link href={strategyLink(r)} className="px-2 py-1 rounded-md text-[11px] font-semibold border border-cyan-900/60 text-cyan-400 hover:bg-cyan-950/40">
+                        🛠️ Build →
+                      </Link>
                     </td>
                   </tr>
                 ))}

@@ -97,12 +97,33 @@ function AccumulationBars({ history, commodity }: { history: HistoryRow[]; commo
   );
 }
 
-function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[] | undefined; currentPrice: number }) {
+function OIMapChart({ strikes, currentPrice, commodity }: { strikes: StrikeRow[] | undefined; currentPrice: number; commodity: string }) {
   if (!strikes?.length) return (
     <div style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-tertiary)", fontSize: 13 }}>
       No strike data yet — run seed first
     </div>
   );
+
+  const [exitMap, setExitMap] = useState<{ pe: Record<number, number>; ce: Record<number, number> }>({ pe: {}, ce: {} });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchExitTotals() {
+      try {
+        const res = await fetch(`/api/mcx/session-exits/${commodity}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        const pe: Record<number, number> = {};
+        const ce: Record<number, number> = {};
+        (d.pe_exits_near || []).forEach((e: { strike: number; total_exited: number }) => { pe[e.strike] = e.total_exited; });
+        (d.ce_exits_near || []).forEach((e: { strike: number; total_exited: number }) => { ce[e.strike] = e.total_exited; });
+        if (!cancelled) setExitMap({ pe, ce });
+      } catch {}
+    }
+    fetchExitTotals();
+    const interval = setInterval(fetchExitTotals, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [commodity]);
 
   // Sort ascending for left-to-right display, filter out zero/invalid strikes
   const sorted = [...(strikes || [])].filter(s => s.strike > 0).sort((a, b) => a.strike - b.strike);
@@ -220,6 +241,38 @@ function OIMapChart({ strikes, currentPrice }: { strikes: StrikeRow[] | undefine
                   {oiLabel(row.ce_oi)}
                 </text>
               )}
+
+              {/* Session exit tag — only when material vs current OI */}
+              {(() => {
+                const peExit = exitMap.pe[row.strike] || 0;
+                const material = Math.max(50, row.pe_oi * 0.1);
+                if (Math.abs(peExit) < material) return null;
+                return (
+                  <g>
+                    <rect x={peX + BAR_W / 2 - 20} y={baseY - peH - 22} width={40} height={13} rx={3}
+                      fill="#0B0B0B" stroke="#E24B4A" strokeWidth={1} opacity={0.95} />
+                    <text x={peX + BAR_W / 2} y={baseY - peH - 12.5} textAnchor="middle"
+                      fontSize={9} fontWeight="700" fill="#E24B4A">
+                      {peExit > 0 ? "+" : "−"}{Math.abs(peExit)}
+                    </text>
+                  </g>
+                );
+              })()}
+              {(() => {
+                const ceExit = exitMap.ce[row.strike] || 0;
+                const material = Math.max(50, row.ce_oi * 0.1);
+                if (Math.abs(ceExit) < material) return null;
+                return (
+                  <g>
+                    <rect x={ceX + BAR_W / 2 - 20} y={baseY - ceH - 22} width={40} height={13} rx={3}
+                      fill="#0B0B0B" stroke="#1D9E75" strokeWidth={1} opacity={0.95} />
+                    <text x={ceX + BAR_W / 2} y={baseY - ceH - 12.5} textAnchor="middle"
+                      fontSize={9} fontWeight="700" fill="#1D9E75">
+                      {ceExit > 0 ? "+" : "−"}{Math.abs(ceExit)}
+                    </text>
+                  </g>
+                );
+              })()}
 
               {/* Strike label */}
               <text x={midX} y={baseY + 16} textAnchor="middle"
@@ -581,7 +634,7 @@ export default function OIMapPage() {
             <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 12 }}>
               PE (green) = put writers defending · CE (red) = call writers capping
             </div>
-            <OIMapChart strikes={data.strike_oi} currentPrice={data.current_price} />
+            <OIMapChart strikes={data.strike_oi} currentPrice={data.current_price} commodity={selected} />
             <SessionExitSummary commodity={selected} />
           </div>
 

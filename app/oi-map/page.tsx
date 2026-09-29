@@ -245,8 +245,7 @@ function OIMapChart({ strikes, currentPrice, commodity }: { strikes: StrikeRow[]
               {/* Session exit tag — only when material vs current OI */}
               {(() => {
                 const peExit = exitMap.pe[row.strike] || 0;
-                const material = Math.max(50, row.pe_oi * 0.1);
-                if (Math.abs(peExit) < material) return null;
+                if (Math.abs(peExit) < 15) return null;
                 return (
                   <g>
                     <rect x={peX + BAR_W / 2 - 20} y={baseY - peH - 22} width={40} height={13} rx={3}
@@ -260,8 +259,7 @@ function OIMapChart({ strikes, currentPrice, commodity }: { strikes: StrikeRow[]
               })()}
               {(() => {
                 const ceExit = exitMap.ce[row.strike] || 0;
-                const material = Math.max(50, row.ce_oi * 0.1);
-                if (Math.abs(ceExit) < material) return null;
+                if (Math.abs(ceExit) < 15) return null;
                 return (
                   <g>
                     <rect x={ceX + BAR_W / 2 - 20} y={baseY - ceH - 22} width={40} height={13} rx={3}

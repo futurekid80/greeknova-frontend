@@ -105,6 +105,7 @@ function OIMapChart({ strikes, currentPrice, commodity }: { strikes: StrikeRow[]
   );
 
   const [exitMap, setExitMap] = useState<{ pe: Record<number, number>; ce: Record<number, number> }>({ pe: {}, ce: {} });
+  const [netMap, setNetMap] = useState<{ pe: Record<string, number>; ce: Record<string, number> }>({ pe: {}, ce: {} });
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +118,10 @@ function OIMapChart({ strikes, currentPrice, commodity }: { strikes: StrikeRow[]
         const ce: Record<number, number> = {};
         (d.pe_exits_near || []).forEach((e: { strike: number; total_exited: number }) => { pe[e.strike] = e.total_exited; });
         (d.ce_exits_near || []).forEach((e: { strike: number; total_exited: number }) => { ce[e.strike] = e.total_exited; });
-        if (!cancelled) setExitMap({ pe, ce });
+        if (!cancelled) {
+          setExitMap({ pe, ce });
+          setNetMap({ pe: d.pe_net_by_strike || {}, ce: d.ce_net_by_strike || {} });
+        }
       } catch {}
     }
     fetchExitTotals();
@@ -174,15 +178,19 @@ function OIMapChart({ strikes, currentPrice, commodity }: { strikes: StrikeRow[]
           const peH = bH(row.pe_oi);
           const ceH = bH(row.ce_oi);
 
-          // Adding stripe height — proportional to delta vs total
-          const peDeltaFrac = row.pe_delta > 0 ? Math.min(row.pe_delta / row.pe_oi, 1) : 0;
-          const ceDeltaFrac = row.ce_delta > 0 ? Math.min(row.ce_delta / row.ce_oi, 1) : 0;
+          // Full-day net change at this strike (falls back to scan delta if not yet loaded)
+          const peNet = netMap.pe[String(row.strike)] ?? row.pe_delta;
+          const ceNet = netMap.ce[String(row.strike)] ?? row.ce_delta;
+
+          // Adding stripe height — proportional to net-for-the-day vs total
+          const peDeltaFrac = peNet > 0 ? Math.min(peNet / row.pe_oi, 1) : 0;
+          const ceDeltaFrac = ceNet > 0 ? Math.min(ceNet / row.ce_oi, 1) : 0;
           const peStripeH = Math.max(2, Math.round(peH * peDeltaFrac));
           const ceStripeH = Math.max(2, Math.round(ceH * ceDeltaFrac));
 
-          // Covering = hollow dashed overlay at top
-          const peCoverFrac = row.pe_delta < 0 ? Math.min(Math.abs(row.pe_delta) / Math.max(row.pe_oi, 1), 1) : 0;
-          const ceCoverFrac = row.ce_delta < 0 ? Math.min(Math.abs(row.ce_delta) / Math.max(row.ce_oi, 1), 1) : 0;
+          // Covering = hollow dashed overlay at top, sized by net-for-the-day
+          const peCoverFrac = peNet < 0 ? Math.min(Math.abs(peNet) / Math.max(row.pe_oi, 1), 1) : 0;
+          const ceCoverFrac = ceNet < 0 ? Math.min(Math.abs(ceNet) / Math.max(row.ce_oi, 1), 1) : 0;
           const peCoverH = Math.max(2, Math.round(peH * peCoverFrac));
           const ceCoverH = Math.max(2, Math.round(ceH * ceCoverFrac));
 
@@ -244,29 +252,29 @@ function OIMapChart({ strikes, currentPrice, commodity }: { strikes: StrikeRow[]
 
               {/* Session exit tag — only when material vs current OI */}
               {(() => {
-                const peExit = exitMap.pe[row.strike] || 0;
-                if (Math.abs(peExit) < 15) return null;
+                if (Math.abs(peNet) < 15) return null;
+                const color = peNet > 0 ? "#1D9E75" : "#E24B4A";
                 return (
                   <g>
                     <rect x={peX + BAR_W / 2 - 20} y={baseY - peH - 22} width={40} height={13} rx={3}
-                      fill="#0B0B0B" stroke="#E24B4A" strokeWidth={1} opacity={0.95} />
+                      fill="#0B0B0B" stroke={color} strokeWidth={1} opacity={0.95} />
                     <text x={peX + BAR_W / 2} y={baseY - peH - 12.5} textAnchor="middle"
-                      fontSize={9} fontWeight="700" fill="#E24B4A">
-                      {peExit > 0 ? "+" : "−"}{Math.abs(peExit)}
+                      fontSize={9} fontWeight="700" fill={color}>
+                      {peNet > 0 ? "+" : "−"}{Math.abs(peNet)}
                     </text>
                   </g>
                 );
               })()}
               {(() => {
-                const ceExit = exitMap.ce[row.strike] || 0;
-                if (Math.abs(ceExit) < 15) return null;
+                if (Math.abs(ceNet) < 15) return null;
+                const color = ceNet > 0 ? "#E24B4A" : "#1D9E75";
                 return (
                   <g>
                     <rect x={ceX + BAR_W / 2 - 20} y={baseY - ceH - 22} width={40} height={13} rx={3}
-                      fill="#0B0B0B" stroke="#1D9E75" strokeWidth={1} opacity={0.95} />
+                      fill="#0B0B0B" stroke={color} strokeWidth={1} opacity={0.95} />
                     <text x={ceX + BAR_W / 2} y={baseY - ceH - 12.5} textAnchor="middle"
-                      fontSize={9} fontWeight="700" fill="#1D9E75">
-                      {ceExit > 0 ? "+" : "−"}{Math.abs(ceExit)}
+                      fontSize={9} fontWeight="700" fill={color}>
+                      {ceNet > 0 ? "+" : "−"}{Math.abs(ceNet)}
                     </text>
                   </g>
                 );

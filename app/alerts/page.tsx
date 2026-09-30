@@ -1,6 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock, Search, X, ExternalLink } from 'lucide-react'
 import { useAlerts } from '@/contexts/AlertsContext'
 import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
@@ -16,10 +16,43 @@ export default function Alerts() {
   const [typeFilter, setTypeFilter]   = useState('all')
   const [sortOrder, setSortOrder]     = useState<'newest'|'oldest'>('newest')
 
+  // The live `alerts` list from context is capped at the last ~100 across every
+  // stock, so on a busy morning an older alert for one symbol falls out of it
+  // within minutes. Once someone searches a specific symbol, pull that
+  // symbol's full day straight from alert_log instead of just filtering
+  // whatever happens to still be in the capped list.
+  const [symbolDayAlerts, setSymbolDayAlerts] = useState<typeof alerts>([])
+  const [symbolDayLoading, setSymbolDayLoading] = useState(false)
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const q = search.trim().toUpperCase()
+    if (searchDebounce.current) clearTimeout(searchDebounce.current)
+    if (q.length < 2) { setSymbolDayAlerts([]); return }
+    searchDebounce.current = setTimeout(() => {
+      setSymbolDayLoading(true)
+      fetch(`https://api.greeknova.com/alerts?symbol=${encodeURIComponent(q)}&limit=500`)
+        .then((r) => r.json())
+        .then((j) => setSymbolDayAlerts(j.alerts || []))
+        .catch(() => setSymbolDayAlerts([]))
+        .finally(() => setSymbolDayLoading(false))
+    }, 400)
+    return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
+  }, [search])
+
   const uniqueSymbols = [...new Set(alerts.map(a => a.symbol))].sort()
   const uniqueTypes   = [...new Set(alerts.map(a => a.signal))]
 
-  const filtered = alerts
+  // Once a symbol-day search has results, that's the full day for this stock --
+  // merge it with the live list (deduped by id) rather than replacing it, so a
+  // fresh alert that just fired (and isn't in alert_log's search response yet
+  // on this exact tick) doesn't disappear while typing.
+  const searchIsSymbol = search.trim().length >= 2
+  const merged = searchIsSymbol
+    ? [...symbolDayAlerts, ...alerts.filter((a) => !symbolDayAlerts.some((b) => b.id === a.id))]
+    : alerts
+
+  const filtered = merged
     .filter(a => {
       if (search) {
         const s = search.toUpperCase()
@@ -180,7 +213,14 @@ export default function Alerts() {
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             Alert Feed
             {alerts.length > 0 && (
-              <span className="text-sm font-normal text-gray-500">({filtered.length} of {alerts.length})</span>
+              <>
+                <span className="text-sm font-normal text-gray-500">({filtered.length} of {alerts.length})</span>
+                {searchIsSymbol && (
+                  <span className="text-xs font-normal text-cyan-400 ml-1">
+                    {symbolDayLoading ? 'Searching full day…' : `· full day for "${search.toUpperCase()}" incl. alerts no longer in the live list`}
+                  </span>
+                )}
+              </>
             )}
           </h2>
           {alerts.length > 0 && (

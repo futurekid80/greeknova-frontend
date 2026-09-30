@@ -199,15 +199,33 @@ export default function EODReport() {
             <h1 className="text-3xl font-black tracking-tight text-white mb-1">EOD Market Report</h1>
             <p className="text-gray-500 text-sm">F&O Positioning · Participant Flow · Stealth Signals · {fmtDate(data.date)}</p>
           </div>
-          <select
-            value={selectedDate}
-            onChange={e => { setSelectedDate(e.target.value); fetchData(e.target.value) }}
-            className="bg-gray-900 border border-gray-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 cursor-pointer"
-          >
-            {data.available_dates.map(d => (
-              <option key={d} value={d} className="bg-gray-900">{fmtDate(d)}</option>
-            ))}
-          </select>
+          <div className="flex items-start gap-2 no-print">
+            <select
+              value={selectedDate}
+              onChange={e => { setSelectedDate(e.target.value); fetchData(e.target.value) }}
+              className="bg-gray-900 border border-gray-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 cursor-pointer"
+            >
+              {data.available_dates.map(d => (
+                <option key={d} value={d} className="bg-gray-900">{fmtDate(d)}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => window.print()}
+              className="bg-gray-900 border border-gray-700 text-gray-200 text-sm rounded-xl px-3 py-2 hover:border-gray-500 whitespace-nowrap"
+            >
+              🖨️ Save PDF
+            </button>
+            <button
+              onClick={() => {
+                const url = 'https://app.greeknova.com/eod-report'
+                const msg = `GreekNova EOD Report — ${fmtDate(data.date)}\nMarket bias: ${biasLabel.replace(/^[^ ]+ /, '')} (${mb.bullish} bullish / ${mb.bearish} bearish / ${mb.neutral} neutral)\n\nFull report: ${url}\n\nEducational only · Not SEBI registered · Not investment advice`
+                window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+              }}
+              className="bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 text-sm rounded-xl px-3 py-2 hover:border-emerald-600 whitespace-nowrap"
+            >
+              💬 Share on WhatsApp
+            </button>
+          </div>
         </div>
 
         {/* Market Bias Banner */}

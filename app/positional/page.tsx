@@ -54,6 +54,20 @@ interface StealthStock {
   rank: number
 }
 
+interface StrikeRung {
+  strike: number
+  put_oi_trend_label?: 'BUILDING' | 'STEADY' | 'UNWINDING' | null
+  call_oi_trend_label?: 'BUILDING' | 'STEADY' | 'UNWINDING' | null
+}
+
+interface WallInfo {
+  callWallStrike: number | null
+  putWallStrike: number | null
+  pctToCallWall: number | null
+  pctToPutWall: number | null
+  strikeLadder: StrikeRung[] | null
+}
+
 interface VolStock {
   symbol: string
   cmp: number
@@ -332,7 +346,38 @@ function SeriesRow({ s, i, onSymbolClick }: { s: PIStock; i: number; onSymbolCli
 }
 
 // ── Stealth Card ──────────────────────────────────────────────────────────────
-function StealthCard({ s, onSymbolClick }: { s: StealthStock; onSymbolClick: (sym: string) => void }) {
+function wallTrendLabel(w: WallInfo | undefined, strike: number | null, side: 'PE' | 'CE'): string | null {
+  if (!w || !strike || !w.strikeLadder) return null
+  const rung = w.strikeLadder.find((x) => x.strike === strike)
+  if (!rung) return null
+  return (side === 'PE' ? rung.put_oi_trend_label : rung.call_oi_trend_label) ?? null
+}
+
+function WallBadge({ w }: { w: WallInfo | undefined }) {
+  if (!w || (!w.putWallStrike && !w.callWallStrike)) return null
+  const peTrend = wallTrendLabel(w, w.putWallStrike, 'PE')
+  const ceTrend = wallTrendLabel(w, w.callWallStrike, 'CE')
+  return (
+    <div className="mt-3 pt-2 border-t border-gray-800/60 flex items-center gap-3 text-[10px]">
+      {w.putWallStrike && (
+        <span className="text-emerald-400" title={`Put wall (support)${w.pctToPutWall !== null && w.pctToPutWall !== undefined ? ` — ${fmt(w.pctToPutWall)}% below spot` : ''}`}>
+          PE {w.putWallStrike}
+          {peTrend === 'BUILDING' && <span className="ml-1 text-emerald-300">✍️writing</span>}
+          {peTrend === 'UNWINDING' && <span className="ml-1 text-amber-400">⚠stale</span>}
+        </span>
+      )}
+      {w.callWallStrike && (
+        <span className="text-sky-400" title={`Call wall (resistance)${w.pctToCallWall !== null && w.pctToCallWall !== undefined ? ` — ${fmt(w.pctToCallWall)}% above spot` : ''}`}>
+          CE {w.callWallStrike}
+          {ceTrend === 'BUILDING' && <span className="ml-1 text-sky-300">✍️writing</span>}
+          {ceTrend === 'UNWINDING' && <span className="ml-1 text-amber-400">⚠stale</span>}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function StealthCard({ s, onSymbolClick, wall }: { s: StealthStock; onSymbolClick: (sym: string) => void; wall?: WallInfo }) {
   const tierColor = s.tier === 'ELITE' ? 'text-amber-400 border-amber-700/50 bg-amber-950/20'
     : s.tier === 'STRONG' ? 'text-emerald-400 border-emerald-700/50 bg-emerald-950/20'
     : 'text-sky-400 border-sky-700/50 bg-sky-950/20'
@@ -412,6 +457,7 @@ function StealthCard({ s, onSymbolClick }: { s: StealthStock; onSymbolClick: (sy
           ) : <p className="text-sm font-bold text-gray-600">—</p>}
         </div>
       </div>
+      <WallBadge w={wall} />
     </div>
   )
 }
@@ -831,6 +877,11 @@ export default function PositionalIntelligence() {
   const [signalFilter, setSignalFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP'>('all')
   const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days' | 'signal' | 'latest'>('consistency')
   const [historySymbol, setHistorySymbol] = useState<string | null>(null)
+  // Call/put wall + writing-vs-stale, from the same gamma-exposure snapshot
+  // the Premium Screen uses -- lets these stealth-buildup cards show whether
+  // the OI move lines up with an actively-defended options wall (e.g. LODHA
+  // building near its PE wall), not just the futures/stock-level numbers.
+  const [wallMap, setWallMap] = useState<Record<string, WallInfo>>({})
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -846,7 +897,28 @@ export default function PositionalIntelligence() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const fetchWalls = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/gamma-squeeze`)
+      if (!res.ok) return
+      const json = await res.json()
+      const map: Record<string, WallInfo> = {}
+      for (const r of (json.watchlist || [])) {
+        map[r.symbol] = {
+          callWallStrike: r.call_wall_strike ?? null,
+          putWallStrike: r.put_wall_strike ?? null,
+          pctToCallWall: r.pct_to_call_wall ?? null,
+          pctToPutWall: r.pct_to_put_wall ?? null,
+          strikeLadder: r.strike_ladder ?? null,
+        }
+      }
+      setWallMap(map)
+    } catch {
+      // Non-critical -- cards just render without the wall badge if this fails.
+    }
+  }, [])
+
+  useEffect(() => { fetchData(); fetchWalls() }, [fetchData, fetchWalls])
 
   // Filtered + sorted series buildup
   const seriesFiltered = (data?.series_buildup || [])
@@ -992,7 +1064,7 @@ export default function PositionalIntelligence() {
                 <>
                   <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Stealth Buildup</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {data.stealth_buildup.map(s => <StealthCard key={s.symbol} s={s} onSymbolClick={setHistorySymbol} />)}
+                    {data.stealth_buildup.map(s => <StealthCard key={s.symbol} s={s} onSymbolClick={setHistorySymbol} wall={wallMap[s.symbol]} />)}
                   </div>
                 </>
               )}

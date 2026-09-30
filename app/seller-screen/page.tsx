@@ -52,6 +52,20 @@ type Row = {
   put_wall_gamma_oi?: number | null
   pct_to_call_wall?: number | null
   pct_to_put_wall?: number | null
+  strike_ladder?: StrikeRung[] | null
+}
+
+type StrikeRung = {
+  strike: number
+  is_atm: boolean
+  is_call_wall: boolean
+  is_put_wall: boolean
+  call_oi?: number | null
+  call_oi_trend_label?: 'BUILDING' | 'STEADY' | 'UNWINDING' | null
+  call_oi_trend_pct?: number | null
+  put_oi?: number | null
+  put_oi_trend_label?: 'BUILDING' | 'STEADY' | 'UNWINDING' | null
+  put_oi_trend_pct?: number | null
 }
 
 type Scored = Row & { score: number; vScore: number; tScore: number; gScore: number }
@@ -60,6 +74,20 @@ type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_thet
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
 const clamp = (x: number) => Math.max(0, Math.min(1, x))
+
+// Is the writer actually still defending this wall right now, or is it stale
+// OI sitting from earlier in the day? BUILDING = fresh writing reinforcing it
+// (the setup the "PE wall = long" read depends on), UNWINDING = the wall is
+// being abandoned and shouldn't be trusted as support/resistance any more.
+function wallTrend(r: Row, strike: number | null | undefined, side: 'PE' | 'CE') {
+  if (!strike || !r.strike_ladder) return null
+  const rung = r.strike_ladder.find((x) => x.strike === strike)
+  if (!rung) return null
+  const label = side === 'PE' ? rung.put_oi_trend_label : rung.call_oi_trend_label
+  const pct = side === 'PE' ? rung.put_oi_trend_pct : rung.call_oi_trend_pct
+  if (!label) return null
+  return { label, pct }
+}
 
 function strategyLink(r: Row) {
   const params = new URLSearchParams({ symbol: r.symbol })
@@ -317,7 +345,7 @@ export default function SellerScreenPage() {
                   <th className={th}>Put beyond 1SD</th>
                   {more && <th className={th} onClick={() => sortBy('atm_vol_lots')}>ATM vol (lots){arrow('atm_vol_lots')}</th>}
                   <th className={th}>Gamma</th>
-                  <th className={th + ' !text-left'} title="Strikes carrying the most gamma-weighted OI on each side — where writers are concentrated, and the natural strikes to sell against">Strikes to write</th>
+                  <th className={th + ' !text-left'} title="Strikes carrying the most gamma-weighted OI on each side — where writers are concentrated. ✍️writing means fresh OI is still being added there today (the wall is actively defended); ⚠stale means it's unwinding and may not hold.">Strikes to write</th>
                   <th className={th} onClick={() => sortBy('pct_to_flip')}>To flip %{arrow('pct_to_flip')}</th>
                   <th className={th + ' !text-left'}>Flags</th>
                   <th className={th + ' !text-left'}>Strategy</th>
@@ -349,9 +377,27 @@ export default function SellerScreenPage() {
                     {more && <td className="px-3 py-2.5 text-right text-gray-400">{r.atm_vol_lots !== null && r.atm_vol_lots !== undefined ? fmt(r.atm_vol_lots, 0) : '—'}</td>}
                     <td className="px-3 py-2.5 text-right whitespace-nowrap"><span className={dot(r.gScore)}>● </span>{r.regime === 'LONG_GAMMA' ? 'Long' : r.regime === 'SHORT_GAMMA' ? 'Short' : '—'}</td>
                     <td className="px-3 py-2.5 text-left whitespace-nowrap text-[11px]">
-                      {r.put_wall_strike ? <span className="text-emerald-400" title={`Put wall — most gamma-weighted PE open interest, acting as support${r.pct_to_put_wall !== null && r.pct_to_put_wall !== undefined ? ` (${fmt(r.pct_to_put_wall)}% below spot)` : ''}`}>PE {fmt(r.put_wall_strike, 0)}</span> : <span className="text-gray-600">—</span>}
+                      {r.put_wall_strike ? (() => {
+                        const t = wallTrend(r, r.put_wall_strike, 'PE')
+                        return (
+                          <span className="text-emerald-400" title={`Put wall — most gamma-weighted PE open interest, acting as support${r.pct_to_put_wall !== null && r.pct_to_put_wall !== undefined ? ` (${fmt(r.pct_to_put_wall)}% below spot)` : ''}${t ? ` — OI ${t.label.toLowerCase()}${t.pct !== null && t.pct !== undefined ? ` (${t.pct > 0 ? '+' : ''}${fmt(t.pct, 0)}%)` : ''} since day's open` : ''}`}>
+                            PE {fmt(r.put_wall_strike, 0)}
+                            {t?.label === 'BUILDING' && <span className="ml-1 text-emerald-300">✍️writing</span>}
+                            {t?.label === 'UNWINDING' && <span className="ml-1 text-amber-400">⚠stale</span>}
+                          </span>
+                        )
+                      })() : <span className="text-gray-600">—</span>}
                       {' / '}
-                      {r.call_wall_strike ? <span className="text-sky-400" title={`Call wall — most gamma-weighted CE open interest, acting as resistance${r.pct_to_call_wall !== null && r.pct_to_call_wall !== undefined ? ` (${fmt(r.pct_to_call_wall)}% above spot)` : ''}`}>CE {fmt(r.call_wall_strike, 0)}</span> : <span className="text-gray-600">—</span>}
+                      {r.call_wall_strike ? (() => {
+                        const t = wallTrend(r, r.call_wall_strike, 'CE')
+                        return (
+                          <span className="text-sky-400" title={`Call wall — most gamma-weighted CE open interest, acting as resistance${r.pct_to_call_wall !== null && r.pct_to_call_wall !== undefined ? ` (${fmt(r.pct_to_call_wall)}% above spot)` : ''}${t ? ` — OI ${t.label.toLowerCase()}${t.pct !== null && t.pct !== undefined ? ` (${t.pct > 0 ? '+' : ''}${fmt(t.pct, 0)}%)` : ''} since day's open` : ''}`}>
+                            CE {fmt(r.call_wall_strike, 0)}
+                            {t?.label === 'BUILDING' && <span className="ml-1 text-sky-300">✍️writing</span>}
+                            {t?.label === 'UNWINDING' && <span className="ml-1 text-amber-400">⚠stale</span>}
+                          </span>
+                        )
+                      })() : <span className="text-gray-600">—</span>}
                     </td>
                     <td className="px-3 py-2.5 text-right text-gray-400">{fmt(r.pct_to_flip)}</td>
                     <td className="px-3 py-2.5 text-left text-[10px] whitespace-nowrap">

@@ -1,7 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import SymbolResult from '@/components/SymbolResult'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 import { ALL_SYMBOLS } from '@/lib/symbols'
@@ -30,6 +30,8 @@ function formatExpiry(e: string) {
 export default function OptionChain() {
   const [symbol, setSymbol]   = useState('NIFTY')
   const [symbolInput, setSymbolInput] = useState('NIFTY')
+  const [showDropdown, setShowDropdown] = useState(false)
+  const searchBoxRef = useRef<HTMLDivElement>(null)
   const [expiry, setExpiry]   = useState<string>('')
   const [data, setData]       = useState<ChainData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -50,6 +52,24 @@ export default function OptionChain() {
 
   useEffect(() => { setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) setShowDropdown(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  const filteredSymbols = symbolInput
+    ? ALL_SYMBOLS.filter(s => s.includes(symbolInput)).slice(0, 50)
+    : ALL_SYMBOLS.slice(0, 50)
+
+  function pickSymbol(s: string) {
+    setSymbolInput(s)
+    setSymbol(s)
+    setShowDropdown(false)
+  }
 
   const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, true)
 
@@ -92,15 +112,34 @@ export default function OptionChain() {
             </button>
           ))}
           <span className="text-gray-700 text-sm px-1">or</span>
-          <input
-            list="oc-symbols" value={symbolInput}
-            onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
-            onBlur={() => { if (ALL_SYMBOLS.includes(symbolInput)) setSymbol(symbolInput) }}
-            onKeyDown={(e) => { if (e.key === 'Enter' && ALL_SYMBOLS.includes(symbolInput)) setSymbol(symbolInput) }}
-            placeholder="Search any F&O stock…"
-            className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all bg-gray-900/40 text-white border-gray-800 placeholder:text-gray-600 placeholder:font-normal focus:outline-none focus:border-cyan-700 w-56 ${!INDICES.includes(symbol) ? 'border-cyan-700' : ''}`}
-          />
-          <datalist id="oc-symbols">{ALL_SYMBOLS.map((s) => <option key={s} value={s} />)}</datalist>
+          <div ref={searchBoxRef} className="relative">
+            <input
+              value={symbolInput}
+              onFocus={() => setShowDropdown(true)}
+              onChange={(e) => { setSymbolInput(e.target.value.toUpperCase()); setShowDropdown(true) }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && filteredSymbols.length > 0) pickSymbol(filteredSymbols[0])
+                if (e.key === 'Escape') setShowDropdown(false)
+              }}
+              placeholder="Search any F&O stock… (click to see list)"
+              className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all bg-gray-900/40 text-white border-gray-800 placeholder:text-gray-600 placeholder:font-normal focus:outline-none focus:border-cyan-700 w-64 ${!INDICES.includes(symbol) ? 'border-cyan-700' : ''}`}
+            />
+            {showDropdown && (
+              <div className="absolute z-20 mt-1 w-64 max-h-72 overflow-y-auto bg-gray-900 border border-gray-700 rounded-xl shadow-xl">
+                {filteredSymbols.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-gray-500">No match</div>
+                ) : filteredSymbols.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => pickSymbol(s)}
+                    className={`block w-full text-left px-3 py-2 text-xs font-semibold hover:bg-gray-800 ${s === symbol ? 'text-cyan-400' : 'text-gray-300'}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Expiry selector */}
@@ -157,8 +196,9 @@ export default function OptionChain() {
           </div>
         ) : (
           <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden">
+            <div className="max-h-[70vh] overflow-y-auto overflow-x-auto">
             <table className="w-full text-xs">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-[#0c0c16]">
                 <tr className="border-b border-gray-800">
                   <th colSpan={6} className="py-3 text-center text-red-400 font-bold text-[11px] tracking-wider border-r border-gray-800">CALLS</th>
                   <th className="py-3 px-4 text-center text-amber-400 font-black text-[11px] tracking-wider">STRIKE</th>
@@ -211,6 +251,7 @@ export default function OptionChain() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 

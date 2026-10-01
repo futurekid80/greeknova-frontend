@@ -4,6 +4,7 @@ import SymbolResult from '@/components/SymbolResult'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
+import { ALL_SYMBOLS } from '@/lib/symbols'
 
 const API = 'https://api.greeknova.com'
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
@@ -28,6 +29,7 @@ function formatExpiry(e: string) {
 
 export default function OptionChain() {
   const [symbol, setSymbol]   = useState('NIFTY')
+  const [symbolInput, setSymbolInput] = useState('NIFTY')
   const [expiry, setExpiry]   = useState<string>('')
   const [data, setData]       = useState<ChainData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,14 +83,24 @@ export default function OptionChain() {
           </div>
         </div>
 
-        {/* Index selector */}
-        <div className="flex gap-2 mb-4">
+        {/* Index selector + stock search */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           {INDICES.map(idx => (
-            <button key={idx} onClick={() => setSymbol(idx)}
+            <button key={idx} onClick={() => { setSymbol(idx); setSymbolInput(idx) }}
               className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${symbol === idx ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {idx}
             </button>
           ))}
+          <span className="text-gray-700 text-sm px-1">or</span>
+          <input
+            list="oc-symbols" value={symbolInput}
+            onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
+            onBlur={() => { if (ALL_SYMBOLS.includes(symbolInput)) setSymbol(symbolInput) }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && ALL_SYMBOLS.includes(symbolInput)) setSymbol(symbolInput) }}
+            placeholder="Search any F&O stock…"
+            className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all bg-gray-900/40 text-white border-gray-800 placeholder:text-gray-600 placeholder:font-normal focus:outline-none focus:border-cyan-700 w-56 ${!INDICES.includes(symbol) ? 'border-cyan-700' : ''}`}
+          />
+          <datalist id="oc-symbols">{ALL_SYMBOLS.map((s) => <option key={s} value={s} />)}</datalist>
         </div>
 
         {/* Expiry selector */}

@@ -215,6 +215,30 @@ function StrategyBuilderInner() {
     return { points, maxProfit, maxLoss, unlimitedProfit, unlimitedLoss, breakevens, netPremium }
   }, [legs, data, lotSize])
 
+  // Synthetic-position check: a BUY CE + SELL PE at the same strike/lots behaves
+  // exactly like a long futures position (and the reverse = short futures) --
+  // Put-Call Parity. Flagging it helps spot cheaper/simpler execution and
+  // avoid double-counting risk that's really just a disguised directional bet.
+  const syntheticNotes = useMemo(() => {
+    const notes: string[] = []
+    const byStrike = new Map<number, Leg[]>()
+    for (const l of legs) {
+      if (!byStrike.has(l.strike)) byStrike.set(l.strike, [])
+      byStrike.get(l.strike)!.push(l)
+    }
+    for (const [strike, group] of byStrike) {
+      const ce = group.find(l => l.optType === 'CE')
+      const pe = group.find(l => l.optType === 'PE')
+      if (!ce || !pe || ce.lots !== pe.lots) continue
+      if (ce.action === 'BUY' && pe.action === 'SELL') {
+        notes.push(`BUY ${strike}CE + SELL ${strike}PE = Synthetic Long (same payoff as going long ${ce.lots} lot${ce.lots > 1 ? 's' : ''} at ${strike})`)
+      } else if (ce.action === 'SELL' && pe.action === 'BUY') {
+        notes.push(`SELL ${strike}CE + BUY ${strike}PE = Synthetic Short (same payoff as going short ${ce.lots} lot${ce.lots > 1 ? 's' : ''} at ${strike})`)
+      }
+    }
+    return notes
+  }, [legs])
+
   const inputCls = 'bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-xs text-gray-200'
 
   return (
@@ -402,6 +426,14 @@ function StrategyBuilderInner() {
                       {analysis.breakevens.length ? analysis.breakevens.map((b) => fmtNum(b)).join(' · ') : '—'}
                     </p>
                   </div>
+                  {syntheticNotes.length > 0 && (
+                    <div className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-4">
+                      <p className="text-[11px] text-amber-500 mb-1 font-semibold">⚡ Synthetic position detected</p>
+                      {syntheticNotes.map((n, i) => (
+                        <p key={i} className="text-xs text-amber-200/90 leading-snug">{n}</p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 import { ALL_SYMBOLS } from '@/lib/symbols'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 
 const API = 'https://api.greeknova.com'
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
@@ -74,6 +75,13 @@ export default function OptionChain() {
   const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, true)
 
   const atm = data?.chain.find(r => r.is_atm)
+
+  // IV skew: plot each strike's CE/PE IV so the "smile/skew" shape is visible
+  // directly -- OTM puts normally pricing richer than OTM calls (equity skew)
+  // is the textbook case this is meant to make visible at a glance.
+  const skewData = (data?.chain ?? [])
+    .filter(r => r.ce.iv != null || r.pe.iv != null)
+    .map(r => ({ strike: r.strike, callIV: r.ce.iv ?? null, putIV: r.pe.iv ?? null, isAtm: r.is_atm }))
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -182,6 +190,31 @@ export default function OptionChain() {
               <p className="text-xs text-gray-500 mb-1">ATM PE IV</p>
               <p className="text-xl font-black text-emerald-400">{atm?.pe.iv != null ? `${atm.pe.iv}%` : '—'}</p>
             </div>
+          </div>
+        )}
+
+        {/* IV Skew curve */}
+        {skewData.length > 2 && (
+          <div className="bg-gray-900/20 border border-gray-800 rounded-2xl p-4 mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-bold text-white">IV Skew — Calls vs Puts by Strike</p>
+              <p className="text-[11px] text-gray-500">Puts pricier than calls on the downside = normal equity skew</p>
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={skewData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                <XAxis dataKey="strike" tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} unit="%" />
+                <Tooltip
+                  contentStyle={{ background: '#0c0c16', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                  labelFormatter={(v) => `Strike ${v}`}
+                  formatter={(v: any, name: any) => [v != null ? `${v}%` : '—', name]}
+                />
+                {atm?.strike && <ReferenceLine x={atm.strike} stroke="#f59e0b" strokeDasharray="3 3" label={{ value: 'ATM', fill: '#f59e0b', fontSize: 10 }} />}
+                <Line type="monotone" dataKey="callIV" name="Call IV" stroke="#f87171" strokeWidth={2} dot={false} connectNulls />
+                <Line type="monotone" dataKey="putIV" name="Put IV" stroke="#34d399" strokeWidth={2} dot={false} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         )}
 

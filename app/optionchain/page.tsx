@@ -140,6 +140,7 @@ export default function OptionChain() {
                 ) : filteredSymbols.map(s => (
                   <button
                     key={s}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pickSymbol(s)}
                     className={`block w-full text-left px-3 py-2 text-xs font-semibold hover:bg-gray-800 ${s === symbol ? 'text-cyan-400' : 'text-gray-300'}`}
                   >

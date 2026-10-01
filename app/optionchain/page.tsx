@@ -115,13 +115,14 @@ export default function OptionChain() {
           <div ref={searchBoxRef} className="relative">
             <input
               value={symbolInput}
-              onFocus={() => setShowDropdown(true)}
+              onFocus={() => { setSymbolInput(''); setShowDropdown(true) }}
               onChange={(e) => { setSymbolInput(e.target.value.toUpperCase()); setShowDropdown(true) }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && filteredSymbols.length > 0) pickSymbol(filteredSymbols[0])
-                if (e.key === 'Escape') setShowDropdown(false)
+                if (e.key === 'Escape') { setSymbolInput(symbol); setShowDropdown(false) }
               }}
-              placeholder="Search any F&O stock… (click to see list)"
+              onBlur={() => { if (!ALL_SYMBOLS.includes(symbolInput)) setSymbolInput(symbol) }}
+              placeholder="Click to see all stocks…"
               className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all bg-gray-900/40 text-white border-gray-800 placeholder:text-gray-600 placeholder:font-normal focus:outline-none focus:border-cyan-700 w-64 ${!INDICES.includes(symbol) ? 'border-cyan-700' : ''}`}
             />
             {showDropdown && (

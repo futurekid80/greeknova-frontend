@@ -79,9 +79,24 @@ export default function OptionChain() {
   // IV skew: plot each strike's CE/PE IV so the "smile/skew" shape is visible
   // directly -- OTM puts normally pricing richer than OTM calls (equity skew)
   // is the textbook case this is meant to make visible at a glance.
+  //
+  // Liquidity filter: a strike with near-zero OI/volume often has a stale last
+  // traded price that no longer matches the current spot. Feeding that into
+  // the Black-Scholes IV solver produces a nonsensical spike or crash in IV --
+  // not real market skew, just a data artifact. Dropping each side's IV when
+  // that side hasn't actually traded keeps the curve to strikes the market is
+  // genuinely pricing right now.
+  const MIN_OI = 500
+  const MIN_VOL = 1
+  const isLiquid = (g: Greeks) => (g.oi ?? 0) >= MIN_OI || (g.volume ?? 0) >= MIN_VOL
   const skewData = (data?.chain ?? [])
-    .filter(r => r.ce.iv != null || r.pe.iv != null)
-    .map(r => ({ strike: r.strike, callIV: r.ce.iv ?? null, putIV: r.pe.iv ?? null, isAtm: r.is_atm }))
+    .map(r => ({
+      strike: r.strike,
+      callIV: isLiquid(r.ce) ? r.ce.iv ?? null : null,
+      putIV:  isLiquid(r.pe) ? r.pe.iv ?? null : null,
+      isAtm:  r.is_atm,
+    }))
+    .filter(r => r.callIV != null || r.putIV != null)
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -216,6 +231,16 @@ export default function OptionChain() {
                 <Line type="monotone" dataKey="putIV" name="Put IV" stroke="#34d399" strokeWidth={2} dot={false} connectNulls />
               </LineChart>
             </ResponsiveContainer>
+            <details className="mt-3 text-xs text-gray-400 leading-relaxed">
+              <summary className="cursor-pointer text-gray-300 font-semibold">How to read this</summary>
+              <ul className="mt-2 space-y-1.5 list-disc list-inside">
+                <li><span className="text-gray-200 font-medium">Put IV above Call IV</span> on the same side = normal equity skew — the market pays up for downside protection (crash hedging demand) more than for upside speculation. This is the default shape for almost every Indian stock/index.</li>
+                <li><span className="text-gray-200 font-medium">The gap near ATM</span> is the one that matters most for pricing — it's what you're actually selling/buying against. Wings far from spot carry less weight even when liquid.</li>
+                <li><span className="text-gray-200 font-medium">A steep/widening curve into expiry or before an event</span> (earnings, results) means the market is pricing fatter tail risk — selling premium here carries more event risk, not just more time value.</li>
+                <li><span className="text-gray-200 font-medium">Thin strikes are hidden</span>, not shown flat — a strike with no real OI/volume is dropped rather than plotted, since its last traded price is often stale and produces a fake spike/crash in implied IV rather than a real market read.</li>
+                <li>This is descriptive, not a signal — it shows how the market is currently pricing risk, not which way price will move.</li>
+              </ul>
+            </details>
           </div>
         )}
 

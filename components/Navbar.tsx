@@ -5,59 +5,66 @@ import { ChevronDown, MessageSquare, X, Bell, LogOut, User } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
+// Oct 2 2026: regrouped by trader persona (Positional / Intraday / Option
+// Sellers) instead of by data-type (Market / OI Analysis / Greeks / Signals)
+// ahead of launch -- same screens, same URLs, nothing merged or removed, just
+// organized around "which kind of trader are you" so the nav reads as a
+// decision tool instead of a feature list. Each group's first link is that
+// persona's hero/landing screen. The Greeks suite (Gamma/Theta/Vega/Premium
+// Screen) stays fully separate under Option Sellers per Manish's call --
+// that's GreekNova's differentiated depth, not something to blend together.
 const NAV_GROUPS = [
   {
     label: 'Market',
     links: [
       { href: '/',           label: '📡 Market Pulse' },
-      { href: '/premarket',  label: '☀️ Pre-Market Brief' },
       { href: '/watchlist',  label: 'Watchlist' },
       { href: '/journal',    label: '📓 Journal' },
-      { href: '/participant-flow', label: '🏦 Participant Flow' },
-      { href: '/sector-strength', label: '🔥 Sector Strength' }
     ]
   },
   {
-    label: 'OI Analysis',
+    label: '🎯 Positional',
     links: [
+      { href: '/positional',  label: '🧠 Positional Intelligence' },
+      { href: '/oi-buildup-period', label: '📊 Weekly/Monthly OI Buildup' },
+      { href: '/rollover', label: '🔄 Rollover Tracker' },
+      { href: '/delivery-confluence', label: '📦 Delivery Confluence' },
+      { href: '/participant-flow', label: '🏦 Participant Flow' },
+      { href: '/sector-strength', label: '🔥 Sector Strength' },
+      { href: '/rs',          label: 'Rel. Strength' },
+      { href: '/signals/wall-migration', label: '🧱 Wall Migration' },
       { href: '/oihistory',  label: 'OI History' },
       { href: '/eod',        label: 'EOD Analysis' },
       { href: '/eod-report', label: '📋 EOD Report' },
-      { href: '/pcr',        label: 'PCR Trend' },
-      { href: '/oiprofile',  label: '📊 OI Profile' },
-      { href: '/oiheatmap',  label: '🌡️ OI Heatmap' },
     ]
   },
   {
-    label: 'Greeks',
+    label: '⚡ Intraday',
     links: [
-      { href: '/optionchain', label: 'Option Chain' },
-      { href: '/historicalchain', label: '🕰️ Historical Chain' },
-      { href: '/maxpain',     label: 'Max Pain' },
-      { href: '/iv',          label: 'IV Analysis' },
+      { href: '/jungle',      label: '🌿 Options Jungle' },
+      { href: '/premarket',  label: '☀️ Pre-Market Brief' },
+      { href: '/uoa',         label: 'UOA' },
+      { href: '/spotvolume', label: '⚡ Spot Volume Breakout' },
+      { href: '/first-hour-breakout', label: '🌅 First Hour Breakout' },
+      { href: '/signals/cpr', label: '📐 CPR Scanner' },
+      { href: '/signals/intraday', label: '📋 Intraday Log' },
+    ]
+  },
+  {
+    label: '🧭 Option Sellers',
+    links: [
+      { href: '/seller-screen', label: '🧭 Premium Screen' },
       { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' },
       { href: '/theta', label: 'Θ Theta Decay' },
       { href: '/vega', label: 'ν Vega Exposure' },
-      { href: '/seller-screen', label: '🧭 Premium Screen' },
+      { href: '/iv',          label: 'IV Analysis' },
+      { href: '/maxpain',     label: 'Max Pain' },
+      { href: '/pcr',        label: 'PCR Trend' },
+      { href: '/oiprofile',  label: '📊 OI Profile' },
+      { href: '/oiheatmap',  label: '🌡️ OI Heatmap' },
+      { href: '/optionchain', label: 'Option Chain' },
+      { href: '/historicalchain', label: '🕰️ Historical Chain' },
       { href: '/strategy-builder', label: '🛠️ Strategy Builder' },
-    ]
-  },
-  {
-    
-    label: 'Signals',
-    links: [
-      { href: '/rs',          label: 'Rel. Strength' },
-      { href: '/uoa',         label: 'UOA' },
-      { href: '/jungle',      label: '🌿 Options Jungle' },
-      { href: '/positional',  label: '🧠 Positional Intelligence' },
-      { href: '/oi-buildup-period', label: '📊 Weekly/Monthly OI Buildup' },
-      { href: '/signals/intraday', label: '📋 Intraday Log' },
-      { href: '/signals/cpr', label: '📐 CPR Scanner' },
-      { href: '/signals/wall-migration', label: '🧱 Wall Migration' },
-      { href: '/spotvolume', label: '⚡ Spot Volume Breakout' },
-      { href: '/first-hour-breakout', label: '🌅 First Hour Breakout' },
-      { href: '/rollover', label: '🔄 Rollover Tracker' },
-      { href: '/delivery-confluence', label: '📦 Delivery Confluence' }
     ]
   },
 ]

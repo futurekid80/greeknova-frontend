@@ -299,11 +299,33 @@ export default function GammaSqueeze() {
   const [page, setPage] = useState(1)
   const [showAllSignals, setShowAllSignals] = useState(false)
 
-  const { priorityAlerts } = useAlerts()
-  const nearStrikeAlerts = useMemo(
-    () => priorityAlerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND').sort((a, b) => b.id - a.id).slice(0, 6),
-    [priorityAlerts]
-  )
+  const { priorityAlerts, marketOpen } = useAlerts()
+
+  // priorityAlerts from context is a rolling top-20 window across the whole
+  // day, so once more than 20 Near-Strike Unwind events fire, earlier ones
+  // (the first stock of the morning, say) silently drop out even though
+  // they're still logged. Pull the full day for this one signal directly so
+  // this box doesn't lose stocks as the day goes on.
+  const [unwindDayAlerts, setUnwindDayAlerts] = useState<typeof priorityAlerts>([])
+  useEffect(() => {
+    const fetchUnwindDay = () => {
+      fetch('https://api.greeknova.com/alerts?signal=NEAR_STRIKE_UNWIND&limit=200')
+        .then((r) => r.json())
+        .then((j) => setUnwindDayAlerts(j.alerts || []))
+        .catch(() => {})
+    }
+    fetchUnwindDay()
+    const t = setInterval(fetchUnwindDay, 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const nearStrikeAlerts = useMemo(() => {
+    const merged = [
+      ...unwindDayAlerts,
+      ...priorityAlerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND' && !unwindDayAlerts.some(b => b.id === a.id)),
+    ]
+    return merged.sort((a, b) => b.id - a.id)
+  }, [priorityAlerts, unwindDayAlerts])
 
 
   const fetchData = useCallback(async () => {
@@ -534,12 +556,19 @@ export default function GammaSqueeze() {
           </div>
         </div>
 
+        {nearStrikeAlerts.length === 0 && !marketOpen && (
+          <div className="mb-5 bg-gray-900/20 border border-gray-800 rounded-2xl p-4 flex items-center gap-2 text-xs text-gray-500">
+            <span className="text-sm">💤</span>
+            Market closed — no live Near-Strike Unwind signals today. This panel fills in during market hours; it's not missing data, there's just nothing happening right now.
+          </div>
+        )}
+
         {nearStrikeAlerts.length > 0 && (
           <div className="mb-5 bg-fuchsia-950/25 border-2 border-fuchsia-500/50 rounded-2xl p-4">
             <h2 className="text-sm font-black text-fuchsia-300 flex items-center gap-2 mb-2">
               💥 Near-Strike Unwind — a wall is breaking right now
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[420px] overflow-y-auto pr-1">
               {nearStrikeAlerts.map(alert => (
                 <div key={alert.id} className="flex items-start gap-2 bg-fuchsia-950/30 border border-fuchsia-500/40 rounded-xl px-3 py-2">
                   <span className="text-base flex-shrink-0">💥</span>

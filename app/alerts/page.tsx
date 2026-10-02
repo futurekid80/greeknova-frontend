@@ -16,6 +16,38 @@ export default function Alerts() {
   const [typeFilter, setTypeFilter]   = useState('all')
   const [sortOrder, setSortOrder]     = useState<'newest'|'oldest'>('newest')
 
+  // Date picker: `/alerts` defaults to TODAY only when no `since_id` is given,
+  // for every query -- symbol search, signal filter, the lot. That silently
+  // made yesterday's alerts (or any past day's) unreachable the moment
+  // midnight passed, even though alert_log still has them -- e.g. reviewing a
+  // trade the next day, or on a market holiday with zero alerts of its own.
+  // '' means "today, live" (the usual rolling view from context); any other
+  // value switches the whole page to a point-in-time read of that past day.
+  const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  const dateOptions = Array.from({ length: 10 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const iso = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+    const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short' })
+    return { iso, label }
+  })
+  const [selectedDate, setSelectedDate] = useState('')   // '' = today/live
+  const viewingPast = selectedDate !== '' && selectedDate !== todayIso
+
+  // Whole-page past-day read: replaces the live `alerts` feed entirely when
+  // viewingPast is true.
+  const [dateAlerts, setDateAlerts] = useState<typeof alerts>([])
+  const [dateLoading, setDateLoading] = useState(false)
+  useEffect(() => {
+    if (!viewingPast) { setDateAlerts([]); return }
+    setDateLoading(true)
+    fetch(`https://api.greeknova.com/alerts?date=${selectedDate}&limit=200`)
+      .then((r) => r.json())
+      .then((j) => setDateAlerts(j.alerts || []))
+      .catch(() => setDateAlerts([]))
+      .finally(() => setDateLoading(false))
+  }, [viewingPast, selectedDate])
+
   // The live `alerts` list from context is capped at the last ~100 across every
   // stock, so on a busy morning an older alert for one symbol falls out of it
   // within minutes. Once someone searches a specific symbol, pull that
@@ -31,14 +63,14 @@ export default function Alerts() {
     if (q.length < 2) { setSymbolDayAlerts([]); return }
     searchDebounce.current = setTimeout(() => {
       setSymbolDayLoading(true)
-      fetch(`https://api.greeknova.com/alerts?symbol=${encodeURIComponent(q)}&limit=500`)
+      fetch(`https://api.greeknova.com/alerts?symbol=${encodeURIComponent(q)}&limit=500${viewingPast ? `&date=${selectedDate}` : ''}`)
         .then((r) => r.json())
         .then((j) => setSymbolDayAlerts(j.alerts || []))
         .catch(() => setSymbolDayAlerts([]))
         .finally(() => setSymbolDayLoading(false))
     }, 400)
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
-  }, [search])
+  }, [search, viewingPast, selectedDate])
 
   // Near-Strike Unwind box: `priorityAlerts` from context is a ROLLING top-20
   // window across the whole day (refetched every 60s), so once more than 20
@@ -49,36 +81,45 @@ export default function Alerts() {
   // missing from this box.
   const [unwindDayAlerts, setUnwindDayAlerts] = useState<typeof alerts>([])
   useEffect(() => {
-    fetch('https://api.greeknova.com/alerts?signal=NEAR_STRIKE_UNWIND&limit=200')
-      .then((r) => r.json())
-      .then((j) => setUnwindDayAlerts(j.alerts || []))
-      .catch(() => {})
-    const t = setInterval(() => {
-      fetch('https://api.greeknova.com/alerts?signal=NEAR_STRIKE_UNWIND&limit=200')
+    const url = `https://api.greeknova.com/alerts?signal=NEAR_STRIKE_UNWIND&limit=200${viewingPast ? `&date=${selectedDate}` : ''}`
+    const fetchUnwind = () => {
+      fetch(url)
         .then((r) => r.json())
         .then((j) => setUnwindDayAlerts(j.alerts || []))
         .catch(() => {})
-    }, 60 * 1000)
+    }
+    fetchUnwind()
+    if (viewingPast) return   // a past day is static, no need to poll it
+    const t = setInterval(fetchUnwind, 60 * 1000)
     return () => clearInterval(t)
-  }, [])
-  // Merge with the live context list too, so an alert that just fired this
-  // second (before it's in alert_log's own query response) still shows up.
-  const unwindAll = [
-    ...unwindDayAlerts,
-    ...priorityAlerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND' && !unwindDayAlerts.some(b => b.id === a.id)),
-  ]
+  }, [viewingPast, selectedDate])
+  // Merge with the live context list too (only while viewing today live), so
+  // an alert that just fired this second (before it's in alert_log's own
+  // query response) still shows up.
+  const unwindAll = viewingPast
+    ? unwindDayAlerts
+    : [
+        ...unwindDayAlerts,
+        ...priorityAlerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND' && !unwindDayAlerts.some(b => b.id === a.id)),
+      ]
 
-  const uniqueSymbols = [...new Set(alerts.map(a => a.symbol))].sort()
-  const uniqueTypes   = [...new Set(alerts.map(a => a.signal))]
+  // Base feed: a past date replaces the live context feed outright (it's a
+  // static point-in-time read); today stays the usual live rolling list.
+  const baseAlerts = viewingPast ? dateAlerts : alerts
+
+  const uniqueSymbols = [...new Set(baseAlerts.map(a => a.symbol))].sort()
+  const uniqueTypes   = [...new Set(baseAlerts.map(a => a.signal))]
 
   // Once a symbol-day search has results, that's the full day for this stock --
   // merge it with the live list (deduped by id) rather than replacing it, so a
   // fresh alert that just fired (and isn't in alert_log's search response yet
-  // on this exact tick) doesn't disappear while typing.
+  // on this exact tick) doesn't disappear while typing. While viewing a past
+  // date there's no "live" list to merge with -- the search result is already
+  // the full answer for that day.
   const searchIsSymbol = search.trim().length >= 2
   const merged = searchIsSymbol
-    ? [...symbolDayAlerts, ...alerts.filter((a) => !symbolDayAlerts.some((b) => b.id === a.id))]
-    : alerts
+    ? (viewingPast ? symbolDayAlerts : [...symbolDayAlerts, ...alerts.filter((a) => !symbolDayAlerts.some((b) => b.id === a.id))])
+    : baseAlerts
 
   const filtered = merged
     .filter(a => {
@@ -235,21 +276,40 @@ export default function Alerts() {
           </div>
         )}
 
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Clock size={13} className="text-gray-600"/>
+            <span className="text-xs text-gray-500">Viewing:</span>
+            <select
+              value={selectedDate || todayIso}
+              onChange={(e) => setSelectedDate(e.target.value === todayIso ? '' : e.target.value)}
+              className="bg-gray-900 border border-gray-800 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-cyan-700"
+            >
+              {dateOptions.map(d => <option key={d.iso} value={d.iso}>{d.label}</option>)}
+            </select>
+            {viewingPast && (
+              <span className="text-[11px] text-amber-400">
+                {dateLoading ? 'Loading that day…' : `Past day — static snapshot, not live`}
+              </span>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             Alert Feed
-            {alerts.length > 0 && (
+            {baseAlerts.length > 0 && (
               <>
-                <span className="text-sm font-normal text-gray-500">({filtered.length} of {alerts.length})</span>
+                <span className="text-sm font-normal text-gray-500">({filtered.length} of {baseAlerts.length})</span>
                 {searchIsSymbol && (
                   <span className="text-xs font-normal text-cyan-400 ml-1">
-                    {symbolDayLoading ? 'Searching full day…' : `· full day for "${search.toUpperCase()}" incl. alerts no longer in the live list`}
+                    {symbolDayLoading ? 'Searching full day…' : `· full day for "${search.toUpperCase()}"${viewingPast ? '' : ' incl. alerts no longer in the live list'}`}
                   </span>
                 )}
               </>
             )}
           </h2>
-          {alerts.length > 0 && (
+          {!viewingPast && alerts.length > 0 && (
             <button onClick={clearAlerts}
               className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 transition-colors">
               <Trash2 size={12} />Clear all
@@ -257,7 +317,7 @@ export default function Alerts() {
           )}
         </div>
 
-        {alerts.length > 0 && (
+        {baseAlerts.length > 0 && (
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
@@ -296,20 +356,22 @@ export default function Alerts() {
           </div>
         )}
 
-        {alerts.length === 0 ? (
+        {baseAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl bg-gray-900/20">
             <div className="text-4xl mb-4">🔔</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">
-              {enabled ? 'Monitoring in background' : 'Alerts disabled'}
+              {viewingPast ? (dateLoading ? 'Loading…' : 'No alerts logged that day') : enabled ? 'Monitoring in background' : 'Alerts disabled'}
             </h3>
             <p className="text-sm text-gray-600 max-w-sm">
-              {enabled
+              {viewingPast
+                ? 'Either a non-trading day, or nothing crossed the alert thresholds that session.'
+                : enabled
                 ? marketOpen
                   ? 'Service worker is running across all tabs. Alerts will appear here, as browser notifications, and via the bell icon on any page.'
                   : 'Market is closed. Checks will auto-resume at 9:15 AM IST on next trading day.'
                 : 'Enable alerts to start monitoring OI spikes, fresh builds and UOA whale activity.'}
             </p>
-            {enabled && marketOpen && (
+            {!viewingPast && enabled && marketOpen && (
               <div className="mt-4 flex items-center gap-2 text-xs text-emerald-500">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Self-scheduling every 5 minutes · Works across all tabs

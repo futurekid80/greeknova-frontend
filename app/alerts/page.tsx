@@ -40,6 +40,34 @@ export default function Alerts() {
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
   }, [search])
 
+  // Near-Strike Unwind box: `priorityAlerts` from context is a ROLLING top-20
+  // window across the whole day (refetched every 60s), so once more than 20
+  // fire, morning events (e.g. the first stock that triggered it) silently
+  // fall out of view even though they're still in alert_log -- same rolling-
+  // cap pattern as the old 100-item bug on the main feed. Pull the FULL day
+  // for this one signal directly instead, so nothing recorded today goes
+  // missing from this box.
+  const [unwindDayAlerts, setUnwindDayAlerts] = useState<typeof alerts>([])
+  useEffect(() => {
+    fetch('https://api.greeknova.com/alerts?signal=NEAR_STRIKE_UNWIND&limit=200')
+      .then((r) => r.json())
+      .then((j) => setUnwindDayAlerts(j.alerts || []))
+      .catch(() => {})
+    const t = setInterval(() => {
+      fetch('https://api.greeknova.com/alerts?signal=NEAR_STRIKE_UNWIND&limit=200')
+        .then((r) => r.json())
+        .then((j) => setUnwindDayAlerts(j.alerts || []))
+        .catch(() => {})
+    }, 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
+  // Merge with the live context list too, so an alert that just fired this
+  // second (before it's in alert_log's own query response) still shows up.
+  const unwindAll = [
+    ...unwindDayAlerts,
+    ...priorityAlerts.filter(a => a.signal === 'NEAR_STRIKE_UNWIND' && !unwindDayAlerts.some(b => b.id === a.id)),
+  ]
+
   const uniqueSymbols = [...new Set(alerts.map(a => a.symbol))].sort()
   const uniqueTypes   = [...new Set(alerts.map(a => a.signal))]
 
@@ -158,17 +186,15 @@ export default function Alerts() {
           </div>
         </div>
 
-        {priorityAlerts.some(a => a.signal === 'NEAR_STRIKE_UNWIND') && (
+        {unwindAll.length > 0 && (
           <div className="mb-6">
             <h2 className="text-lg font-bold text-fuchsia-300 flex items-center gap-2 mb-1">
               💥 Near-Strike Unwind — Tradeable Breaks
             </h2>
-            <p className="text-xs text-gray-500 mb-3">Near-ATM OI collapsing fast — a support/resistance wall is breaking right now. Higher conviction than routine OI spikes.</p>
-            <div className="space-y-2">
-              {priorityAlerts
-                .filter(a => a.signal === 'NEAR_STRIKE_UNWIND')
+            <p className="text-xs text-gray-500 mb-3">Near-ATM OI collapsing fast — a support/resistance wall is breaking right now. Higher conviction than routine OI spikes. Showing today's full list, not just the latest few.</p>
+            <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+              {unwindAll
                 .sort((a, b) => b.id - a.id)
-                .slice(0, 8)
                 .map(alert => (
                   <div key={alert.id}
                     className="flex items-start justify-between p-4 rounded-xl border-2 border-fuchsia-500/60 bg-fuchsia-950/30 shadow-[0_0_20px_-8px_rgba(217,70,239,0.5)]">

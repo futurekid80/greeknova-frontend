@@ -3,12 +3,15 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
+const DEMO_API = 'https://api.greeknova.com'
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState<'email' | 'otp'>('email')
+  const [step, setStep] = useState<'email' | 'otp' | 'demo'>('email')
   const [error, setError] = useState('')
+  const [demoCode, setDemoCode] = useState('')
 
   async function handleEmailSubmit() {
     if (!email || !email.includes('@')) {
@@ -60,6 +63,42 @@ export default function LoginPage() {
     const rTo = new URLSearchParams(window.location.search).get('returnTo') || '/'; window.location.href = rTo
   }
 
+  async function handleDemoSubmit() {
+    if (!demoCode) {
+      setError('Please enter the demo access code')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`${DEMO_API}/auth/demo-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: demoCode.trim() }),
+      })
+      if (!res.ok) {
+        setError('Invalid demo code. Please check and try again.')
+        setLoading(false)
+        return
+      }
+      const { token_hash } = await res.json()
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: 'magiclink',
+      })
+      if (verifyError) {
+        setError('Could not start demo session. Please try again.')
+        setLoading(false)
+        return
+      }
+      const rTo = new URLSearchParams(window.location.search).get('returnTo') || '/'
+      window.location.href = rTo
+    } catch {
+      setError('Something went wrong. Please try again.')
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
@@ -98,6 +137,47 @@ export default function LoginPage() {
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition disabled:opacity-50"
               >
                 {loading ? 'Sending...' : 'Send Login Code →'}
+              </button>
+              <button
+                onClick={() => { setStep('demo'); setError('') }}
+                className="w-full text-gray-500 hover:text-gray-300 text-sm py-2 mt-2 transition"
+              >
+                Have a demo access code?
+              </button>
+            </div>
+          )}
+          {step === 'demo' && (
+            <div>
+              <h2 className="text-white text-lg font-semibold mb-1">
+                Demo Access
+              </h2>
+              <p className="text-gray-400 text-sm mb-6">
+                Enter the shared demo code given to you.
+              </p>
+              <label className="text-gray-400 text-xs uppercase tracking-wider mb-1 block">
+                Demo Code
+              </label>
+              <input
+                type="text"
+                value={demoCode}
+                onChange={(e) => setDemoCode(e.target.value.replace(/\s/g, ''))}
+                onKeyDown={(e) => e.key === 'Enter' && handleDemoSubmit()}
+                placeholder="Enter demo code"
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 mb-4 text-center tracking-[0.5em] text-lg font-bold"
+              />
+              {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+              <button
+                onClick={handleDemoSubmit}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition disabled:opacity-50"
+              >
+                {loading ? 'Verifying...' : 'Enter Demo →'}
+              </button>
+              <button
+                onClick={() => { setStep('email'); setDemoCode(''); setError('') }}
+                className="w-full text-gray-500 hover:text-gray-300 text-sm py-2 mt-2 transition"
+              >
+                ← Back to login
               </button>
             </div>
           )}

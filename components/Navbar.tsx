@@ -21,6 +21,11 @@ const NAV_GROUPS = [
       { href: '/',           label: '📡 Market Pulse' },
       { href: '/watchlist',  label: 'Watchlist' },
       { href: '/journal',    label: '📓 Journal' },
+      // Defaults to NIFTY since this is a fixed nav link (no symbol
+      // context) -- the page itself lets you switch symbol via the URL,
+      // and the homepage's Stock Command Centre search links to a
+      // specific symbol's chart directly.
+      { href: '/stock-chart/NIFTY', label: '📈 Price Chart' },
     ]
   },
   {

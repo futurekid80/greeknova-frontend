@@ -252,9 +252,9 @@ export default function StockChart({ symbol }: { symbol: string }) {
       .then((data) => {
         if (cancelled || !data || data.error || candleSeriesRef.current !== series) return
         const specs: [number | null | undefined, string, string][] = [
-          [data.ce_wall, '#dc2626', 'CE Wall'],
-          [data.pe_wall, '#16a34a', 'PE Wall'],
-          [data.poc_strike, '#a855f7', 'POC'],
+          [data.ce_wall, '#dc2626', 'OI: CE Wall'],
+          [data.pe_wall, '#16a34a', 'OI: PE Wall'],
+          [data.poc_strike, '#a855f7', 'OI: POC'],
         ]
         for (const [price, color, title] of specs) {
           if (price == null) continue
@@ -292,9 +292,9 @@ export default function StockChart({ symbol }: { symbol: string }) {
       .then((data) => {
         if (cancelled || !data || data.error || candleSeriesRef.current !== series) return
         const specs: [number | null | undefined, string, string][] = [
-          [data.call_wall_strike, '#f97316', 'Call Wall'],
-          [data.put_wall_strike, '#0ea5e9', 'Put Wall'],
-          [data.flip_point, '#e5e7eb', 'Gamma Flip'],
+          [data.call_wall_strike, '#f97316', 'GEX: Call Wall'],
+          [data.put_wall_strike, '#0ea5e9', 'GEX: Put Wall'],
+          [data.flip_point, '#e5e7eb', 'GEX: Gamma Flip'],
         ]
         for (const [price, color, title] of specs) {
           if (price == null) continue
@@ -380,8 +380,8 @@ export default function StockChart({ symbol }: { symbol: string }) {
         1
       )
       series.setData(data)
-      series.createPriceLine({ price: 70, color: '#6b7280', lineWidth: 1, lineStyle: LEVEL_LINE_STYLE, axisLabelVisible: true, title: 'Overbought' })
-      series.createPriceLine({ price: 30, color: '#6b7280', lineWidth: 1, lineStyle: LEVEL_LINE_STYLE, axisLabelVisible: true, title: 'Oversold' })
+      series.createPriceLine({ price: 60, color: '#6b7280', lineWidth: 1, lineStyle: LEVEL_LINE_STYLE, axisLabelVisible: true, title: 'Overbought' })
+      series.createPriceLine({ price: 40, color: '#6b7280', lineWidth: 1, lineStyle: LEVEL_LINE_STYLE, axisLabelVisible: true, title: 'Oversold' })
       rsiSeriesRef.current = series
 
       if (containerRef.current) {
@@ -418,7 +418,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
               className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
                 showRSI ? 'bg-violet-900/60 text-violet-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
               }`}
-              title="RSI (14) in its own pane below, with 70/30 reference lines"
+              title="RSI (14) in its own pane below, with 60/40 reference lines"
             >
               RSI
             </button>
@@ -429,7 +429,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
               className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
                 showOI ? 'bg-fuchsia-900/60 text-fuchsia-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
               }`}
-              title="CE Wall (red) · PE Wall (green) · POC (purple)"
+              title="OI: CE Wall (red) · PE Wall (green) · POC (purple)"
             >
               OI Levels
             </button>
@@ -438,7 +438,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
               className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
                 showGEX ? 'bg-orange-900/60 text-orange-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
               }`}
-              title="Call Wall (orange) · Put Wall (blue) · Gamma Flip (white)"
+              title="GEX: Call Wall (orange) · Put Wall (blue) · Gamma Flip (white)"
             >
               GEX Levels
             </button>

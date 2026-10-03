@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, MessageSquare, X, Bell, LogOut, User } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import VixGauge from '@/components/VixGauge'
 
 // Oct 2 2026: regrouped by trader persona (Positional / Intraday / Option
 // Sellers) instead of by data-type (Market / OI Analysis / Greeks / Signals)
@@ -70,6 +71,7 @@ const NAV_GROUPS = [
 ]
 
 const STANDALONE = [
+  { href: '/vix', label: '😨 VIX' },
   { href: '/alerts', label: 'Alerts' },
 ]
 
@@ -365,6 +367,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <VixGauge />
             <BellBadge />
             <button
               onClick={() => setFeedbackOpen(true)}

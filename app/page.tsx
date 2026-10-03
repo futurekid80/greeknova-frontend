@@ -1,5 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
+import StockChart from '@/components/StockChart'
 export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -790,6 +791,9 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
           <a href={`/oi-profile?symbol=${symbol}`} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 px-2 py-1 rounded-lg">OI Profile →</a>
         </div>
         <button onClick={onClose} className="text-gray-600 hover:text-white p-1"><X size={16}/></button>
+      </div>
+      <div className="p-4 pb-0">
+        <StockChart symbol={symbol} />
       </div>
       {loading && <div className="p-6 text-center text-gray-500 text-sm">Loading...</div>}
       {data && (

@@ -95,7 +95,7 @@ function DropdownMenu({ group, active }: { group: typeof NAV_GROUPS[0], active: 
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-1 text-sm font-medium transition-colors px-1 py-0.5 rounded ${
+        className={`flex items-center gap-1 text-sm font-medium transition-colors px-1 py-0.5 rounded whitespace-nowrap ${
           isActive ? 'text-white' : 'text-gray-400 hover:text-white'
         }`}>
         {group.label}

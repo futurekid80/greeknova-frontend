@@ -25,9 +25,21 @@ type VixData = {
   timestamp: string
 }
 
+type RangeKey = '3h' | '1m' | '3m' | '6m' | '1y'
+
+type DailyHistory = {
+  range: string
+  history: { date: string; open: number; high: number; low: number; close: number }[]
+  range_low: number | null
+  range_high: number | null
+}
+
 export default function VixPage() {
   const [data, setData] = useState<VixData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [range, setRange] = useState<RangeKey>('3h')
+  const [daily, setDaily] = useState<DailyHistory | null>(null)
+  const [dailyLoading, setDailyLoading] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -46,12 +58,29 @@ export default function VixPage() {
     return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    if (range === '3h') return
+    setDailyLoading(true)
+    fetch(`${API}/vix-history?range=${range}&t=${Date.now()}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(setDaily)
+      .catch(() => setDaily(null))
+      .finally(() => setDailyLoading(false))
+  }, [range])
+
   const color = data ? ZONE_COLORS[data.color] || '#6b7280' : '#6b7280'
 
-  const chartData = (data?.history || []).map((h) => ({
+  const intradayChartData = (data?.history || []).map((h) => ({
     time: new Date(h.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
     vix: h.vix_value,
   }))
+
+  const dailyChartData = (daily?.history || []).map((h) => ({
+    time: new Date(h.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+    vix: h.close,
+  }))
+
+  const chartData = range === '3h' ? intradayChartData : dailyChartData
 
   return (
     <>
@@ -117,8 +146,34 @@ export default function VixPage() {
             </div>
 
             <div className="rounded-xl border border-gray-800 p-4 mb-6">
-              <div className="text-xs text-gray-500 mb-3">Last 3 hours</div>
-              {chartData.length > 1 ? (
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs text-gray-500">
+                  {range === '3h' ? "Today's intraday" : `Daily close — ${range.toUpperCase()}`}
+                </div>
+                <div className="flex gap-1">
+                  {(['3h', '1m', '3m', '6m', '1y'] as RangeKey[]).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setRange(r)}
+                      className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                        range === r
+                          ? 'bg-gray-700 text-white'
+                          : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                      }`}
+                    >
+                      {r.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {daily && range !== '3h' && daily.range_low !== null && (
+                <div className="text-xs text-gray-500 mb-2">
+                  {range.toUpperCase()} range: {daily.range_low?.toFixed(2)} – {daily.range_high?.toFixed(2)}
+                </div>
+              )}
+              {dailyLoading ? (
+                <div className="text-sm text-gray-500 py-10 text-center">Loading history...</div>
+              ) : chartData.length > 1 ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -132,7 +187,9 @@ export default function VixPage() {
                 </ResponsiveContainer>
               ) : (
                 <div className="text-sm text-gray-500 py-10 text-center">
-                  Collecting data — chart fills in as snapshots build up through the session.
+                  {range === '3h'
+                    ? "Collecting data — chart fills in as snapshots build up through the session."
+                    : "No history yet for this range."}
                 </div>
               )}
             </div>

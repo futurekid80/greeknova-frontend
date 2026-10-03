@@ -401,6 +401,12 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
   const [data, setData]       = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [stale, setStale]     = useState<any>(null)
+  // BUG FIX (Oct 3 2026): was computed inline during render with new Date(),
+  // which can differ between the server-rendered HTML and the client's
+  // hydration render -- a hydration-mismatch source. Default false matches
+  // what SSR would compute at a stable baseline; real value is set client-only
+  // in the effect below, after hydration, so no mismatch is possible.
+  const [isMarketOpen, setIsMarketOpen] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -418,14 +424,19 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
     return () => clearInterval(t)
   }, [])
 
-  const isMarketOpen = (() => {
-    const now = new Date()
-    const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
-    const day = ist.getDay()
-    if (day === 0 || day === 6) return false
-    const mins = ist.getHours() * 60 + ist.getMinutes()
-    return mins >= 555 && mins <= 930
-  })()
+  useEffect(() => {
+    function calc() {
+      const now = new Date()
+      const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+      const day = ist.getDay()
+      if (day === 0 || day === 6) { setIsMarketOpen(false); return }
+      const mins = ist.getHours() * 60 + ist.getMinutes()
+      setIsMarketOpen(mins >= 555 && mins <= 930)
+    }
+    calc()
+    const t = setInterval(calc, 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
 
   const display = (data?.signals?.length === 0 && stale && !isMarketOpen) ? stale : data
   const signals = display?.signals || []
@@ -930,7 +941,20 @@ export default function MarketPulse() {
   const [analyses, setAnalyses]       = useState<IndexAnalysis[]>([])
   const [cmps, setCmps]               = useState<Record<string,number>>({})
   const [cprData, setCprData]         = useState<CPRRow[]>([])
-  const [pulseStocks, setPulseStocks] = useState<PulseStock[]>(() => {
+  // BUG FIX (Oct 3 2026): pulseStocks/breadth used to read sessionStorage
+  // synchronously in the useState lazy initializer, which runs during the
+  // initial render. SSR has no sessionStorage (falls back to the empty
+  // default), but the client's first render DOES see real cached data when
+  // a returning visitor has it -- so the client's first-paint markup didn't
+  // match the server-rendered HTML, which is exactly what triggers React's
+  // hydration-mismatch crash (#418/#423) and left the whole page frozen on
+  // "Loading...". Fix: keep the SSR-safe default here, and only read the
+  // real cached value inside a useEffect below (client-only, after mount),
+  // so hydration always starts from a matching empty state.
+  const [pulseStocks, setPulseStocks] = useState<PulseStock[]>([])
+  const [breadth, setBreadth] = useState({ bullish:0, bearish:0, neutral:0, total:0 })
+
+  useEffect(() => {
     try {
       const cached = sessionStorage.getItem('gn_breadth_stocks')
       const dateCached = sessionStorage.getItem('gn_breadth_cache')
@@ -938,23 +962,21 @@ export default function MarketPulse() {
         const today = new Date().toISOString().slice(0, 10)
         const meta = JSON.parse(dateCached)
         const ageMs = Date.now() - (meta.savedAt || 0)
-        if (meta.date === today && ageMs < 10 * 60 * 1000) return JSON.parse(cached)
+        if (meta.date === today && ageMs < 10 * 60 * 1000) setPulseStocks(JSON.parse(cached))
       }
     } catch {}
-    return []
-  })
-  const [breadth, setBreadth] = useState(() => {
     try {
       const cached = sessionStorage.getItem('gn_breadth_cache')
       if (cached) {
         const parsed = JSON.parse(cached)
         const today = new Date().toISOString().slice(0, 10)
         const ageMs = Date.now() - (parsed.savedAt || 0)
-        if (parsed.date === today && ageMs < 10 * 60 * 1000) return { bullish: parsed.bullish, bearish: parsed.bearish, neutral: parsed.neutral, total: parsed.total }
+        if (parsed.date === today && ageMs < 10 * 60 * 1000) {
+          setBreadth({ bullish: parsed.bullish, bearish: parsed.bearish, neutral: parsed.neutral, total: parsed.total })
+        }
       }
     } catch {}
-    return { bullish:0, bearish:0, neutral:0, total:0 }
-  })
+  }, [])
   const [loading, setLoading]         = useState(true)
   const [lastUpdate, setLastUpdate]   = useState('')
   const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)
@@ -963,6 +985,10 @@ export default function MarketPulse() {
   const [activeSector, setActiveSector] = useState<string|null>(null)
   const [activeBreadth, setActiveBreadth] = useState<'bullish'|'bearish'|'neutral'|null>(null)
   const [ivData, setIvData] = useState<Record<string, {atm_iv:number, iv_min:number, iv_max:number}>>({})
+  // BUG FIX (Oct 3 2026): was an inline IIFE in JSX using new Date() at
+  // render time -- same hydration-mismatch class as isMarketOpen above.
+  // Default false matches SSR; real value set client-only post-mount.
+  const [isPreOpen, setIsPreOpen] = useState(false)
   // ADX map fetch removed (Jul 27 2026) — built and shipped, but results
   // weren't giving the desired signal quality, so it's turned off for now
   // rather than kept running (it was also the single slowest fetch on this
@@ -974,6 +1000,18 @@ export default function MarketPulse() {
       if (!session) window.location.href = '/login'
     }
     checkAuth()
+  }, [])
+
+  useEffect(() => {
+    function calc() {
+      const now = new Date()
+      const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+      const h = ist.getHours(), m = ist.getMinutes(), day = ist.getDay()
+      setIsPreOpen(day !== 0 && day !== 6 && (h < 9 || (h === 9 && m < 15)))
+    }
+    calc()
+    const t = setInterval(calc, 60 * 1000)
+    return () => clearInterval(t)
   }, [])
 
   // BUG FIX (Sep 12 2026): fetchData used to fetch cpr/oi-pulse/uoa/52wh
@@ -1120,22 +1158,15 @@ export default function MarketPulse() {
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/"/>
-      {(() => {
-        const now = new Date()
-        const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
-        const h = ist.getHours(), m = ist.getMinutes(), day = ist.getDay()
-        const isPreOpen = day !== 0 && day !== 6 && (h < 9 || (h === 9 && m < 15))
-        if (!isPreOpen) return null
-        return (
-          <a href="/premarket" className="flex items-center justify-between px-4 py-2.5 bg-amber-950/60 border-b border-amber-700/50 hover:bg-amber-950/80 transition-colors group">
-            <div className="flex items-center gap-3">
-              <span className="text-amber-400 text-sm font-black animate-pulse">⚡ PRE-OPEN</span>
-              <span className="text-amber-200/80 text-xs">Market opens at 9:15 AM · View CPR setups, OI buildup &amp; confluence picks</span>
-            </div>
-            <span className="text-amber-400 text-xs font-bold group-hover:translate-x-1 transition-transform">View Report →</span>
-          </a>
-        )
-      })()}
+      {isPreOpen && (
+        <a href="/premarket" className="flex items-center justify-between px-4 py-2.5 bg-amber-950/60 border-b border-amber-700/50 hover:bg-amber-950/80 transition-colors group">
+          <div className="flex items-center gap-3">
+            <span className="text-amber-400 text-sm font-black animate-pulse">⚡ PRE-OPEN</span>
+            <span className="text-amber-200/80 text-xs">Market opens at 9:15 AM · View CPR setups, OI buildup &amp; confluence picks</span>
+          </div>
+          <span className="text-amber-400 text-xs font-bold group-hover:translate-x-1 transition-transform">View Report →</span>
+        </a>
+      )}
       <div className="bg-gray-950 border-b border-gray-800/50 overflow-hidden">
         <div className="flex items-center h-9">
           <div className="flex-shrink-0 bg-emerald-950 border-r border-emerald-800/50 px-3 h-full flex items-center">

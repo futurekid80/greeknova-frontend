@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 const API = 'https://api.greeknova.com'
 
@@ -39,34 +40,28 @@ export default function VixGauge() {
 
   if (!data) return null
   const color = ZONE_COLORS[data.color] || '#6b7280'
+  const alertTitle = data.alert
+    ? `VIX ${data.alert.type === 'VIX_SPIKE' ? 'spiking' : 'cooling'} ${Math.abs(data.alert.move_pct)}% intraday`
+    : `India VIX — ${data.zone}`
 
   return (
-    <div
-      className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+    <Link
+      href="/vix"
+      className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm shrink-0 hover:bg-gray-800/40 transition-colors"
       style={{ borderColor: color }}
-      title="India VIX — NSE's volatility (fear) index"
+      title={alertTitle}
     >
-      <span className="text-xs text-gray-400">VIX</span>
-      <span className="font-semibold" style={{ color }}>
+      <span className="text-[10px] text-gray-500">VIX</span>
+      <span className="font-semibold tabular-nums" style={{ color }}>
         {data.vix_value.toFixed(2)}
       </span>
       {data.change_pct !== null && (
-        <span className="text-xs" style={{ color }}>
+        <span className="text-xs tabular-nums" style={{ color }}>
           {data.change_pct > 0 ? '+' : ''}
           {data.change_pct}%
         </span>
       )}
-      <span
-        className="text-xs px-1.5 py-0.5 rounded"
-        style={{ backgroundColor: color + '22', color }}
-      >
-        {data.zone}
-      </span>
-      {data.alert && (
-        <span className="text-xs font-bold animate-pulse" style={{ color }}>
-          ⚡ {data.alert.type === 'VIX_SPIKE' ? 'Spiking' : 'Cooling'} {Math.abs(data.alert.move_pct)}%
-        </span>
-      )}
-    </div>
+      {data.alert && <span className="text-xs animate-pulse">⚡</span>}
+    </Link>
   )
 }

@@ -8,8 +8,8 @@ type RangeKey = '1d' | '1m' | '3m' | '6m' | '1y'
 
 const CPR_LINE_STYLE = 2 // LineStyle.Dashed
 const LEVEL_LINE_STYLE = 2 // LineStyle.Dashed
-const CHART_HEIGHT = 300
-const RSI_PANE_HEIGHT = 110
+const CHART_HEIGHT = 520
+const RSI_PANE_HEIGHT = 160
 
 // EMA: standard exponential moving average, seeded with an SMA of the
 // first `period` closes (the usual convention) rather than seeding from

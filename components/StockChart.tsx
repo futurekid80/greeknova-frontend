@@ -113,11 +113,19 @@ export default function StockChart({ symbol }: { symbol: string }) {
           ))}
         </div>
       </div>
-      {loading && <div className="h-[300px] flex items-center justify-center text-sm text-gray-600">Loading chart...</div>}
-      {error && !loading && (
-        <div className="h-[300px] flex items-center justify-center text-sm text-gray-600">{error}</div>
-      )}
-      <div ref={containerRef} className={loading || error ? 'hidden' : ''} />
+      <div className="relative w-full h-[300px]">
+        <div ref={containerRef} className="w-full h-[300px]" />
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-600 bg-gray-950/40">
+            Loading chart...
+          </div>
+        )}
+        {error && !loading && (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-600 bg-gray-950/40">
+            {error}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -8,13 +8,65 @@ type RangeKey = '1d' | '1m' | '3m' | '6m' | '1y'
 
 const CPR_LINE_STYLE = 2 // LineStyle.Dashed
 const LEVEL_LINE_STYLE = 2 // LineStyle.Dashed
+const CHART_HEIGHT = 300
+const RSI_PANE_HEIGHT = 110
+
+// EMA: standard exponential moving average, seeded with an SMA of the
+// first `period` closes (the usual convention) rather than seeding from
+// the very first close, which would skew early values.
+function computeEMA(candles: Candle[], period: number): { time: string; value: number }[] {
+  if (candles.length < period) return []
+  const k = 2 / (period + 1)
+  const out: { time: string; value: number }[] = []
+  let sma = 0
+  for (let i = 0; i < period; i++) sma += candles[i].close
+  sma /= period
+  let prev = sma
+  out.push({ time: candles[period - 1].time, value: sma })
+  for (let i = period; i < candles.length; i++) {
+    prev = candles[i].close * k + prev * (1 - k)
+    out.push({ time: candles[i].time, value: prev })
+  }
+  return out
+}
+
+// RSI(14), Wilder's smoothing (the standard RSI definition -- a plain
+// moving average of gains/losses instead understates the indicator and
+// won't match what traders see on TradingView/Zerodha).
+function computeRSI(candles: Candle[], period = 14): { time: string; value: number }[] {
+  if (candles.length < period + 1) return []
+  const out: { time: string; value: number }[] = []
+  let gainSum = 0
+  let lossSum = 0
+  for (let i = 1; i <= period; i++) {
+    const diff = candles[i].close - candles[i - 1].close
+    if (diff > 0) gainSum += diff
+    else lossSum += -diff
+  }
+  let avgGain = gainSum / period
+  let avgLoss = lossSum / period
+  const rsiAt = (ag: number, al: number) => (al === 0 ? 100 : 100 - 100 / (1 + ag / al))
+  out.push({ time: candles[period].time, value: rsiAt(avgGain, avgLoss) })
+  for (let i = period + 1; i < candles.length; i++) {
+    const diff = candles[i].close - candles[i - 1].close
+    const gain = diff > 0 ? diff : 0
+    const loss = diff < 0 ? -diff : 0
+    avgGain = (avgGain * (period - 1) + gain) / period
+    avgLoss = (avgLoss * (period - 1) + loss) / period
+    out.push({ time: candles[i].time, value: rsiAt(avgGain, avgLoss) })
+  }
+  return out
+}
 
 export default function StockChart({ symbol }: { symbol: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
   const candleSeriesRef = useRef<any>(null)
+  const candlesRef = useRef<Candle[]>([])
   const oiLinesRef = useRef<any[]>([])
   const gexLinesRef = useRef<any[]>([])
+  const emaSeriesRef = useRef<any[]>([])
+  const rsiSeriesRef = useRef<any>(null)
   const [range, setRange] = useState<RangeKey>('6m')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,6 +77,8 @@ export default function StockChart({ symbol }: { symbol: string }) {
   // whole chart.
   const [showOI, setShowOI] = useState(false)
   const [showGEX, setShowGEX] = useState(false)
+  const [showEMA, setShowEMA] = useState(false)
+  const [showRSI, setShowRSI] = useState(false)
   const [chartVersion, setChartVersion] = useState(0)
 
   useEffect(() => {
@@ -71,7 +125,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
           layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#9ca3af' },
           grid: { vertLines: { color: '#1f2937' }, horzLines: { color: '#1f2937' } },
           width: containerRef.current.clientWidth,
-          height: 300,
+          height: CHART_HEIGHT + (showRSI ? RSI_PANE_HEIGHT : 0),
           timeScale: { borderColor: '#374151', timeVisible: range === '1d', secondsVisible: false },
           rightPriceScale: { borderColor: '#374151' },
         })
@@ -88,8 +142,11 @@ export default function StockChart({ symbol }: { symbol: string }) {
           json.candles.map((c: Candle) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }))
         )
         candleSeriesRef.current = candleSeries
+        candlesRef.current = json.candles
         oiLinesRef.current = []
         gexLinesRef.current = []
+        emaSeriesRef.current = []
+        rsiSeriesRef.current = null
 
         const volumeSeries = chart.addSeries(HistogramSeries, {
           color: '#374151',
@@ -259,6 +316,83 @@ export default function StockChart({ symbol }: { symbol: string }) {
     }
   }, [symbol, showGEX, chartVersion])
 
+  // EMA 20/50 overlay -- computed client-side from the already-loaded
+  // candles (no extra backend call), same pattern as VWAP
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    for (const s of emaSeriesRef.current) {
+      try { chart.removeSeries(s) } catch {}
+    }
+    emaSeriesRef.current = []
+    if (!showEMA) return
+
+    import('lightweight-charts').then(({ LineSeries }) => {
+      if (chartRef.current !== chart) return
+      const candles = candlesRef.current
+      const specs: [number, string][] = [
+        [20, '#fbbf24'],
+        [50, '#38bdf8'],
+      ]
+      for (const [period, color] of specs) {
+        const data = computeEMA(candles, period)
+        if (!data.length) continue
+        const series = chart.addSeries(LineSeries, {
+          color,
+          lineWidth: 1,
+          title: `EMA ${period}`,
+          priceLineVisible: false,
+          lastValueVisible: true,
+        })
+        series.setData(data)
+        emaSeriesRef.current.push(series)
+      }
+    })
+  }, [showEMA, chartVersion])
+
+  // RSI(14) -- own pane below the main chart (lightweight-charts v5 native
+  // multi-pane support), since it's an oscillator on a 0-100 scale and
+  // doesn't make sense overlaid on price
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+
+    if (rsiSeriesRef.current) {
+      const paneIdx = rsiSeriesRef.current.paneIndex ? rsiSeriesRef.current.paneIndex() : null
+      try { chart.removeSeries(rsiSeriesRef.current) } catch {}
+      rsiSeriesRef.current = null
+      try {
+        if (paneIdx != null && chart.panes().length > paneIdx) chart.removePane(paneIdx)
+      } catch {}
+      if (containerRef.current) {
+        chart.resize(containerRef.current.clientWidth, CHART_HEIGHT)
+      }
+    }
+    if (!showRSI) return
+
+    import('lightweight-charts').then(({ LineSeries }) => {
+      if (chartRef.current !== chart) return
+      const data = computeRSI(candlesRef.current, 14)
+      if (!data.length) return
+      const series = chart.addSeries(
+        LineSeries,
+        { color: '#c084fc', lineWidth: 1, title: 'RSI 14', priceLineVisible: false, lastValueVisible: true },
+        1
+      )
+      series.setData(data)
+      series.createPriceLine({ price: 70, color: '#6b7280', lineWidth: 1, lineStyle: LEVEL_LINE_STYLE, axisLabelVisible: true, title: 'Overbought' })
+      series.createPriceLine({ price: 30, color: '#6b7280', lineWidth: 1, lineStyle: LEVEL_LINE_STYLE, axisLabelVisible: true, title: 'Oversold' })
+      rsiSeriesRef.current = series
+
+      if (containerRef.current) {
+        chart.resize(containerRef.current.clientWidth, CHART_HEIGHT + RSI_PANE_HEIGHT)
+      }
+      const panes = chart.panes()
+      if (panes[0]) panes[0].setHeight(CHART_HEIGHT)
+      if (panes[1]) panes[1].setHeight(RSI_PANE_HEIGHT)
+    })
+  }, [showRSI, chartVersion])
+
   return (
     <div className="bg-gray-950/40 border border-gray-800 rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
@@ -269,6 +403,26 @@ export default function StockChart({ symbol }: { symbol: string }) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setShowEMA((v) => !v)}
+              className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
+                showEMA ? 'bg-amber-900/60 text-amber-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+              }`}
+              title="EMA 20 (amber) · EMA 50 (sky blue)"
+            >
+              EMA
+            </button>
+            <button
+              onClick={() => setShowRSI((v) => !v)}
+              className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
+                showRSI ? 'bg-violet-900/60 text-violet-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+              }`}
+              title="RSI (14) in its own pane below, with 70/30 reference lines"
+            >
+              RSI
+            </button>
+          </div>
           <div className="flex gap-1">
             <button
               onClick={() => setShowOI((v) => !v)}
@@ -304,8 +458,8 @@ export default function StockChart({ symbol }: { symbol: string }) {
           </div>
         </div>
       </div>
-      <div className="relative w-full h-[300px]">
-        <div ref={containerRef} className="w-full h-[300px]" />
+      <div className="relative w-full" style={{ height: CHART_HEIGHT + (showRSI ? RSI_PANE_HEIGHT : 0) }}>
+        <div ref={containerRef} className="w-full h-full" />
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-600 bg-gray-950/40">
             Loading chart...

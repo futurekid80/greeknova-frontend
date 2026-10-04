@@ -173,7 +173,7 @@ export default function Scanners() {
       setLastUpdate(new Date(ts).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }))
 
       // ── FIX: Paginated fetch — Supabase default 1000-row limit was cutting off at ~30 stocks
-      // 66 symbols × ~40 strikes × 2 types × 3 expiries ≈ 15,840 rows needed
+      // Full F&O universe × ~40 strikes × 2 types × 3 expiries needs well over 1000 rows
       let data: any[] = []
       for (let offset = 0; offset < 200000; offset += 1000) {
         const { data: batch } = await supabase
@@ -184,10 +184,13 @@ export default function Scanners() {
         if (batch.length < 1000) break
       }
 
-      // ── FIX: CMP — increased limit to cover all 66 symbols
+      // ── FIX: CMP — limit sized for the full F&O universe (216 symbols as of
+      // Oct 2026). Rows come back newest-timestamp-first, so this comfortably
+      // covers the latest snapshot plus a prior one as fallback for any gaps,
+      // with headroom if the universe grows further.
       const { data: cmpData } = await supabase
         .from('cmp_prices').select('*')
-        .order('timestamp', { ascending: false }).limit(500)
+        .order('timestamp', { ascending: false }).limit(1000)
 
       if (!data.length) { setLoading(false); return }
 

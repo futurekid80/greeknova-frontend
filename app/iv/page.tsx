@@ -12,7 +12,7 @@ interface IVResult {
   iv_ce: number | null; iv_pe: number | null; current_iv: number
   iv_52w_high: number; iv_52w_low: number
   ivr: number | null; ivp: number | null
-  iv_history_days: number; iv_signal: string; iv_label: string
+  iv_history_days: number; iv_signal: string; iv_label: string; low_confidence: boolean
   strategies: string[]
   expected_move_pts: number; expected_move_pct: number
   upper_range: number; lower_range: number
@@ -320,7 +320,9 @@ export default function IVAnalysis() {
                         <p className="text-sm font-semibold text-gray-300">
                           {r.ivp !== null ? `${r.ivp}%ile` : '—'}
                         </p>
-                        <p className="text-xs text-gray-600">{r.iv_history_days}d history</p>
+                        <p className={`text-xs ${r.low_confidence ? 'text-amber-500 font-semibold' : 'text-gray-600'}`}>
+                          {r.low_confidence ? `⚠ only ${r.iv_history_days}d history` : `${r.iv_history_days}d history`}
+                        </p>
                       </td>
 
                       {/* Expected Move 1SD */}
@@ -359,6 +361,11 @@ export default function IVAnalysis() {
                           {r.strategies.slice(0,2).map((s,j) => (
                             <span key={j} className="text-gray-400">{s}</span>
                           ))}
+                          {r.low_confidence && (
+                            <span className="text-amber-500 font-semibold">
+                              ⚠ Low confidence ({r.iv_history_days}d)
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>

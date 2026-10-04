@@ -260,7 +260,7 @@ export default function IVAnalysis() {
             <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl px-4 py-3 flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0"/>
               <p className="text-xs text-blue-400">
-                Calculating Black-Scholes IV for all 66 symbols...
+                Calculating Black-Scholes IV for all F&O symbols...
                 <span className="text-gray-500 ml-2">First load takes 15-20 seconds · Cached for 5 minutes after</span>
               </p>
             </div>

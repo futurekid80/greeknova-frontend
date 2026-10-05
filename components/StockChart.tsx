@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from 'react'
 
 const API = 'https://api.greeknova.com'
 
-type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number }
+// `time` is a "YYYY-MM-DD" string for daily candles, or a Unix timestamp
+// (seconds) for intraday candles -- lightweight-charts requires the latter
+// numeric form for anything with a time-of-day component.
+type Candle = { time: string | number; open: number; high: number; low: number; close: number; volume: number }
 type RangeKey = '1d' | '1m' | '3m' | '6m' | '1y'
 
 const CPR_LINE_STYLE = 2 // LineStyle.Dashed
@@ -14,10 +17,10 @@ const RSI_PANE_HEIGHT = 160
 // EMA: standard exponential moving average, seeded with an SMA of the
 // first `period` closes (the usual convention) rather than seeding from
 // the very first close, which would skew early values.
-function computeEMA(candles: Candle[], period: number): { time: string; value: number }[] {
+function computeEMA(candles: Candle[], period: number): { time: string | number; value: number }[] {
   if (candles.length < period) return []
   const k = 2 / (period + 1)
-  const out: { time: string; value: number }[] = []
+  const out: { time: string | number; value: number }[] = []
   let sma = 0
   for (let i = 0; i < period; i++) sma += candles[i].close
   sma /= period
@@ -33,9 +36,9 @@ function computeEMA(candles: Candle[], period: number): { time: string; value: n
 // RSI(14), Wilder's smoothing (the standard RSI definition -- a plain
 // moving average of gains/losses instead understates the indicator and
 // won't match what traders see on TradingView/Zerodha).
-function computeRSI(candles: Candle[], period = 14): { time: string; value: number }[] {
+function computeRSI(candles: Candle[], period = 14): { time: string | number; value: number }[] {
   if (candles.length < period + 1) return []
-  const out: { time: string; value: number }[] = []
+  const out: { time: string | number; value: number }[] = []
   let gainSum = 0
   let lossSum = 0
   for (let i = 1; i <= period; i++) {

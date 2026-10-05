@@ -146,6 +146,19 @@ export default function StraddleChartPage() {
         height: CHART_HEIGHT,
         timeScale: { borderColor: '#374151', timeVisible: true, secondsVisible: false },
         rightPriceScale: { borderColor: '#374151' },
+        // BUG FIX (Oct 5 2026): lightweight-charts lets you grab either price
+        // axis label and drag it to rescale JUST that axis -- with two price
+        // scales here (Combined/CE/PE on the right, Spot/VWAP on the left),
+        // a drag that starts anywhere near the right axis rescaled only the
+        // right scale, leaving the left scale untouched. That's what made
+        // Spot/VWAP look "frozen"/unaffected while Combined/CE/PE visibly
+        // distorted (even going negative) on drag. Disabling price-axis drag
+        // leaves only time-panning (handleScale.axisPressedMouseMove.time),
+        // which moves the shared time scale and lets both price scales
+        // autoscale together from the same visible window -- so everything
+        // now moves in sync, the way a single-axis chart would.
+        handleScale: { axisPressedMouseMove: { time: true, price: false }, mouseWheel: true, pinch: true },
+        handleScroll: { pressedMouseMove: true, mouseWheel: true, horzTouchDrag: true, vertTouchDrag: false },
       })
       chartRef.current = chart
 

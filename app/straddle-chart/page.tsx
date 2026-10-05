@@ -79,7 +79,23 @@ export default function StraddleChartPage() {
         if (chartRes) {
           try {
             const cj = await chartRes.json()
-            const candles = cj.candles || []
+            const allCandles = cj.candles || []
+            // BUG FIX (Oct 5 2026): /chart-data?range=1d deliberately returns
+            // up to 5 CALENDAR days of candles (so the 1D view still has data
+            // right after a weekend/holiday -- see chart_data.py) while the
+            // straddle series itself is always exactly one trading day. Left
+            // untrimmed, Spot/VWAP carried several days of history against
+            // Combined/CE/PE's single day: the two mismatched date ranges
+            // made Spot/VWAP look "frozen" when panning -- it wasn't frozen,
+            // its time domain was just several times wider, so the same drag
+            // distance moved it proportionally far less. Trim to the most
+            // recent trading day's candles only, same technique StockChart.tsx
+            // uses for its own 1D session view, so Spot/VWAP cover exactly
+            // the same window as the straddle premium series.
+            const toIstDate = (epochSec: number) =>
+              new Date(epochSec * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+            const lastDate = allCandles.length ? toIstDate(allCandles[allCandles.length - 1].time) : null
+            const candles = lastDate ? allCandles.filter((c: any) => toIstDate(c.time) === lastDate) : allCandles
             setSpotPoints(candles.map((c: any) => ({ time: c.time, value: c.close })))
             let cumPV = 0
             let cumVol = 0

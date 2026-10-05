@@ -215,7 +215,25 @@ export default function StockChart({ symbol }: { symbol: string }) {
           }
         }
 
-        chart.timeScale().fitContent()
+        if (range === '1d') {
+          // Focus on just the most recent trading session instead of the
+          // full multi-day fetch window (widened to 5 days so the 1D view
+          // always reaches the last real session across weekends/holidays)
+          // -- fitContent() alone would zoom out to show all of it, leaving
+          // today's handful of candles squeezed flat at one edge.
+          const toIstDate = (epochSec: number) =>
+            new Date(epochSec * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+          const lastTime = json.candles[json.candles.length - 1].time as number
+          const lastDate = toIstDate(lastTime)
+          const sessionStartCandle = json.candles.find((c: Candle) => toIstDate(c.time as number) === lastDate)
+          if (sessionStartCandle) {
+            chart.timeScale().setVisibleRange({ from: sessionStartCandle.time as any, to: lastTime as any })
+          } else {
+            chart.timeScale().fitContent()
+          }
+        } else {
+          chart.timeScale().fitContent()
+        }
         setLoading(false)
         // candleSeriesRef/chart are freshly (re)built here — bump so the
         // OI/GEX overlay effects below know to (re)draw onto the new series
@@ -459,6 +477,27 @@ export default function StockChart({ symbol }: { symbol: string }) {
               </button>
             ))}
           </div>
+          <button
+            onClick={() => {
+              if (!chartRef.current) return
+              if (range === '1d' && candlesRef.current.length) {
+                const toIstDate = (epochSec: number) =>
+                  new Date(epochSec * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+                const lastTime = candlesRef.current[candlesRef.current.length - 1].time as number
+                const lastDate = toIstDate(lastTime)
+                const sessionStartCandle = candlesRef.current.find((c) => toIstDate(c.time as number) === lastDate)
+                if (sessionStartCandle) {
+                  chartRef.current.timeScale().setVisibleRange({ from: sessionStartCandle.time as any, to: lastTime as any })
+                  return
+                }
+              }
+              chartRef.current.timeScale().fitContent()
+            }}
+            className="text-[10px] px-2 py-0.5 rounded font-medium text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+            title={range === '1d' ? "Reset to today's session" : 'Reset zoom — fit full range'}
+          >
+            ⟲ Reset
+          </button>
         </div>
       </div>
       <div className="relative w-full" style={{ height: CHART_HEIGHT + (showRSI ? RSI_PANE_HEIGHT : 0) }}>

@@ -60,6 +60,7 @@ const NAV_GROUPS = [
     label: '🧭 Option Sellers',
     links: [
       { href: '/seller-screen', label: '🧭 Premium Screen' },
+      { href: '/straddle-chart', label: '🍲 Straddle Chart' },
       { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' },
       { href: '/theta', label: 'Θ Theta Decay' },
       { href: '/vega', label: 'ν Vega Exposure' },

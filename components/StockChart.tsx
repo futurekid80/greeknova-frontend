@@ -14,6 +14,21 @@ const LEVEL_LINE_STYLE = 2 // LineStyle.Dashed
 const CHART_HEIGHT = 520
 const RSI_PANE_HEIGHT = 160
 
+// BUG FIX (Oct 5 2026): lightweight-charts always renders numeric Time
+// values (intraday Unix timestamps) using UTC -- it has no "display
+// timezone" option, unlike the date-string business-day type used for
+// daily candles. The backend correctly sends true UTC epoch seconds, so
+// without this, every intraday chart showed times 5:30 behind real IST
+// clock time. Fix: shift numeric timestamps by the IST offset before
+// handing them to the chart, so its UTC-formatted labels read correctly
+// as IST. Date-string times (daily candles) are untouched -- those are
+// already timezone-agnostic "business days". Only applied right before
+// data reaches the chart API (setData / setVisibleRange); all other
+// logic (toIstDate session-boundary detection, EMA/RSI math) keeps using
+// the true, unshifted epoch from candlesRef.
+const IST_OFFSET_SEC = 19800 // 5h30m
+const chartTime = (t: string | number): any => (typeof t === 'number' ? t + IST_OFFSET_SEC : t)
+
 // EMA: standard exponential moving average, seeded with an SMA of the
 // first `period` closes (the usual convention) rather than seeding from
 // the very first close, which would skew early values.
@@ -142,7 +157,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
           wickDownColor: '#dc2626',
         })
         candleSeries.setData(
-          json.candles.map((c: Candle) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }))
+          json.candles.map((c: Candle) => ({ time: chartTime(c.time), open: c.open, high: c.high, low: c.low, close: c.close }))
         )
         candleSeriesRef.current = candleSeries
         candlesRef.current = json.candles
@@ -159,7 +174,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
         volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } })
         volumeSeries.setData(
           json.candles.map((c: Candle) => ({
-            time: c.time,
+            time: chartTime(c.time),
             value: c.volume,
             color: c.close >= c.open ? '#16a34a33' : '#dc262633',
           }))
@@ -174,7 +189,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
             const typical = (c.high + c.low + c.close) / 3
             cumPV += typical * (c.volume || 0)
             cumVol += c.volume || 0
-            return { time: c.time, value: cumVol > 0 ? cumPV / cumVol : typical }
+            return { time: chartTime(c.time), value: cumVol > 0 ? cumPV / cumVol : typical }
           })
           const vwapSeries = chart.addSeries(LineSeries, {
             color: '#3b82f6',
@@ -227,7 +242,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
           const lastDate = toIstDate(lastTime)
           const sessionStartCandle = json.candles.find((c: Candle) => toIstDate(c.time as number) === lastDate)
           if (sessionStartCandle) {
-            chart.timeScale().setVisibleRange({ from: sessionStartCandle.time as any, to: lastTime as any })
+            chart.timeScale().setVisibleRange({ from: chartTime(sessionStartCandle.time), to: chartTime(lastTime) })
           } else {
             chart.timeScale().fitContent()
           }
@@ -365,7 +380,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
           priceLineVisible: false,
           lastValueVisible: true,
         })
-        series.setData(data)
+        series.setData(data.map((d) => ({ time: chartTime(d.time), value: d.value })))
         emaSeriesRef.current.push(series)
       }
     })
@@ -400,7 +415,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
         { color: '#c084fc', lineWidth: 1, title: 'RSI 14', priceLineVisible: false, lastValueVisible: true },
         1
       )
-      series.setData(data)
+      series.setData(data.map((d) => ({ time: chartTime(d.time), value: d.value })))
       series.createPriceLine({ price: 60, color: '#6b7280', lineWidth: 1, lineStyle: LEVEL_LINE_STYLE, axisLabelVisible: true, title: 'Overbought' })
       series.createPriceLine({ price: 40, color: '#6b7280', lineWidth: 1, lineStyle: LEVEL_LINE_STYLE, axisLabelVisible: true, title: 'Oversold' })
       rsiSeriesRef.current = series
@@ -487,7 +502,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
                 const lastDate = toIstDate(lastTime)
                 const sessionStartCandle = candlesRef.current.find((c) => toIstDate(c.time as number) === lastDate)
                 if (sessionStartCandle) {
-                  chartRef.current.timeScale().setVisibleRange({ from: sessionStartCandle.time as any, to: lastTime as any })
+                  chartRef.current.timeScale().setVisibleRange({ from: chartTime(sessionStartCandle.time), to: chartTime(lastTime) })
                   return
                 }
               }

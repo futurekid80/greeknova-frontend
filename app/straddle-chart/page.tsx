@@ -24,6 +24,15 @@ type ChartData = {
 
 const CHART_HEIGHT = 440
 
+// BUG FIX (Oct 5 2026): same fix as StockChart.tsx -- lightweight-charts
+// renders numeric Time values in UTC with no display-timezone option, so
+// the true-UTC epoch seconds from the backend showed 5h30m behind real
+// IST clock time. Shift every point by the IST offset right before it
+// reaches the chart (setData calls only -- backend data/stat cards stay
+// on true epoch, nothing else depends on these values).
+const IST_OFFSET_SEC = 19800 // 5h30m
+const chartTime = (t: number): any => t + IST_OFFSET_SEC
+
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
 
@@ -125,13 +134,13 @@ export default function StraddleChartPage() {
       chartRef.current = chart
 
       const combinedSeries = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 3, title: 'Combined (CE+PE)' })
-      combinedSeries.setData(data.points.map((p) => ({ time: p.time, value: p.combined })) as any)
+      combinedSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.combined })) as any)
 
       const ceSeries = chart.addSeries(LineSeries, { color: '#16a34a', lineWidth: 1, title: 'CE' })
-      ceSeries.setData(data.points.map((p) => ({ time: p.time, value: p.ce })) as any)
+      ceSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.ce })) as any)
 
       const peSeries = chart.addSeries(LineSeries, { color: '#dc2626', lineWidth: 1, title: 'PE' })
-      peSeries.setData(data.points.map((p) => ({ time: p.time, value: p.pe })) as any)
+      peSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.pe })) as any)
 
       // Spot + VWAP on a separate LEFT price scale -- wildly different
       // magnitude from the premium (e.g. ~24,600 vs ~150), so they'd be
@@ -143,7 +152,7 @@ export default function StraddleChartPage() {
           title: 'Spot',
           priceScaleId: 'left',
         })
-        spotSeries.setData(spotPoints as any)
+        spotSeries.setData(spotPoints.map((p) => ({ time: chartTime(p.time), value: p.value })) as any)
       }
       if (vwapPoints.length) {
         const vwapSeries = chart.addSeries(LineSeries, {
@@ -153,7 +162,7 @@ export default function StraddleChartPage() {
           title: 'VWAP',
           priceScaleId: 'left',
         })
-        vwapSeries.setData(vwapPoints as any)
+        vwapSeries.setData(vwapPoints.map((p) => ({ time: chartTime(p.time), value: p.value })) as any)
       }
       chart.priceScale('left').applyOptions({ visible: true, borderColor: '#374151' })
 

@@ -58,20 +58,28 @@ export default function Alerts() {
   const [symbolDayLoading, setSymbolDayLoading] = useState(false)
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Oct 6 2026: search box now also accepts strike+type, e.g. "435CE" or
+  // "BHEL435CE" (Manish's ask -- scrolling a long list to find one strike was
+  // painful). The day-fetch below still needs a real stock SYMBOL though (the
+  // backend's /alerts?symbol= expects one), so pull just the leading letters
+  // off the query as the symbol guess -- "BHEL435CE" -> "BHEL", "435CE" -> ''
+  // (no day-fetch, falls back to whatever's in the live capped list). The
+  // actual strike/type matching happens client-side in `filtered` below.
+  const symbolGuess = search.trim().toUpperCase().match(/^[A-Z&-]+/)?.[0] || ''
+
   useEffect(() => {
-    const q = search.trim().toUpperCase()
     if (searchDebounce.current) clearTimeout(searchDebounce.current)
-    if (q.length < 2) { setSymbolDayAlerts([]); return }
+    if (symbolGuess.length < 2) { setSymbolDayAlerts([]); return }
     searchDebounce.current = setTimeout(() => {
       setSymbolDayLoading(true)
-      fetch(`https://api.greeknova.com/alerts?symbol=${encodeURIComponent(q)}&limit=500${viewingPast ? `&date=${selectedDate}` : ''}`)
+      fetch(`https://api.greeknova.com/alerts?symbol=${encodeURIComponent(symbolGuess)}&limit=500${viewingPast ? `&date=${selectedDate}` : ''}`)
         .then((r) => r.json())
         .then((j) => setSymbolDayAlerts(j.alerts || []))
         .catch(() => setSymbolDayAlerts([]))
         .finally(() => setSymbolDayLoading(false))
     }, 400)
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
-  }, [search, viewingPast, selectedDate])
+  }, [symbolGuess, viewingPast, selectedDate])
 
   // Near-Strike Unwind box: `priorityAlerts` from context is a ROLLING top-20
   // window across the whole day (refetched every 60s), so once more than 20
@@ -117,7 +125,7 @@ export default function Alerts() {
   // on this exact tick) doesn't disappear while typing. While viewing a past
   // date there's no "live" list to merge with -- the search result is already
   // the full answer for that day.
-  const searchIsSymbol = search.trim().length >= 2
+  const searchIsSymbol = symbolGuess.length >= 2
   const merged = searchIsSymbol
     ? (viewingPast ? symbolDayAlerts : [...symbolDayAlerts, ...alerts.filter((a) => !symbolDayAlerts.some((b) => b.id === a.id))])
     : baseAlerts
@@ -125,8 +133,12 @@ export default function Alerts() {
   const filtered = merged
     .filter(a => {
       if (search) {
-        const s = search.toUpperCase()
-        return a.symbol?.includes(s) || a.signal?.includes(s)
+        // Match symbol, strike and option type together as one string so a
+        // query like "435CE" or "BHEL435CE" finds the right row without
+        // needing separate strike/type inputs -- see symbolGuess comment above.
+        const s = search.trim().toUpperCase().replace(/\s+/g, '')
+        const composite = `${a.symbol || ''}${a.strike ?? ''}${a.optionType || ''}`.toUpperCase()
+        return composite.includes(s) || a.signal?.includes(s)
       }
       return true
     })
@@ -325,8 +337,8 @@ export default function Alerts() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value.toUpperCase())}
-                placeholder="Search symbol..."
-                className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg pl-8 pr-8 py-2 focus:outline-none focus:border-emerald-500 w-40"
+                placeholder="e.g. BHEL, 435CE..."
+                className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg pl-8 pr-8 py-2 focus:outline-none focus:border-emerald-500 w-44"
               />
               {search && (
                 <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">

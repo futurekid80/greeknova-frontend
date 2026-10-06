@@ -3,6 +3,8 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useRef, useState } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock, Search, X, ExternalLink } from 'lucide-react'
 import { useAlerts } from '@/contexts/AlertsContext'
+import { usePushPreferences } from '@/hooks/usePushPreferences'
+import AlertThresholds from '@/components/AlertThresholds'
 import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
 import { formatReceivedAt } from '@/lib/formatTime'
 
@@ -12,6 +14,15 @@ export default function Alerts() {
     spikeThreshold, setSpikeThreshold,
     enableAlerts, disableAlerts, checkNow, clearAlerts, playSound,
   } = useAlerts()
+
+  // Server-side PUSH (popup) thresholds -- separate from `spikeThreshold`
+  // above, which only drives this tab's own in-browser polling engine. This
+  // one is read from/written to push_subscriptions in Supabase, keyed by
+  // this browser's push endpoint, so it's unaffected by refresh (hard or
+  // soft) and only changes when the Save button below is clicked.
+  const {
+    spikeThreshold: pushSpikeThreshold, volThreshold: pushVolThreshold, saveThresholds,
+  } = usePushPreferences()
 
   const [search, setSearch]           = useState('')
   const [typeFilter, setTypeFilter]   = useState('all')
@@ -368,6 +379,10 @@ export default function Alerts() {
             ))}
           </div>
         )}
+
+        <div className="mb-4">
+          <AlertThresholds spikeThreshold={pushSpikeThreshold} volThreshold={pushVolThreshold} onSave={saveThresholds} />
+        </div>
 
         {baseAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl bg-gray-900/20">

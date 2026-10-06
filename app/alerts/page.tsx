@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock, Search, X, ExternalLink } from 'lucide-react'
 import { useAlerts } from '@/contexts/AlertsContext'
 import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
+import { formatReceivedAt } from '@/lib/formatTime'
 
 export default function Alerts() {
   const {
@@ -264,7 +265,7 @@ export default function Alerts() {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0 ml-4">
-                      <p className="text-xs text-gray-500 mb-1">{alert.receivedAt}</p>
+                      <p className="text-xs text-gray-500 mb-1">{formatReceivedAt(alert.receivedAt)}</p>
                       <a href={alert.url}
                         className="flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 transition-colors justify-end">
                         View <ExternalLink size={10}/>
@@ -426,7 +427,7 @@ export default function Alerts() {
                   </div>
 
                   <div className="text-right flex-shrink-0 ml-4">
-                    <p className="text-xs text-gray-500 mb-1">{alert.receivedAt}</p>
+                    <p className="text-xs text-gray-500 mb-1">{formatReceivedAt(alert.receivedAt)}</p>
                     <a href={alert.url}
                       className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors justify-end">
                       View <ExternalLink size={10}/>

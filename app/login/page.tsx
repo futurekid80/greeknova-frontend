@@ -5,13 +5,6 @@ import { supabase } from '@/lib/supabase'
 
 const DEMO_API = 'https://api.greeknova.com'
 
-// Oct 2026: Zerodha Kite Connect login. Requires NEXT_PUBLIC_KITE_API_KEY
-// (the app's public API key -- safe to expose, mirrors any other Kite
-// Connect integration) to be set on Vercel; the matching secret stays
-// server-side only (see /auth/kite-login in the backend).
-const KITE_API_KEY = process.env.NEXT_PUBLIC_KITE_API_KEY || ''
-const KITE_LOGIN_URL = KITE_API_KEY ? `https://kite.zerodha.com/connect/login?v=3&api_key=${KITE_API_KEY}` : ''
-
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
@@ -19,21 +12,6 @@ export default function LoginPage() {
   const [step, setStep] = useState<'email' | 'otp' | 'demo'>('email')
   const [error, setError] = useState('')
   const [demoCode, setDemoCode] = useState('')
-  const [disclaimerChecked, setDisclaimerChecked] = useState(false)
-
-  function handleKiteLogin() {
-    if (!disclaimerChecked) {
-      setError('Please tick the disclaimer checkbox first.')
-      return
-    }
-    if (!KITE_LOGIN_URL) {
-      setError('Zerodha login is not configured yet.')
-      return
-    }
-    const returnTo = new URLSearchParams(window.location.search).get('returnTo') || '/'
-    sessionStorage.setItem('gn_login_return_to', returnTo)
-    window.location.href = KITE_LOGIN_URL
-  }
 
   async function handleEmailSubmit() {
     if (!email || !email.includes('@')) {
@@ -139,37 +117,8 @@ export default function LoginPage() {
                 Welcome to GreekNova Beta
               </h2>
               <p className="text-gray-400 text-sm mb-6">
-                Enter your email to receive a one-time login code, or log in with Zerodha below.
+                Enter your email to receive a one-time login code.
               </p>
-
-              <label className="flex items-start gap-2 mb-4 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={disclaimerChecked}
-                  onChange={(e) => { setDisclaimerChecked(e.target.checked); setError('') }}
-                  className="mt-0.5 h-4 w-4 accent-blue-500"
-                />
-                <span className="text-gray-400 text-xs leading-snug">
-                  I understand GreekNova is an analytics tool for educational and
-                  informational purposes only, is not a SEBI-registered investment
-                  adviser, and nothing on this platform is investment advice.
-                </span>
-              </label>
-
-              <button
-                onClick={handleKiteLogin}
-                disabled={loading || !disclaimerChecked}
-                className="w-full bg-[#387ed1] hover:bg-[#2f6bb5] text-white font-semibold py-3 rounded-lg text-sm transition disabled:opacity-40 disabled:cursor-not-allowed mb-5"
-              >
-                Login with Zerodha →
-              </button>
-
-              <div className="flex items-center gap-3 mb-5">
-                <div className="flex-1 h-px bg-gray-800" />
-                <span className="text-gray-600 text-xs uppercase tracking-wider">or</span>
-                <div className="flex-1 h-px bg-gray-800" />
-              </div>
-
               <label className="text-gray-400 text-xs uppercase tracking-wider mb-1 block">
                 Email Address
               </label>

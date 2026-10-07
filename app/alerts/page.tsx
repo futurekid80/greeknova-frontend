@@ -3,7 +3,6 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useRef, useState } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock, Search, X, ExternalLink } from 'lucide-react'
 import { useAlerts } from '@/contexts/AlertsContext'
-import { usePushPreferences } from '@/hooks/usePushPreferences'
 import AlertThresholds from '@/components/AlertThresholds'
 import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
 import { formatReceivedAt } from '@/lib/formatTime'
@@ -11,18 +10,19 @@ import { formatReceivedAt } from '@/lib/formatTime'
 export default function Alerts() {
   const {
     alerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck,
-    spikeThreshold, setSpikeThreshold,
+    spikeThreshold, volThreshold, saveThresholds,
     enableAlerts, disableAlerts, checkNow, clearAlerts, playSound,
   } = useAlerts()
 
-  // Server-side PUSH (popup) thresholds -- separate from `spikeThreshold`
-  // above, which only drives this tab's own in-browser polling engine. This
-  // one is read from/written to push_subscriptions in Supabase, keyed by
-  // this browser's push endpoint, so it's unaffected by refresh (hard or
-  // soft) and only changes when the Save button below is clicked.
-  const {
-    spikeThreshold: pushSpikeThreshold, volThreshold: pushVolThreshold, saveThresholds,
-  } = usePushPreferences()
+  // Oct 7 2026: there used to be TWO separate threshold systems on this page
+  // -- this tab's own in-browser "Alert Engine" (OI-only, defaulted to 30%,
+  // ignored vol% and signal mutes entirely) and a server-saved "Push alerts
+  // when..." box, each with its OWN usePushPreferences() fetch, so saving
+  // one didn't update the other without a page reload. Now this page reads
+  // spikeThreshold/volThreshold/saveThresholds straight from AlertsContext's
+  // single shared instance -- the same one that drives the in-browser
+  // engine -- so there's one number, one Save button, and it takes effect
+  // immediately, no refresh needed.
 
   const [search, setSearch]           = useState('')
   const [typeFilter, setTypeFilter]   = useState('all')
@@ -223,7 +223,7 @@ export default function Alerts() {
             </div>
             <div className="bg-emerald-950/20 rounded-xl p-4 border border-emerald-800/30">
               <p className="text-xs text-gray-500 mb-1">🌱 Fresh Builds</p>
-              <p className="text-sm text-gray-300">Volume spike + OI building simultaneously</p>
+              <p className="text-sm text-gray-300">Volume &gt;{volThreshold}% + OI building simultaneously</p>
             </div>
             <div className="bg-blue-950/20 rounded-xl p-4 border border-blue-800/30">
               <p className="text-xs text-gray-500 mb-1">🐋 UOA Whales</p>
@@ -236,11 +236,9 @@ export default function Alerts() {
           </div>
 
           <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-xs text-gray-500">OI spike threshold:</span>
-            <input type="range" min="2" max="30" value={spikeThreshold}
-              onChange={e => setSpikeThreshold(Number(e.target.value))}
-              className="w-32 accent-orange-400" />
-            <span className="text-sm font-black text-orange-400">{spikeThreshold}%</span>
+            <span className="text-xs text-gray-500">
+              Currently alerting at OI ≥ <span className="text-orange-400 font-bold">{spikeThreshold}%</span>, Vol ≥ <span className="text-orange-400 font-bold">{volThreshold}%</span> — edit in the box below
+            </span>
             <button onClick={playSound}
               className="text-xs text-gray-500 hover:text-white border border-gray-700 hover:border-gray-600 px-3 py-1.5 rounded-lg transition-all ml-2">
               🔔 Preview Sound
@@ -381,7 +379,7 @@ export default function Alerts() {
         )}
 
         <div className="mb-4">
-          <AlertThresholds spikeThreshold={pushSpikeThreshold} volThreshold={pushVolThreshold} onSave={saveThresholds} />
+          <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} onSave={saveThresholds} />
         </div>
 
         {baseAlerts.length === 0 ? (

@@ -1,6 +1,7 @@
 'use client'
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { usePushPreferences } from '@/hooks/usePushPreferences'
 
 export interface Alert {
   id: number; signal: string; symbol: string; strike?: number
@@ -71,7 +72,10 @@ interface AlertsContextValue {
   lastCheck: string
   unreadCount: number
   spikeThreshold: number
-  setSpikeThreshold: (v: number) => void
+  volThreshold: number
+  enabledSignals: string[] | null
+  toggleSignal: (signal: string, on: boolean) => Promise<void>
+  saveThresholds: (oi: number, vol: number) => Promise<void>
   enableAlerts: () => Promise<void>
   disableAlerts: () => Promise<void>
   checkNow: () => Promise<void>
@@ -86,8 +90,21 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   const [enabled, setEnabled]         = useState(false)
   const [permission, setPermission]   = useState('default')
   const [swReady, setSwReady]         = useState(false)
-  const [spikeThreshold, setSpikeThresholdState] = useState(10)
   const [lastCheck, setLastCheck]     = useState('')
+  // Oct 7 2026: this in-browser "Alert Engine" (system A, runs via the SW's
+  // own 5-min self-scheduling loop -- see sw.js) used to carry its own
+  // separate OI-only threshold in localStorage ('gn_spike_threshold',
+  // default 10%), completely independent of the OI%/Vol%/signal-mute
+  // settings in the "Push alerts when..." box (AlertThresholds component,
+  // backed by usePushPreferences / push_subscriptions in Supabase -- system
+  // B, the real OS-level push). Manish set system B to OI>=50%/Vol>=100%
+  // expecting it to cut the flood, but system A never read those values at
+  // all -- it kept firing on its own stale 10-30% default with no vol or
+  // signal-mute check whatsoever, which is exactly the "still getting
+  // 10-15 alerts every 5 min below my threshold" report. Fix: make system A
+  // read the SAME numbers from system B (one source of truth) instead of
+  // maintaining its own parallel copy.
+  const { spikeThreshold, volThreshold, enabledSignals, toggleSignal, saveThresholds } = usePushPreferences()
   const [alerts, setAlerts]           = useState<Alert[]>([])
   const [priorityAlerts, setPriorityAlerts] = useState<Alert[]>([])
   const [marketOpen, setMarketOpen]   = useState(false)
@@ -129,7 +146,6 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       const seen = localStorage.getItem('gn_alerts_last_seen')
       if (seen) setLastSeenId(Number(seen))
     } catch {}
-    setSpikeThresholdState(Number(localStorage.getItem('gn_spike_threshold') || 10))
     setMarketOpen(isMarketOpen())
     const t = setInterval(() => setMarketOpen(isMarketOpen()), 30000)
 
@@ -184,11 +200,15 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       navigator.serviceWorker.ready.then(async () => {
         setSwReady(true)
         const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
-        const threshold  = Number(localStorage.getItem('gn_spike_threshold') || 10)
         if (wasEnabled && Notification.permission === 'granted') {
           setEnabled(true)
+          // spikeThreshold/volThreshold/enabledSignals from usePushPreferences
+          // may still be mid-load (defaults) at this exact instant -- the
+          // sync effect below re-sends the real values to the SW the moment
+          // they finish loading, so this initial ENABLE doesn't need to be
+          // perfect, just get the engine running.
           navigator.serviceWorker.ready.then(reg => {
-            reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold: threshold } })
+            reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold, volThreshold, enabledSignals } })
           })
         }
       }).catch(() => {})
@@ -288,10 +308,9 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     setPermission(result)
     if (result !== 'granted') return
     localStorage.setItem('gn_alerts_enabled', 'true')
-    localStorage.setItem('gn_spike_threshold', String(spikeThreshold))
     setEnabled(true)
     const reg = await navigator.serviceWorker.ready
-    reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold } })
+    reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold, volThreshold, enabledSignals } })
 
     // Also subscribe this device to real server-sent push — this is what
     // makes alerts arrive reliably even when the tab is closed/backgrounded,
@@ -355,20 +374,25 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('gn_alerts_last_seen', String(maxId)) } catch {}
   }
 
-  function setSpikeThreshold(v: number) {
-    setSpikeThresholdState(v)
-    localStorage.setItem('gn_spike_threshold', String(v))
+  // Whenever the shared push prefs change -- either they finish loading
+  // after mount, or Manish hits Save on the "Push alerts when..." box on
+  // any page -- resync the in-browser engine (SW) to the SAME numbers,
+  // instead of it silently running on whatever it started with. This is
+  // what makes the OI%/Vol%/signal-mute settings actually take effect on
+  // this engine too, not just on real OS push notifications.
+  useEffect(() => {
+    if (!enabled) return
     navigator.serviceWorker?.ready.then(reg => {
-      reg.active?.postMessage({ type: 'UPDATE_THRESHOLD', data: { spikeThreshold: v } })
+      reg.active?.postMessage({ type: 'UPDATE_THRESHOLD', data: { spikeThreshold, volThreshold, enabledSignals } })
     })
-  }
+  }, [enabled, spikeThreshold, volThreshold, enabledSignals])
 
   const unreadCount = alerts.filter(a => a.id > lastSeenId).length
 
   return (
     <AlertsContext.Provider value={{
       alerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck, unreadCount,
-      spikeThreshold, setSpikeThreshold,
+      spikeThreshold, volThreshold, enabledSignals, toggleSignal, saveThresholds,
       enableAlerts, disableAlerts, checkNow, clearAlerts, markAllRead, playSound,
     }}>
       {children}

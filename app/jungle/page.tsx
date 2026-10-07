@@ -1,7 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import AlertToggle from '@/components/AlertToggle'
-import { usePushPreferences } from '@/hooks/usePushPreferences'
+import { useAlerts } from '@/contexts/AlertsContext'
 import AlertThresholds from '@/components/AlertThresholds'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, Zap, Search, X } from 'lucide-react'
@@ -61,7 +61,11 @@ function fmtOI(n: number) {
 }
 
 export default function OptionsJungle() {
-  const { enabledSignals, toggleSignal, spikeThreshold: pushSpikeThreshold, volThreshold: pushVolThreshold, saveThresholds } = usePushPreferences()
+  // Oct 7 2026: shared AlertsContext instance (one usePushPreferences call
+  // for the whole app) instead of this page's own separate fetch -- saving
+  // here now also updates the in-browser Alert Engine (and the Alerts/UOA
+  // pages) immediately, with no reload needed. See AlertsContext.tsx.
+  const { enabledSignals, toggleSignal, spikeThreshold: pushSpikeThreshold, volThreshold: pushVolThreshold, saveThresholds } = useAlerts()
   const [data, setData]             = useState<JungleData | null>(null)
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState<'oi' | 'vol'>('oi')

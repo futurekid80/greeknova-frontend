@@ -1,6 +1,6 @@
 // ── GreekNova Service Worker ──────────────────────────────────────────────────
 // BUMP THIS VERSION every time you change this file.
-const SW_VERSION = 'v2.0.9'
+const SW_VERSION = 'v2.1.0'
 
 const API = 'https://greeknova-backend-production.up.railway.app'
 const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
@@ -24,6 +24,15 @@ self.addEventListener('activate', (e) => {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let spikeThreshold = 10
+// Oct 7 2026: volThreshold/enabledSignals now mirror the same "Push alerts
+// when..." OI%/Vol% box and per-signal mute toggles that already govern real
+// OS push (see push_notifications.py's broadcast_alert) -- this in-browser
+// engine used to ignore both entirely, firing on a hardcoded vol_threshold=50
+// and with zero signal-mute enforcement regardless of what was toggled off
+// on the Jungle/UOA pages. null enabledSignals means "no mute list saved
+// yet / everything on", matching the backend's own null-means-all-on default.
+let volThreshold    = 20
+let enabledSignals  = null
 let enabled        = false
 let schedulerTimer = null
 let previousKeys   = new Set()  // dedup alerts
@@ -152,7 +161,9 @@ self.addEventListener('message', async (event) => {
   if (type === 'ENABLE') {
     enabled = true
     spikeThreshold = data?.spikeThreshold ?? 10
-    console.log(`[SW ${SW_VERSION}] Enabled | threshold=${spikeThreshold}`)
+    volThreshold = data?.volThreshold ?? 20
+    enabledSignals = data?.enabledSignals ?? null
+    console.log(`[SW ${SW_VERSION}] Enabled | oi>=${spikeThreshold} vol>=${volThreshold} signals=${enabledSignals ? enabledSignals.join(',') : 'all'}`)
     // Clear old dedup keys on enable
     previousKeys.clear()
     // Run immediate check + start self-scheduling
@@ -171,8 +182,10 @@ self.addEventListener('message', async (event) => {
 
   if (type === 'UPDATE_THRESHOLD') {
     spikeThreshold = data?.spikeThreshold ?? 10
+    volThreshold = data?.volThreshold ?? 20
+    enabledSignals = data?.enabledSignals ?? null
     previousKeys.clear()  // Clear dedup so alerts refire at new threshold
-    console.log(`[SW ${SW_VERSION}] Threshold → ${spikeThreshold}`)
+    console.log(`[SW ${SW_VERSION}] Thresholds → oi>=${spikeThreshold} vol>=${volThreshold} signals=${enabledSignals ? enabledSignals.join(',') : 'all'}`)
   }
 
   if (type === 'CHECK_NOW') {
@@ -194,7 +207,7 @@ self.addEventListener('message', async (event) => {
   if (type === 'GET_STATUS') {
     event.source?.postMessage({
       type: 'STATUS',
-      data: { enabled, spikeThreshold, version: SW_VERSION },
+      data: { enabled, spikeThreshold, volThreshold, enabledSignals, version: SW_VERSION },
     })
   }
 })
@@ -237,12 +250,13 @@ function broadcastAlert(alert) {
 // ── Options Jungle alerts (OI spikes + Vol fresh builds) ──────────────────────
 async function checkOptionsJungle() {
   const res = await fetch(
-    `${API}/options-jungle?oi_threshold=${spikeThreshold}&vol_threshold=50`,
+    `${API}/options-jungle?oi_threshold=${spikeThreshold}&vol_threshold=${volThreshold}`,
     { headers: authHeaders() }
   )
   const json = await res.json()
 
   // OI Spikes
+  if (!enabledSignals || enabledSignals.includes('OI_SPIKE')) {
   for (const spike of (json.oi_spikes || [])) {
     const key = `oi_${spike.tradingsymbol}_${json.ts_new}`
     if (previousKeys.has(key)) continue
@@ -278,8 +292,10 @@ async function checkOptionsJungle() {
       ltp:        spike.last_price,
     })
   }
+  }
 
   // Volume Fresh Builds only (FRESH_BUILD = vol spike + OI building)
+  if (!enabledSignals || enabledSignals.includes('FRESH_BUILD')) {
   for (const spike of (json.vol_spikes || [])) {
     if (spike.vol_signal !== 'FRESH_BUILD') continue
     const key = `vol_${spike.tradingsymbol}_${json.ts_new}`
@@ -314,6 +330,7 @@ async function checkOptionsJungle() {
       ltp:        spike.last_price,
     })
   }
+  }
 }
 
 // ── UOA Whale alerts ──────────────────────────────────────────────────────────
@@ -324,6 +341,11 @@ async function checkUOAWhales() {
   for (const sig of (json.signals || [])) {
     // Only alert on high conviction (score 4+) or two-way activity
     if (sig.score < 4) continue
+    // Oct 7 2026: UOA signals used to ignore the per-signal mute list
+    // entirely -- "disabling all parameters for UOA" on the page toggles
+    // only ever updated enabled_signals server-side (for real OS push), this
+    // in-browser engine never checked it. Now it does, same as Jungle above.
+    if (enabledSignals && !enabledSignals.includes(sig.signal_type)) continue
 
     const key = `uoa_${sig.tradingsymbol}_${json.timestamp}`
     if (previousKeys.has(key)) continue

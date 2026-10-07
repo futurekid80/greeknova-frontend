@@ -325,10 +325,17 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
             applicationServerKey: urlBase64ToUint8Array(vapidKey),
           })
         }
+        // Oct 7 2026: a disable->enable cycle unsubscribes the old push
+        // endpoint and gets issued a brand new one, so this isn't just
+        // updating the existing row -- it creates a NEW one. Sending only
+        // spikeThreshold here (as before) meant volThreshold/enabledSignals
+        // silently reset to their column defaults (20%/all-on) every time
+        // someone toggled alerts off and back on, discarding whatever
+        // they'd customized. Send the full current state instead.
         await fetch(`${API}/push-subscribe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subscription: sub.toJSON(), spikeThreshold }),
+          body: JSON.stringify({ subscription: sub.toJSON(), spikeThreshold, volThreshold, enabledSignals }),
         })
       }
     } catch (e) {

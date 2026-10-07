@@ -37,6 +37,7 @@ export default function ConnectKitePage() {
   const [remember, setRemember] = useState(false)
   const [saved, setSaved] = useState<{ k: string; s: string } | null>(null)
   const [error, setError] = useState('')
+  const [disclaimerChecked, setDisclaimerChecked] = useState(false)
 
   useEffect(() => {
     try {
@@ -57,11 +58,18 @@ export default function ConnectKitePage() {
 
   function start() {
     setError('')
+    if (!disclaimerChecked) { setError('Please tick the disclaimer below before logging in.'); return }
     const k = apiKey.trim()
     const s = secret.trim()
     if (!/^[A-Za-z0-9]{8,32}$/.test(k)) { setError('Enter your Kite API key (letters and numbers only).'); return }
     if (!/^[A-Za-z0-9]{8,64}$/.test(s)) { setError('Enter your Kite API secret.'); return }
     goToZerodha(k, s, remember)
+  }
+
+  function startSaved() {
+    setError('')
+    if (!disclaimerChecked) { setError('Please tick the disclaimer below before logging in.'); return }
+    if (saved) goToZerodha(saved.k, saved.s, true)
   }
 
   const box = 'bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-4'
@@ -93,12 +101,29 @@ export default function ConnectKitePage() {
           {status?.error && <p className="text-red-400 text-sm">{status.error}</p>}
         </div>
 
+        <div className={box}>
+          <label className="flex items-start gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={disclaimerChecked}
+              onChange={(e) => { setDisclaimerChecked(e.target.checked); setError('') }}
+              className="mt-0.5 h-4 w-4 accent-blue-500"
+            />
+            <span className="text-gray-300 text-sm leading-snug">
+              I understand GreekNova is an analytics tool for educational and informational
+              purposes only, is not a SEBI-registered investment adviser, and nothing on this
+              platform is investment advice.
+            </span>
+          </label>
+        </div>
+
         {saved && (
           <div className={box}>
             <p className="text-gray-300 text-sm mb-3">Your Kite details are saved on this device.</p>
             <button
-              onClick={() => goToZerodha(saved.k, saved.s, true)}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition"
+              onClick={startSaved}
+              disabled={!disclaimerChecked}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Log in with Zerodha (one click)
             </button>
@@ -118,7 +143,8 @@ export default function ConnectKitePage() {
           {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
           <button
             onClick={start}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition"
+            disabled={!disclaimerChecked}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Log in with Zerodha →
           </button>

@@ -42,6 +42,9 @@ type VrpCandidate = {
   iv: number
   vrp: number | null
   iv_change_60m: number | null
+  pop: number | null
+  roi_pct: number | null
+  annualized_roi_pct: number | null
   score: number
   is_best_pick: boolean
 }
@@ -54,6 +57,12 @@ type VrpScan = {
   realized_vol: number | null
   lookback_minutes: number
   zone_pct: number
+  weekend_theta_note: string | null
+  call_wall: number | null
+  call_wall_status: 'HOLDING' | 'ERODING' | null
+  put_wall: number | null
+  put_wall_status: 'HOLDING' | 'ERODING' | null
+  margin_estimate_note: string | null
   as_of: string
   ce_candidates: VrpCandidate[]
   pe_candidates: VrpCandidate[]
@@ -90,15 +99,28 @@ function VrpScanner() {
   const rowCls = (c: VrpCandidate) =>
     `border-t border-gray-800/70 hover:bg-gray-900/40 ${c.is_best_pick ? 'bg-emerald-950/20' : ''}`
 
-  const renderTable = (title: string, rows: VrpCandidate[], accent: string) => {
+  const wallBadge = (status: 'HOLDING' | 'ERODING' | null, wallStrike: number | null) => {
+    if (!status || !wallStrike) return null
+    const cls = status === 'HOLDING' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-900/50' : 'bg-red-950/60 text-red-400 border-red-900/50'
+    return (
+      <span className={`text-[10px] px-2 py-0.5 rounded border ${cls}`}>
+        Wall {wallStrike} {status === 'HOLDING' ? 'holding' : 'eroding'}
+      </span>
+    )
+  }
+
+  const renderTable = (title: string, rows: VrpCandidate[], accent: string, wallStrike: number | null, wallStatus: 'HOLDING' | 'ERODING' | null) => {
     const pick = rows.find((c) => c.is_best_pick)
     return (
-    <div className="flex-1 min-w-[320px]">
-      <div className="flex items-center justify-between mb-2">
-        <p className={`text-xs font-bold uppercase tracking-wide ${accent}`}>{title}</p>
+    <div className="flex-1 min-w-[360px]">
+      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <p className={`text-xs font-bold uppercase tracking-wide ${accent}`}>{title}</p>
+          {wallBadge(wallStatus, wallStrike)}
+        </div>
         {pick && (
           <p className="text-[11px] text-emerald-400">
-            Best pick: <b>{pick.strike}</b> · ₹{fmt(pick.premium, 1)} · VRP {pick.vrp !== null ? `+${fmt(pick.vrp, 1)}` : '—'}
+            Best pick: <b>{pick.strike}</b> · ₹{fmt(pick.premium, 1)} · VRP {pick.vrp !== null ? `+${fmt(pick.vrp, 1)}` : '—'} · PoP {pick.pop !== null ? `${fmt(pick.pop, 0)}%` : '—'}
           </p>
         )}
       </div>
@@ -113,11 +135,13 @@ function VrpScanner() {
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">IV</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">VRP (pts)</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">IV Δ 60m</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">PoP</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">ROI / ann.</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-600">No liquid candidates right now.</td></tr>
+              <tr><td colSpan={9} className="px-3 py-4 text-center text-gray-600">No liquid candidates right now.</td></tr>
             )}
             {rows.map((c) => (
               <tr key={`${c.option_type}-${c.strike}`} className={rowCls(c)}>
@@ -133,6 +157,11 @@ function VrpScanner() {
                 </td>
                 <td className={`px-3 py-2.5 text-right ${c.iv_change_60m !== null && c.iv_change_60m > 0 ? 'text-orange-400' : 'text-gray-400'}`}>
                   {c.iv_change_60m !== null ? `${c.iv_change_60m > 0 ? '+' : ''}${fmt(c.iv_change_60m, 1)}` : '—'}
+                </td>
+                <td className="px-3 py-2.5 text-right text-sky-300 font-semibold">{c.pop !== null ? `${fmt(c.pop, 0)}%` : '—'}</td>
+                <td className="px-3 py-2.5 text-right text-gray-300">
+                  {c.roi_pct !== null ? `${fmt(c.roi_pct, 2)}%` : '—'}
+                  {c.annualized_roi_pct !== null && <span className="text-gray-500"> / {fmt(c.annualized_roi_pct, 0)}%</span>}
                 </td>
               </tr>
             ))}
@@ -184,10 +213,20 @@ function VrpScanner() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-5 mb-6">
-            {renderTable('Call side (resistance)', data.ce_candidates, 'text-sky-400')}
-            {renderTable('Put side (support)', data.pe_candidates, 'text-rose-400')}
+          {data.weekend_theta_note && (
+            <div className="mb-4 bg-indigo-950/20 border border-indigo-900/40 rounded-xl px-4 py-3 text-xs text-indigo-300">
+              <b>Weekend theta:</b> {data.weekend_theta_note}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-5 mb-3">
+            {renderTable('Call side (resistance)', data.ce_candidates, 'text-sky-400', data.call_wall, data.call_wall_status)}
+            {renderTable('Put side (support)', data.pe_candidates, 'text-rose-400', data.put_wall, data.put_wall_status)}
           </div>
+
+          {data.margin_estimate_note && (
+            <p className="text-[11px] text-gray-600 mb-6">{data.margin_estimate_note}</p>
+          )}
 
           <details className="rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
             <summary className="cursor-pointer text-gray-300 font-semibold">How to read this</summary>
@@ -196,8 +235,12 @@ function VrpScanner() {
               <li><b>VRP (pts):</b> this strike&apos;s IV minus the index&apos;s own realized volatility. Positive means IV is pricing in more movement than the index has actually been making — historically where premium sellers get paid for risk that doesn&apos;t usually show up.</li>
               <li><b>IV Δ 60m:</b> how many vol points this exact strike&apos;s IV has moved in the last hour. A positive jump with no matching realized-vol move is a fresh spike — often the richest, freshest premium, and the kind that tends to fade.</li>
               <li><b className="text-emerald-400">Best pick:</b> the highest-scoring strike (VRP plus spike) that still carries real collectable premium (₹5+) — guards against the "pick" being a strike so far out that there&apos;s barely anything to collect.</li>
+              <li><b className="text-sky-300">PoP:</b> probability this strike expires worthless (the risk-neutral chance spot doesn&apos;t cross it by expiry) — the other half of the decision VRP alone doesn&apos;t answer: rich premium on a strike with low PoP is a different trade than rich premium on a safe one.</li>
+              <li><b>Wall holding / eroding:</b> whether the nearby gamma wall this side leans on has been stable or drifting toward spot recently. A strike behind an eroding wall is riskier than the same VRP behind a wall that&apos;s holding — needs a little trading history to accumulate before it shows a verdict.</li>
+              <li><b>ROI / ann.:</b> premium collected against a rough ~12%-of-notional margin estimate (not your broker&apos;s real SPAN+exposure figure — check that before sizing), shown as this-trade ROI% and an annualized rate so strikes are comparable on capital efficiency, not just raw premium.</li>
+              <li><b>Weekend theta:</b> flagged when a weekend or holiday sits between now and expiry — decay accrues every calendar day while risk is only taken on trading days, so that stretch captures more decay per day of actual market exposure.</li>
               <li>Strikes below {VRP_MIN_OI_LABEL} open interest are filtered out — a "spike" on a near-empty strike isn&apos;t a real opportunity.</li>
-              <li>Estimates only, from live option data. Not investment advice — always check liquidity and spreads before acting.</li>
+              <li>Estimates only, from live option data. Not investment advice — always check liquidity, spreads and real margin before acting.</li>
             </ul>
           </details>
         </>

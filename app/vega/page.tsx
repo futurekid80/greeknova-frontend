@@ -37,11 +37,13 @@ type VrpCandidate = {
   strike: number
   option_type: 'CE' | 'PE'
   premium: number
+  pct_from_spot: number
   oi: number
   iv: number
   vrp: number | null
   iv_change_60m: number | null
   score: number
+  is_best_pick: boolean
 }
 type VrpScan = {
   symbol: string
@@ -51,6 +53,7 @@ type VrpScan = {
   futures: number
   realized_vol: number | null
   lookback_minutes: number
+  zone_pct: number
   as_of: string
   ce_candidates: VrpCandidate[]
   pe_candidates: VrpCandidate[]
@@ -85,16 +88,26 @@ function VrpScanner() {
   useEffect(() => { load(symbol) }, [symbol, load])
 
   const rowCls = (c: VrpCandidate) =>
-    `border-t border-gray-800/70 hover:bg-gray-900/40 ${c.score >= 8 ? 'bg-red-950/10' : ''}`
+    `border-t border-gray-800/70 hover:bg-gray-900/40 ${c.is_best_pick ? 'bg-emerald-950/20' : ''}`
 
-  const renderTable = (title: string, rows: VrpCandidate[], accent: string) => (
+  const renderTable = (title: string, rows: VrpCandidate[], accent: string) => {
+    const pick = rows.find((c) => c.is_best_pick)
+    return (
     <div className="flex-1 min-w-[320px]">
-      <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${accent}`}>{title}</p>
+      <div className="flex items-center justify-between mb-2">
+        <p className={`text-xs font-bold uppercase tracking-wide ${accent}`}>{title}</p>
+        {pick && (
+          <p className="text-[11px] text-emerald-400">
+            Best pick: <b>{pick.strike}</b> · ₹{fmt(pick.premium, 1)} · VRP {pick.vrp !== null ? `+${fmt(pick.vrp, 1)}` : '—'}
+          </p>
+        )}
+      </div>
       <div className="overflow-x-auto rounded-xl border border-gray-800">
         <table className="w-full text-xs">
           <thead className="bg-gray-900/60">
             <tr>
               <th className="px-3 py-2.5 text-left text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Strike</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">% from spot</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Premium</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">OI</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">IV</th>
@@ -104,12 +117,15 @@ function VrpScanner() {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-600">No liquid candidates right now.</td></tr>
+              <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-600">No liquid candidates right now.</td></tr>
             )}
             {rows.map((c) => (
               <tr key={`${c.option_type}-${c.strike}`} className={rowCls(c)}>
-                <td className="px-3 py-2.5 font-bold text-white">{c.strike}</td>
-                <td className="px-3 py-2.5 text-right text-gray-300">{fmt(c.premium, 1)}</td>
+                <td className="px-3 py-2.5 font-bold text-white">
+                  {c.strike}{c.is_best_pick && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-400 border border-emerald-700/50 align-middle">BEST</span>}
+                </td>
+                <td className="px-3 py-2.5 text-right text-gray-400">{c.pct_from_spot > 0 ? '+' : ''}{fmt(c.pct_from_spot, 1)}%</td>
+                <td className="px-3 py-2.5 text-right text-white font-semibold">₹{fmt(c.premium, 1)}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400">{c.oi.toLocaleString('en-IN')}</td>
                 <td className="px-3 py-2.5 text-right text-amber-400 font-bold">{fmt(c.iv, 1)}%</td>
                 <td className={`px-3 py-2.5 text-right font-bold ${c.vrp !== null && c.vrp > 0 ? 'text-red-400' : 'text-gray-400'}`}>
@@ -124,7 +140,8 @@ function VrpScanner() {
         </table>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <>
@@ -162,8 +179,8 @@ function VrpScanner() {
               <p className="text-lg font-black text-white">{data.realized_vol ? `${fmt(data.realized_vol, 1)}%` : '—'}</p>
             </div>
             <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Spike window</p>
-              <p className="text-lg font-black text-white">{data.lookback_minutes}m</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Scan zone / spike window</p>
+              <p className="text-lg font-black text-white">±{fmt(data.zone_pct, 1)}% · {data.lookback_minutes}m</p>
             </div>
           </div>
 
@@ -175,9 +192,10 @@ function VrpScanner() {
           <details className="rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
             <summary className="cursor-pointer text-gray-300 font-semibold">How to read this</summary>
             <ul className="mt-3 space-y-2 list-disc pl-5">
+              <li>Shows every OTM strike within the scan zone (near-ATM to the zone edge, both sides), not just a shortlist — IV naturally rises further from spot (normal skew), so a pure "highest VRP" ranking would always drift to the edge and miss the strikes actually worth comparing.</li>
               <li><b>VRP (pts):</b> this strike&apos;s IV minus the index&apos;s own realized volatility. Positive means IV is pricing in more movement than the index has actually been making — historically where premium sellers get paid for risk that doesn&apos;t usually show up.</li>
               <li><b>IV Δ 60m:</b> how many vol points this exact strike&apos;s IV has moved in the last hour. A positive jump with no matching realized-vol move is a fresh spike — often the richest, freshest premium, and the kind that tends to fade.</li>
-              <li>Rows are ranked richest-and-freshest first (VRP weighted more than the spike alone). Highlighted rows score high on both.</li>
+              <li><b className="text-emerald-400">Best pick:</b> the highest-scoring strike (VRP plus spike) that still carries real collectable premium (₹5+) — guards against the "pick" being a strike so far out that there&apos;s barely anything to collect.</li>
               <li>Strikes below {VRP_MIN_OI_LABEL} open interest are filtered out — a "spike" on a near-empty strike isn&apos;t a real opportunity.</li>
               <li>Estimates only, from live option data. Not investment advice — always check liquidity and spreads before acting.</li>
             </ul>

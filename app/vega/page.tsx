@@ -97,6 +97,23 @@ type VolSurface = {
   error?: string
 }
 
+type GapScan = {
+  symbol: string
+  as_of: string
+  expiry: string
+  spot: number
+  prev_close: number | null
+  today_open: number | null
+  gap_pct: number | null
+  gap_direction: 'UP' | 'DOWN' | 'FLAT'
+  gap_threshold_pct: number
+  iv_pctile_threshold: number
+  spike_detected: boolean
+  candidates: VrpCandidate[]
+  note: string
+  error?: string
+}
+
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
 
@@ -113,6 +130,11 @@ function VrpScanner() {
   // rich (a kink in the smile, a jump between expiries), not another
   // auto-generated verdict. Fetched alongside the scan, same expiry.
   const [surface, setSurface] = useState<VolSurface | null>(null)
+  // Oct 8 2026: passive gap-down/gap-up + IV-spike panel, per Manish's
+  // request to explore selling into IV spikes off a gap open. Context
+  // only -- fetched non-blockingly alongside the main scan, not expiry-
+  // dependent (gap is a once-a-day, whole-symbol fact).
+  const [gapScan, setGapScan] = useState<GapScan | null>(null)
 
   const load = useCallback(async (sym: string, exp: string | null) => {
     setLoading(true)
@@ -134,6 +156,11 @@ function VrpScanner() {
         .then((r) => r.ok ? r.json() : null)
         .then((sj) => setSurface(sj && !sj.error ? sj : null))
         .catch(() => setSurface(null))
+
+      fetch(`${API}/gap-iv-scan/${sym}?t=${Date.now()}`, { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((gj) => setGapScan(gj && !gj.error ? gj : null))
+        .catch(() => setGapScan(null))
     } catch (e: any) {
       setError(e?.message || 'Failed to load data')
       setData(null)
@@ -158,6 +185,61 @@ function VrpScanner() {
       <span className={`text-[10px] px-2 py-0.5 rounded border ${cls}`}>
         Wall {wallStrike} {status === 'HOLDING' ? 'holding' : 'eroding'}
       </span>
+    )
+  }
+
+  const renderGapScan = () => {
+    if (!gapScan || gapScan.gap_pct === null) return null
+    const dirColor = gapScan.gap_direction === 'DOWN' ? 'text-red-400' : gapScan.gap_direction === 'UP' ? 'text-emerald-400' : 'text-gray-400'
+    return (
+      <div className={`mb-5 rounded-xl border px-4 py-3 ${gapScan.spike_detected ? 'bg-amber-950/20 border-amber-800/50' : 'bg-gray-900/40 border-gray-800'}`}>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <p className="text-sm font-bold">
+            Gap at open: <span className={dirColor}>{gapScan.gap_pct > 0 ? '+' : ''}{fmt(gapScan.gap_pct, 2)}%</span>
+            <span className="text-gray-500 font-normal"> ({fmt(gapScan.prev_close, 0)} → {fmt(gapScan.today_open, 0)})</span>
+          </p>
+          {gapScan.spike_detected ? (
+            <span className="text-[11px] px-2 py-1 rounded border bg-amber-900/40 border-amber-700/60 text-amber-300 font-bold">
+              GAP + IV SPIKE — strike(s) below are rich for themselves right now
+            </span>
+          ) : (
+            <span className="text-[11px] text-gray-500">
+              No gap+spike condition met (needs ±{fmt(gapScan.gap_threshold_pct, 1)}% gap and IV %ile ≥{fmt(gapScan.iv_pctile_threshold, 0)} on a strike)
+            </span>
+          )}
+        </div>
+        {gapScan.candidates.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="text-xs w-full">
+              <thead>
+                <tr className="text-gray-500 text-left">
+                  <th className="pr-4 pb-1">Strike</th>
+                  <th className="pr-4 pb-1">Side</th>
+                  <th className="pr-4 pb-1">Premium</th>
+                  <th className="pr-4 pb-1">IV</th>
+                  <th className="pr-4 pb-1">IV %ile</th>
+                  <th className="pr-4 pb-1">PoP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gapScan.candidates.map((c) => (
+                  <tr key={`${c.strike}-${c.option_type}`} className="border-t border-gray-800/70">
+                    <td className="pr-4 py-0.5 font-semibold">{c.strike}</td>
+                    <td className="pr-4 py-0.5">{c.option_type}</td>
+                    <td className="pr-4 py-0.5">₹{fmt(c.premium, 1)}</td>
+                    <td className="pr-4 py-0.5">{fmt(c.iv, 1)}%</td>
+                    <td className={`pr-4 py-0.5 ${c.iv_percentile !== null && c.iv_percentile >= gapScan.iv_pctile_threshold ? 'text-amber-400 font-bold' : ''}`}>
+                      {c.iv_percentile !== null ? `P${c.iv_percentile}` : `collecting (${c.iv_percentile_sessions}/10)`}
+                    </td>
+                    <td className="pr-4 py-0.5">{c.pop !== null ? `${fmt(c.pop, 0)}%` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-[11px] text-gray-600 mt-2">{gapScan.note}</p>
+      </div>
     )
   }
 
@@ -303,6 +385,8 @@ function VrpScanner() {
 
       {!loading && !error && data && (
         <>
+          {renderGapScan()}
+
           {data.available_expiries && data.available_expiries.length > 1 && (
             <div className="flex items-center gap-2 flex-wrap mb-4">
               <p className="text-[11px] text-gray-500 uppercase tracking-wide mr-1">Expiry:</p>
@@ -365,6 +449,7 @@ function VrpScanner() {
               <li><b className="text-sky-300">PoP:</b> probability this strike expires worthless (the risk-neutral chance spot doesn&apos;t cross it by expiry) — the other half of the decision VRP alone doesn&apos;t answer: rich premium on a strike with low PoP is a different trade than rich premium on a safe one.</li>
               <li><b>Wall holding / eroding:</b> whether the nearby gamma wall this side leans on has been stable or drifting toward spot recently. A strike behind an eroding wall is riskier than the same VRP behind a wall that&apos;s holding — needs a little trading history to accumulate before it shows a verdict. Only shown for the nearest expiry — gamma walls are tracked for the front week, so a wall reading wouldn&apos;t mean much for a far-dated expiry.</li>
               <li><b>Expiry tabs:</b> when the nearest weekly looks quiet, flip to a later expiry above — a further-dated series can still be showing real VRP worth a look.</li>
+              <li><b className="text-amber-400">Gap at open:</b> today&apos;s open vs yesterday&apos;s close. Flags "GAP + IV SPIKE" only when there&apos;s a real gap (not normal daily drift) <i>and</i> at least one strike&apos;s IV is unusually rich versus its own recent history — the setup some sellers watch for to short into panic premium before it mean-reverts. This is context, not a signal to act on — still passive by design; no alert/auto-trade, and it won&apos;t yet say how IV has historically behaved after a gap like this since that history only started being recorded today.</li>
               <li><b>Vol smile:</b> plots IV across the whole OTM ladder so you can see the actual shape — a flat line means skew alone explains the VRP spread; a kink at one strike means something specific is happening there, worth a second look before trusting that strike's number on its own.</li>
               <li><b>Term structure:</b> ATM IV across every expiry — a jump between two points usually means an event (RBI policy, Budget, earnings) sits between them, which is useful context before committing to an expiry for weeks.</li>
               <li><b>ROI / ann.:</b> premium collected against a rough ~12%-of-notional margin estimate (not your broker&apos;s real SPAN+exposure figure — check that before sizing), shown as this-trade ROI% and an annualized rate so strikes are comparable on capital efficiency, not just raw premium.</li>

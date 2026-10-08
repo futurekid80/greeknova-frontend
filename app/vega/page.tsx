@@ -105,7 +105,8 @@ type GapScan = {
   prev_close: number | null
   today_open: number | null
   gap_pct: number | null
-  gap_direction: 'UP' | 'DOWN' | 'FLAT'
+  move_from_close_pct: number | null
+  move_direction: 'UP' | 'DOWN' | 'FLAT'
   gap_threshold_pct: number
   iv_pctile_threshold: number
   spike_detected: boolean
@@ -169,6 +170,15 @@ function VrpScanner() {
   }, [])
 
   useEffect(() => { load(symbol, selectedExpiry) }, [symbol, selectedExpiry, load])
+  // Oct 8 2026: poll through the session so the Gap + IV Spike panel can
+  // catch a spike that develops later in the day, not just one visible at
+  // the moment the page was opened -- opportunities here aren't confined
+  // to the open. 3 min matches the oi_snapshots capture cadence (5 min),
+  // no point polling faster than the underlying data changes.
+  useEffect(() => {
+    const id = setInterval(() => load(symbol, selectedExpiry), 180000)
+    return () => clearInterval(id)
+  }, [symbol, selectedExpiry, load])
 
   const onSymbolChange = (s: 'NIFTY' | 'BANKNIFTY' | 'FINNIFTY') => {
     setSelectedExpiry(null) // reset to nearest on symbol switch
@@ -190,13 +200,14 @@ function VrpScanner() {
 
   const renderGapScan = () => {
     if (!gapScan || gapScan.gap_pct === null) return null
-    const dirColor = gapScan.gap_direction === 'DOWN' ? 'text-red-400' : gapScan.gap_direction === 'UP' ? 'text-emerald-400' : 'text-gray-400'
+    const moveColor = gapScan.move_direction === 'DOWN' ? 'text-red-400' : gapScan.move_direction === 'UP' ? 'text-emerald-400' : 'text-gray-400'
     return (
       <div className={`mb-5 rounded-xl border px-4 py-3 ${gapScan.spike_detected ? 'bg-amber-950/20 border-amber-800/50' : 'bg-gray-900/40 border-gray-800'}`}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
           <p className="text-sm font-bold">
-            Gap at open: <span className={dirColor}>{gapScan.gap_pct > 0 ? '+' : ''}{fmt(gapScan.gap_pct, 2)}%</span>
-            <span className="text-gray-500 font-normal"> ({fmt(gapScan.prev_close, 0)} → {fmt(gapScan.today_open, 0)})</span>
+            Now vs prev close: <span className={moveColor}>{(gapScan.move_from_close_pct ?? 0) > 0 ? '+' : ''}{fmt(gapScan.move_from_close_pct, 2)}%</span>
+            <span className="text-gray-500 font-normal"> ({fmt(gapScan.prev_close, 0)} → {fmt(gapScan.spot, 0)})</span>
+            <span className="text-gray-600 font-normal text-xs ml-2">gap at open was {gapScan.gap_pct > 0 ? '+' : ''}{fmt(gapScan.gap_pct, 2)}% ({fmt(gapScan.today_open, 0)})</span>
           </p>
           {gapScan.spike_detected ? (
             <span className="text-[11px] px-2 py-1 rounded border bg-amber-900/40 border-amber-700/60 text-amber-300 font-bold">
@@ -449,7 +460,7 @@ function VrpScanner() {
               <li><b className="text-sky-300">PoP:</b> probability this strike expires worthless (the risk-neutral chance spot doesn&apos;t cross it by expiry) — the other half of the decision VRP alone doesn&apos;t answer: rich premium on a strike with low PoP is a different trade than rich premium on a safe one.</li>
               <li><b>Wall holding / eroding:</b> whether the nearby gamma wall this side leans on has been stable or drifting toward spot recently. A strike behind an eroding wall is riskier than the same VRP behind a wall that&apos;s holding — needs a little trading history to accumulate before it shows a verdict. Only shown for the nearest expiry — gamma walls are tracked for the front week, so a wall reading wouldn&apos;t mean much for a far-dated expiry.</li>
               <li><b>Expiry tabs:</b> when the nearest weekly looks quiet, flip to a later expiry above — a further-dated series can still be showing real VRP worth a look.</li>
-              <li><b className="text-amber-400">Gap at open:</b> today&apos;s open vs yesterday&apos;s close. Flags "GAP + IV SPIKE" only when there&apos;s a real gap (not normal daily drift) <i>and</i> at least one strike&apos;s IV is unusually rich versus its own recent history — the setup some sellers watch for to short into panic premium before it mean-reverts. This is context, not a signal to act on — still passive by design; no alert/auto-trade, and it won&apos;t yet say how IV has historically behaved after a gap like this since that history only started being recorded today.</li>
+              <li><b className="text-amber-400">Gap + IV Spike:</b> tracks two separate moves off yesterday&apos;s close — the gap at open (fixed once the day starts) and where spot sits right now (updates all day, polled every 3 min), so a quiet open that slides into a real move by afternoon still gets caught, not just a move visible at 9:15am. Flags "GAP + IV SPIKE" only when either move is real (not normal daily drift) <i>and</i> at least one strike&apos;s IV is unusually rich versus its own recent history — the setup some sellers watch for to short into panic premium before it mean-reverts. This is context, not a signal to act on — still passive by design; no alert/auto-trade, and it won&apos;t yet say how IV has historically behaved after a move like this since that history only started being recorded today.</li>
               <li><b>Vol smile:</b> plots IV across the whole OTM ladder so you can see the actual shape — a flat line means skew alone explains the VRP spread; a kink at one strike means something specific is happening there, worth a second look before trusting that strike's number on its own.</li>
               <li><b>Term structure:</b> ATM IV across every expiry — a jump between two points usually means an event (RBI policy, Budget, earnings) sits between them, which is useful context before committing to an expiry for weeks.</li>
               <li><b>ROI / ann.:</b> premium collected against a rough ~12%-of-notional margin estimate (not your broker&apos;s real SPAN+exposure figure — check that before sizing), shown as this-trade ROI% and an annualized rate so strikes are comparable on capital efficiency, not just raw premium.</li>

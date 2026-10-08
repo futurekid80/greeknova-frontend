@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import ResultBadge from '@/components/ResultBadge'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
+  ResponsiveContainer, Legend,
+} from 'recharts'
 
 const API = 'https://api.greeknova.com'
 
@@ -47,6 +51,8 @@ type VrpCandidate = {
   annualized_roi_pct: number | null
   score: number
   is_best_pick: boolean
+  iv_percentile: number | null
+  iv_percentile_sessions: number
 }
 type VrpScan = {
   symbol: string
@@ -70,6 +76,27 @@ type VrpScan = {
   error?: string
 }
 
+type SmilePoint = {
+  strike: number
+  option_type: 'CE' | 'PE'
+  pct_from_spot: number
+  iv: number
+}
+type TermPoint = {
+  expiry: string
+  days_to_expiry: number
+  atm_iv: number | null
+}
+type VolSurface = {
+  symbol: string
+  expiry: string
+  spot: number
+  zone_pct: number
+  smile: SmilePoint[]
+  term_structure: TermPoint[]
+  error?: string
+}
+
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
 
@@ -82,6 +109,10 @@ function VrpScanner() {
   // opportunities sitting in a later expiry -- null means "nearest"
   // (the API's own default), reset back to it on a symbol switch.
   const [selectedExpiry, setSelectedExpiry] = useState<string | null>(null)
+  // Oct 8 2026: vol smile + term structure -- context for WHY a strike is
+  // rich (a kink in the smile, a jump between expiries), not another
+  // auto-generated verdict. Fetched alongside the scan, same expiry.
+  const [surface, setSurface] = useState<VolSurface | null>(null)
 
   const load = useCallback(async (sym: string, exp: string | null) => {
     setLoading(true)
@@ -95,6 +126,14 @@ function VrpScanner() {
       const j = await res.json()
       if (j.error) throw new Error(j.error)
       setData(j)
+
+      const surfaceUrl = exp
+        ? `${API}/vol-surface/${sym}?expiry=${exp}&t=${Date.now()}`
+        : `${API}/vol-surface/${sym}?t=${Date.now()}`
+      fetch(surfaceUrl, { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((sj) => setSurface(sj && !sj.error ? sj : null))
+        .catch(() => setSurface(null))
     } catch (e: any) {
       setError(e?.message || 'Failed to load data')
       setData(null)
@@ -122,6 +161,57 @@ function VrpScanner() {
     )
   }
 
+  const renderSurface = () => {
+    if (!surface || surface.smile.length === 0) return null
+    // Stitch puts (left of spot) and calls (right of spot) into one
+    // continuous smile line, ordered by strike.
+    const smileData = [...surface.smile]
+      .sort((a, b) => a.strike - b.strike)
+      .map((p) => ({ strike: p.strike, iv: p.iv, side: p.option_type }))
+    const termData = surface.term_structure
+      .filter((t) => t.atm_iv !== null)
+      .map((t) => ({ label: `${t.expiry} (${t.days_to_expiry}d)`, atm_iv: t.atm_iv }))
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+        <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Vol smile — {surface.expiry}</p>
+          <p className="text-[11px] text-gray-600 mb-3">OTM IV by strike (±{fmt(surface.zone_pct, 0)}% of spot) — shows why a strike is rich, not just that it is.</p>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={smileData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+              <XAxis dataKey="strike" type="number" domain={['dataMin', 'dataMax']} tick={{ fill: '#888', fontSize: 10 }} tickFormatter={(v) => v.toLocaleString()} />
+              <YAxis tick={{ fill: '#888', fontSize: 10 }} tickFormatter={(v) => `${v}%`} domain={['auto', 'auto']} />
+              <Tooltip
+                contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
+                labelFormatter={(v) => `Strike ${Number(v).toLocaleString()}`}
+                formatter={(v: any) => [`${v}%`, 'IV']}
+              />
+              <ReferenceLine x={surface.spot} stroke="#fbbf24" strokeDasharray="4 3" label={{ value: 'SPOT', position: 'top', fill: '#fbbf24', fontSize: 10 }} />
+              <Line type="monotone" dataKey="iv" stroke="#38bdf8" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-gray-900/40 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Term structure</p>
+          <p className="text-[11px] text-gray-600 mb-3">ATM IV across every available expiry — a jump between two points usually means an event sits between them.</p>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={termData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+              <XAxis dataKey="label" tick={{ fill: '#888', fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={50} />
+              <YAxis tick={{ fill: '#888', fontSize: 10 }} tickFormatter={(v) => `${v}%`} domain={['auto', 'auto']} />
+              <Tooltip
+                contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
+                formatter={(v: any) => [`${v}%`, 'ATM IV']}
+              />
+              <Line type="monotone" dataKey="atm_iv" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    )
+  }
+
   const renderTable = (title: string, rows: VrpCandidate[], accent: string, wallStrike: number | null, wallStatus: 'HOLDING' | 'ERODING' | null) => {
     const pick = rows.find((c) => c.is_best_pick)
     return (
@@ -146,6 +236,7 @@ function VrpScanner() {
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Premium</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">OI</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">IV</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">IV %ile</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">VRP (pts)</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">IV Δ 60m</th>
               <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">PoP</th>
@@ -154,7 +245,7 @@ function VrpScanner() {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={9} className="px-3 py-4 text-center text-gray-600">No liquid candidates right now.</td></tr>
+              <tr><td colSpan={10} className="px-3 py-4 text-center text-gray-600">No liquid candidates right now.</td></tr>
             )}
             {rows.map((c) => (
               <tr key={`${c.option_type}-${c.strike}`} className={rowCls(c)}>
@@ -165,6 +256,11 @@ function VrpScanner() {
                 <td className="px-3 py-2.5 text-right text-white font-semibold">₹{fmt(c.premium, 1)}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400">{c.oi.toLocaleString('en-IN')}</td>
                 <td className="px-3 py-2.5 text-right text-amber-400 font-bold">{fmt(c.iv, 1)}%</td>
+                <td className="px-3 py-2.5 text-right text-gray-400">
+                  {c.iv_percentile !== null
+                    ? <span className={c.iv_percentile >= 70 ? 'text-emerald-400 font-semibold' : c.iv_percentile <= 30 ? 'text-gray-500' : 'text-gray-300'}>P{fmt(c.iv_percentile, 0)}</span>
+                    : <span className="text-gray-600" title={`${c.iv_percentile_sessions}/10 sessions collected`}>collecting ({c.iv_percentile_sessions}/10)</span>}
+                </td>
                 <td className={`px-3 py-2.5 text-right font-bold ${c.vrp !== null && c.vrp > 0 ? 'text-red-400' : 'text-gray-400'}`}>
                   {c.vrp !== null ? `${c.vrp > 0 ? '+' : ''}${fmt(c.vrp, 1)}` : '—'}
                 </td>
@@ -252,6 +348,8 @@ function VrpScanner() {
             {renderTable('Put side (support)', data.pe_candidates, 'text-rose-400', data.put_wall, data.put_wall_status)}
           </div>
 
+          {renderSurface()}
+
           {data.margin_estimate_note && (
             <p className="text-[11px] text-gray-600 mb-6">{data.margin_estimate_note}</p>
           )}
@@ -262,10 +360,13 @@ function VrpScanner() {
               <li>Shows every OTM strike within the scan zone (near-ATM to the zone edge, both sides), not just a shortlist — IV naturally rises further from spot (normal skew), so a pure "highest VRP" ranking would always drift to the edge and miss the strikes actually worth comparing.</li>
               <li><b>VRP (pts):</b> this strike&apos;s IV minus the index&apos;s own realized volatility. Positive means IV is pricing in more movement than the index has actually been making — historically where premium sellers get paid for risk that doesn&apos;t usually show up.</li>
               <li><b>IV Δ 60m:</b> how many vol points this exact strike&apos;s IV has moved in the last hour. A positive jump with no matching realized-vol move is a fresh spike — often the richest, freshest premium, and the kind that tends to fade.</li>
+              <li><b>IV %ile:</b> where today&apos;s IV for this exact strike sits versus its own recent history — P80 means this strike&apos;s IV is richer than 80% of its own last ~30 sessions. Context, not a verdict: a strike can have a modest VRP but still be unusually rich FOR ITSELF, which a flat VRP number alone won&apos;t show. Needs 10+ sessions of history to show a number — shows "collecting" until then, since this is a brand-new data series starting today.</li>
               <li><b className="text-emerald-400">Best pick:</b> the highest-scoring strike (VRP plus spike) among those with real collectable premium (₹5+) <i>and</i> a PoP of at least 70% — ATM strikes carry more gamma/vega, so ordinary IV noise can out-score a safer OTM strike on raw VRP alone; the PoP floor keeps "best" from ever landing on a near-coin-flip strike.</li>
               <li><b className="text-sky-300">PoP:</b> probability this strike expires worthless (the risk-neutral chance spot doesn&apos;t cross it by expiry) — the other half of the decision VRP alone doesn&apos;t answer: rich premium on a strike with low PoP is a different trade than rich premium on a safe one.</li>
               <li><b>Wall holding / eroding:</b> whether the nearby gamma wall this side leans on has been stable or drifting toward spot recently. A strike behind an eroding wall is riskier than the same VRP behind a wall that&apos;s holding — needs a little trading history to accumulate before it shows a verdict. Only shown for the nearest expiry — gamma walls are tracked for the front week, so a wall reading wouldn&apos;t mean much for a far-dated expiry.</li>
               <li><b>Expiry tabs:</b> when the nearest weekly looks quiet, flip to a later expiry above — a further-dated series can still be showing real VRP worth a look.</li>
+              <li><b>Vol smile:</b> plots IV across the whole OTM ladder so you can see the actual shape — a flat line means skew alone explains the VRP spread; a kink at one strike means something specific is happening there, worth a second look before trusting that strike's number on its own.</li>
+              <li><b>Term structure:</b> ATM IV across every expiry — a jump between two points usually means an event (RBI policy, Budget, earnings) sits between them, which is useful context before committing to an expiry for weeks.</li>
               <li><b>ROI / ann.:</b> premium collected against a rough ~12%-of-notional margin estimate (not your broker&apos;s real SPAN+exposure figure — check that before sizing), shown as this-trade ROI% and an annualized rate so strikes are comparable on capital efficiency, not just raw premium.</li>
               <li><b>Weekend theta:</b> flagged when a weekend or holiday sits between now and expiry — decay accrues every calendar day while risk is only taken on trading days, so that stretch captures more decay per day of actual market exposure.</li>
               <li>Strikes below {VRP_MIN_OI_LABEL} open interest are filtered out — a "spike" on a near-empty strike isn&apos;t a real opportunity.</li>

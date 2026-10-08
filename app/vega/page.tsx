@@ -33,10 +33,165 @@ type Row = {
 type SortKey = 'symbol' | 'cmp' | 'days_to_expiry' | 'atm_iv' | 'realized_vol' | 'iv_rv_ratio' | 'iv_month' | 'term_ratio' | 'atm_vega_per_lot' | 'vega_total_cr' | 'vega_ce_cr' | 'vega_pe_cr' | 'vega_peak_strike'
 type Filter = 'ALL' | 'RICH' | 'CHEAP' | 'CRUSH'
 
+type VrpCandidate = {
+  strike: number
+  option_type: 'CE' | 'PE'
+  premium: number
+  oi: number
+  iv: number
+  vrp: number | null
+  iv_change_60m: number | null
+  score: number
+}
+type VrpScan = {
+  symbol: string
+  expiry: string
+  days_to_expiry: number
+  spot: number
+  futures: number
+  realized_vol: number | null
+  lookback_minutes: number
+  as_of: string
+  ce_candidates: VrpCandidate[]
+  pe_candidates: VrpCandidate[]
+  error?: string
+}
+
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
 
+function VrpScanner() {
+  const [symbol, setSymbol] = useState<'NIFTY' | 'BANKNIFTY' | 'FINNIFTY'>('NIFTY')
+  const [data, setData] = useState<VrpScan | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async (sym: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API}/vrp-scan/${sym}?t=${Date.now()}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`Server returned ${res.status}`)
+      const j = await res.json()
+      if (j.error) throw new Error(j.error)
+      setData(j)
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load data')
+      setData(null)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load(symbol) }, [symbol, load])
+
+  const rowCls = (c: VrpCandidate) =>
+    `border-t border-gray-800/70 hover:bg-gray-900/40 ${c.score >= 8 ? 'bg-red-950/10' : ''}`
+
+  const renderTable = (title: string, rows: VrpCandidate[], accent: string) => (
+    <div className="flex-1 min-w-[320px]">
+      <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${accent}`}>{title}</p>
+      <div className="overflow-x-auto rounded-xl border border-gray-800">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-900/60">
+            <tr>
+              <th className="px-3 py-2.5 text-left text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Strike</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Premium</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">OI</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">IV</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">VRP (pts)</th>
+              <th className="px-3 py-2.5 text-right text-[11px] uppercase tracking-wide text-gray-500 font-semibold">IV Δ 60m</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-600">No liquid candidates right now.</td></tr>
+            )}
+            {rows.map((c) => (
+              <tr key={`${c.option_type}-${c.strike}`} className={rowCls(c)}>
+                <td className="px-3 py-2.5 font-bold text-white">{c.strike}</td>
+                <td className="px-3 py-2.5 text-right text-gray-300">{fmt(c.premium, 1)}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400">{c.oi.toLocaleString('en-IN')}</td>
+                <td className="px-3 py-2.5 text-right text-amber-400 font-bold">{fmt(c.iv, 1)}%</td>
+                <td className={`px-3 py-2.5 text-right font-bold ${c.vrp !== null && c.vrp > 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                  {c.vrp !== null ? `${c.vrp > 0 ? '+' : ''}${fmt(c.vrp, 1)}` : '—'}
+                </td>
+                <td className={`px-3 py-2.5 text-right ${c.iv_change_60m !== null && c.iv_change_60m > 0 ? 'text-orange-400' : 'text-gray-400'}`}>
+                  {c.iv_change_60m !== null ? `${c.iv_change_60m > 0 ? '+' : ''}${fmt(c.iv_change_60m, 1)}` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      <div className="flex items-center gap-2 flex-wrap mb-5">
+        {(['NIFTY', 'BANKNIFTY', 'FINNIFTY'] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setSymbol(s)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${symbol === s ? 'bg-white text-gray-900 border-white' : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'}`}
+          >
+            {s}
+          </button>
+        ))}
+        <button onClick={() => load(symbol)} className="ml-auto px-4 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-gray-500">
+          Refresh
+        </button>
+      </div>
+
+      {error && <div className="mb-4 bg-red-950/30 border border-red-800/40 rounded-xl px-4 py-3 text-sm text-red-400">{error}</div>}
+      {loading && <p className="text-gray-500 text-sm">Loading…</p>}
+
+      {!loading && !error && data && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Spot / Futures</p>
+              <p className="text-lg font-black text-white">{fmt(data.spot, 0)} / {fmt(data.futures, 0)}</p>
+            </div>
+            <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Weekly expiry</p>
+              <p className="text-lg font-black text-white">{data.expiry} · {data.days_to_expiry}d</p>
+            </div>
+            <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Realized vol</p>
+              <p className="text-lg font-black text-white">{data.realized_vol ? `${fmt(data.realized_vol, 1)}%` : '—'}</p>
+            </div>
+            <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Spike window</p>
+              <p className="text-lg font-black text-white">{data.lookback_minutes}m</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-5 mb-6">
+            {renderTable('Call side (resistance)', data.ce_candidates, 'text-sky-400')}
+            {renderTable('Put side (support)', data.pe_candidates, 'text-rose-400')}
+          </div>
+
+          <details className="rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400 leading-relaxed">
+            <summary className="cursor-pointer text-gray-300 font-semibold">How to read this</summary>
+            <ul className="mt-3 space-y-2 list-disc pl-5">
+              <li><b>VRP (pts):</b> this strike&apos;s IV minus the index&apos;s own realized volatility. Positive means IV is pricing in more movement than the index has actually been making — historically where premium sellers get paid for risk that doesn&apos;t usually show up.</li>
+              <li><b>IV Δ 60m:</b> how many vol points this exact strike&apos;s IV has moved in the last hour. A positive jump with no matching realized-vol move is a fresh spike — often the richest, freshest premium, and the kind that tends to fade.</li>
+              <li>Rows are ranked richest-and-freshest first (VRP weighted more than the spike alone). Highlighted rows score high on both.</li>
+              <li>Strikes below {VRP_MIN_OI_LABEL} open interest are filtered out — a "spike" on a near-empty strike isn&apos;t a real opportunity.</li>
+              <li>Estimates only, from live option data. Not investment advice — always check liquidity and spreads before acting.</li>
+            </ul>
+          </details>
+        </>
+      )}
+      {!loading && !error && !data && <p className="text-gray-500 text-sm">No data available yet.</p>}
+    </>
+  )
+}
+const VRP_MIN_OI_LABEL = '500'
+
 export default function VegaPage() {
+  const [tab, setTab] = useState<'VEGA' | 'VRP'>('VEGA')
   const [rows, setRows] = useState<Row[]>([])
   const [asOf, setAsOf] = useState('')
   const [loading, setLoading] = useState(true)
@@ -112,13 +267,37 @@ export default function VegaPage() {
         <div>
           <h1 className="text-2xl font-black text-white">ν Vega Exposure</h1>
           <p className="text-sm text-gray-500 mt-1">
-            How much option premium moves when implied volatility moves, per stock. Nearest active expiry.
+            {tab === 'VEGA'
+              ? 'How much option premium moves when implied volatility moves, per stock. Nearest active expiry.'
+              : 'Weekly index strikes ranked by richness of premium — VRP and recent IV spikes.'}
           </p>
         </div>
-        <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">
-          Refresh
+        {tab === 'VEGA' && (
+          <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">
+            Refresh
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 mb-5">
+        <button
+          onClick={() => setTab('VEGA')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${tab === 'VEGA' ? 'bg-white text-gray-900 border-white' : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'}`}
+        >
+          Stock Vega
+        </button>
+        <button
+          onClick={() => setTab('VRP')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${tab === 'VRP' ? 'bg-white text-gray-900 border-white' : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'}`}
+        >
+          VRP Scanner (Weekly)
         </button>
       </div>
+
+      {tab === 'VRP' ? (
+        <VrpScanner />
+      ) : (
+      <>
       {asOf && <p className="text-xs text-gray-600 mb-5">As of {asOf} IST · vega from IV-implied Black-Scholes on live premiums · chain figures weighted by open interest</p>}
 
       {error && <div className="mb-4 bg-red-950/30 border border-red-800/40 rounded-xl px-4 py-3 text-sm text-red-400">{error}</div>}
@@ -227,6 +406,8 @@ export default function VegaPage() {
         </>
       )}
       {!loading && !error && rows.length === 0 && <p className="text-gray-500 text-sm">No data available yet.</p>}
+      </>
+      )}
     </div>
     </div>
   )

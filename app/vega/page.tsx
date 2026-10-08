@@ -51,6 +51,7 @@ type VrpCandidate = {
 type VrpScan = {
   symbol: string
   expiry: string
+  available_expiries: string[]
   days_to_expiry: number
   spot: number
   futures: number
@@ -77,12 +78,19 @@ function VrpScanner() {
   const [data, setData] = useState<VrpScan | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Oct 8 2026: selected expiry so a quiet nearest weekly doesn't hide
+  // opportunities sitting in a later expiry -- null means "nearest"
+  // (the API's own default), reset back to it on a symbol switch.
+  const [selectedExpiry, setSelectedExpiry] = useState<string | null>(null)
 
-  const load = useCallback(async (sym: string) => {
+  const load = useCallback(async (sym: string, exp: string | null) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API}/vrp-scan/${sym}?t=${Date.now()}`, { cache: 'no-store' })
+      const url = exp
+        ? `${API}/vrp-scan/${sym}?expiry=${exp}&t=${Date.now()}`
+        : `${API}/vrp-scan/${sym}?t=${Date.now()}`
+      const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) throw new Error(`Server returned ${res.status}`)
       const j = await res.json()
       if (j.error) throw new Error(j.error)
@@ -94,7 +102,12 @@ function VrpScanner() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load(symbol) }, [symbol, load])
+  useEffect(() => { load(symbol, selectedExpiry) }, [symbol, selectedExpiry, load])
+
+  const onSymbolChange = (s: 'NIFTY' | 'BANKNIFTY' | 'FINNIFTY') => {
+    setSelectedExpiry(null) // reset to nearest on symbol switch
+    setSymbol(s)
+  }
 
   const rowCls = (c: VrpCandidate) =>
     `border-t border-gray-800/70 hover:bg-gray-900/40 ${c.is_best_pick ? 'bg-emerald-950/20' : ''}`
@@ -178,13 +191,13 @@ function VrpScanner() {
         {(['NIFTY', 'BANKNIFTY', 'FINNIFTY'] as const).map((s) => (
           <button
             key={s}
-            onClick={() => setSymbol(s)}
+            onClick={() => onSymbolChange(s)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${symbol === s ? 'bg-white text-gray-900 border-white' : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'}`}
           >
             {s}
           </button>
         ))}
-        <button onClick={() => load(symbol)} className="ml-auto px-4 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-gray-500">
+        <button onClick={() => load(symbol, selectedExpiry)} className="ml-auto px-4 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-gray-500">
           Refresh
         </button>
       </div>
@@ -194,13 +207,28 @@ function VrpScanner() {
 
       {!loading && !error && data && (
         <>
+          {data.available_expiries && data.available_expiries.length > 1 && (
+            <div className="flex items-center gap-2 flex-wrap mb-4">
+              <p className="text-[11px] text-gray-500 uppercase tracking-wide mr-1">Expiry:</p>
+              {data.available_expiries.map((exp) => (
+                <button
+                  key={exp}
+                  onClick={() => setSelectedExpiry(exp)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold border transition ${data.expiry === exp ? 'bg-emerald-500/90 text-gray-950 border-emerald-400' : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'}`}
+                >
+                  {exp}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
               <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Spot / Futures</p>
               <p className="text-lg font-black text-white">{fmt(data.spot, 0)} / {fmt(data.futures, 0)}</p>
             </div>
             <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Weekly expiry</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Scanned expiry</p>
               <p className="text-lg font-black text-white">{data.expiry} · {data.days_to_expiry}d</p>
             </div>
             <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
@@ -236,7 +264,8 @@ function VrpScanner() {
               <li><b>IV Δ 60m:</b> how many vol points this exact strike&apos;s IV has moved in the last hour. A positive jump with no matching realized-vol move is a fresh spike — often the richest, freshest premium, and the kind that tends to fade.</li>
               <li><b className="text-emerald-400">Best pick:</b> the highest-scoring strike (VRP plus spike) that still carries real collectable premium (₹5+) — guards against the "pick" being a strike so far out that there&apos;s barely anything to collect.</li>
               <li><b className="text-sky-300">PoP:</b> probability this strike expires worthless (the risk-neutral chance spot doesn&apos;t cross it by expiry) — the other half of the decision VRP alone doesn&apos;t answer: rich premium on a strike with low PoP is a different trade than rich premium on a safe one.</li>
-              <li><b>Wall holding / eroding:</b> whether the nearby gamma wall this side leans on has been stable or drifting toward spot recently. A strike behind an eroding wall is riskier than the same VRP behind a wall that&apos;s holding — needs a little trading history to accumulate before it shows a verdict.</li>
+              <li><b>Wall holding / eroding:</b> whether the nearby gamma wall this side leans on has been stable or drifting toward spot recently. A strike behind an eroding wall is riskier than the same VRP behind a wall that&apos;s holding — needs a little trading history to accumulate before it shows a verdict. Only shown for the nearest expiry — gamma walls are tracked for the front week, so a wall reading wouldn&apos;t mean much for a far-dated expiry.</li>
+              <li><b>Expiry tabs:</b> when the nearest weekly looks quiet, flip to a later expiry above — a further-dated series can still be showing real VRP worth a look.</li>
               <li><b>ROI / ann.:</b> premium collected against a rough ~12%-of-notional margin estimate (not your broker&apos;s real SPAN+exposure figure — check that before sizing), shown as this-trade ROI% and an annualized rate so strikes are comparable on capital efficiency, not just raw premium.</li>
               <li><b>Weekend theta:</b> flagged when a weekend or holiday sits between now and expiry — decay accrues every calendar day while risk is only taken on trading days, so that stretch captures more decay per day of actual market exposure.</li>
               <li>Strikes below {VRP_MIN_OI_LABEL} open interest are filtered out — a "spike" on a near-empty strike isn&apos;t a real opportunity.</li>

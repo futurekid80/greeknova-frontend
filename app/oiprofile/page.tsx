@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 import { STOCKS as _CANON_SYMBOLS } from '@/lib/symbols'
+import { chartColors } from '@/lib/chartColors'
 const API = 'https://api.greeknova.com'
 
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
@@ -406,9 +407,9 @@ export default function OIProfile() {
                   <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={fmtDate}/>
                   <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} domain={['auto', 'auto']} tickFormatter={v => v.toLocaleString()}/>
                   <Tooltip content={<MigrationTooltip/>}/>
-                  <Line type="monotone" dataKey="ce_wall" name="CE Wall" stroke="#ef4444" strokeWidth={2} dot={{ fill: '#ef4444', r: 3 }} activeDot={{ r: 5 }} connectNulls/>
-                  <Line type="monotone" dataKey="pe_wall" name="PE Wall" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }} activeDot={{ r: 5 }} connectNulls/>
-                  <Line type="monotone" dataKey="cmp" name="Price" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 3" dot={{ fill: '#f59e0b', r: 2 }} activeDot={{ r: 4 }} connectNulls/>
+                  <Line type="monotone" dataKey="ce_wall" name="CE Wall" stroke={chartColors.callWall} strokeWidth={2} dot={{ fill: chartColors.callWall, r: 3 }} activeDot={{ r: 5 }} connectNulls/>
+                  <Line type="monotone" dataKey="pe_wall" name="PE Wall" stroke={chartColors.putWall} strokeWidth={2} dot={{ fill: chartColors.putWall, r: 3 }} activeDot={{ r: 5 }} connectNulls/>
+                  <Line type="monotone" dataKey="cmp" name="Price" stroke={chartColors.spot} strokeWidth={1.5} strokeDasharray="5 3" dot={{ fill: chartColors.spot, r: 2 }} activeDot={{ r: 4 }} connectNulls/>
                 </LineChart>
               </ResponsiveContainer>
             ) : (

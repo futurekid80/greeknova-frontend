@@ -1,15 +1,27 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer, Legend,
 } from 'recharts'
+import { chartColors } from '@/lib/chartColors'
 
 const API = 'https://api.greeknova.com'
 const SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
 
+function fmtNum(n: number | null | undefined) {
+  if (n === null || n === undefined || isNaN(n)) return '—'
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (abs >= 10000000) return sign + (abs / 10000000).toFixed(2) + 'Cr'
+  if (abs >= 100000) return sign + (abs / 100000).toFixed(2) + 'L'
+  if (abs >= 1000) return sign + (abs / 1000).toFixed(1) + 'K'
+  return n.toLocaleString('en-IN')
+}
+
 type StrikeRow = { strike: number; ce_gex: number; pe_gex: number; net_gex: number }
+type StrikeRowWithCum = StrikeRow & { cum_gex: number }
 type GexData = {
   symbol: string
   expiry: string
@@ -19,6 +31,7 @@ type GexData = {
   call_wall_strike: number | null
   put_wall_strike: number | null
   flip_point: number | null
+  local_flip_point: number | null
   strikes: StrikeRow[]
   as_of: string
   error?: string
@@ -49,6 +62,19 @@ export default function GexByStrikePage() {
   }, [symbol, load])
 
   const isShort = data?.regime === 'SHORT_GAMMA'
+
+  // Running cumulative net GEX across strikes, low -> high -- this is the
+  // exact curve the backend walks to find flip_point, drawn as a line so
+  // the "does it cross zero near spot" question is visible at a glance
+  // instead of needing a one-off diagnostic script.
+  const strikesWithCum = useMemo<StrikeRowWithCum[]>(() => {
+    if (!data?.strikes) return []
+    let cum = 0
+    return data.strikes.map(r => {
+      cum += r.net_gex
+      return { ...r, cum_gex: Math.round(cum * 100) / 100 }
+    })
+  }, [data?.strikes])
 
   return (
     <div className="min-h-screen bg-black text-white px-4 py-6 md:px-8">
@@ -84,7 +110,7 @@ export default function GexByStrikePage() {
 
       {!loading && data && !data.error && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
             <StatCard label="SPOT" value={data.spot?.toLocaleString()} />
             <StatCard
               label="REGIME"
@@ -94,6 +120,7 @@ export default function GexByStrikePage() {
             <StatCard label="CALL WALL" value={data.call_wall_strike?.toLocaleString() ?? '—'} accent="text-emerald-400" />
             <StatCard label="PUT WALL" value={data.put_wall_strike?.toLocaleString() ?? '—'} accent="text-red-400" />
             <StatCard label="FLIP" value={data.flip_point?.toLocaleString() ?? '—'} accent="text-amber-400" />
+            <StatCard label="FLIP (nearby)" value={data.local_flip_point?.toLocaleString() ?? '—'} accent="text-violet-300" />
           </div>
 
           <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4">
@@ -103,46 +130,61 @@ export default function GexByStrikePage() {
               </h2>
               <span className="text-xs text-gray-500">as of {data.as_of?.slice(11, 16)} UTC</span>
             </div>
-            <ResponsiveContainer width="100%" height={420}>
-              <ComposedChart data={data.strikes} margin={{ top: 75, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+            <ResponsiveContainer width="100%" height={440}>
+              <ComposedChart data={strikesWithCum} margin={{ top: 75, right: 20, left: 0, bottom: 0 }} barGap={2} barCategoryGap="20%">
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                 <XAxis
                   dataKey="strike"
                   type="number"
                   domain={['dataMin', 'dataMax']}
-                  tick={{ fill: '#888', fontSize: 11 }}
+                  tick={{ fill: chartColors.axisTick, fontSize: 11 }}
                   tickFormatter={(v) => v.toLocaleString()}
                 />
-                <YAxis tick={{ fill: '#888', fontSize: 11 }} />
+                <YAxis tick={{ fill: chartColors.axisTick, fontSize: 11 }} tickFormatter={fmtNum} />
                 <Tooltip
                   contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
                   labelFormatter={(v) => `Strike ${Number(v).toLocaleString()}`}
+                  formatter={(value, name) => [fmtNum(typeof value === 'number' ? value : Number(value)), name]}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="ce_gex" name="Call GEX" fill="#34d399" radius={[2, 2, 0, 0]} barSize={8} isAnimationActive={false} />
-                <Bar dataKey="pe_gex" name="Put GEX" fill="#f87171" radius={[0, 0, 2, 2]} barSize={8} isAnimationActive={false} />
+                <Bar dataKey="ce_gex" name="Call GEX" fill={chartColors.call} radius={[2, 2, 0, 0]} barSize={7} isAnimationActive={false} />
+                <Bar dataKey="pe_gex" name="Put GEX" fill={chartColors.put} radius={[0, 0, 2, 2]} barSize={7} isAnimationActive={false} />
+                <Line
+                  type="monotone"
+                  dataKey="cum_gex"
+                  name="Cumulative GEX"
+                  stroke={chartColors.flip}
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                />
 
                 {data.spot && (
-                  <ReferenceLine x={data.spot} stroke="#fbbf24" strokeDasharray="4 3"
-                    label={{ value: `SPOT ${data.spot.toLocaleString()}`, position: 'top', offset: 10, fill: '#fbbf24', fontSize: 11 }} />
+                  <ReferenceLine x={data.spot} stroke={chartColors.spot} strokeDasharray="4 3"
+                    label={{ value: `SPOT ${data.spot.toLocaleString()}`, position: 'top', offset: 10, fill: chartColors.spot, fontSize: 11 }} />
                 )}
                 {data.call_wall_strike && (
-                  <ReferenceLine x={data.call_wall_strike} stroke="#34d399" strokeDasharray="4 3"
-                    label={{ value: `CALL WALL ${data.call_wall_strike.toLocaleString()}`, position: 'top', offset: 32, fill: '#34d399', fontSize: 11 }} />
+                  <ReferenceLine x={data.call_wall_strike} stroke={chartColors.callWall} strokeDasharray="4 3"
+                    label={{ value: `CALL WALL ${data.call_wall_strike.toLocaleString()}`, position: 'top', offset: 32, fill: chartColors.callWall, fontSize: 11 }} />
                 )}
                 {data.put_wall_strike && (
-                  <ReferenceLine x={data.put_wall_strike} stroke="#f87171" strokeDasharray="4 3"
-                    label={{ value: `PUT WALL ${data.put_wall_strike.toLocaleString()}`, position: 'top', offset: 54, fill: '#f87171', fontSize: 11 }} />
+                  <ReferenceLine x={data.put_wall_strike} stroke={chartColors.putWall} strokeDasharray="4 3"
+                    label={{ value: `PUT WALL ${data.put_wall_strike.toLocaleString()}`, position: 'top', offset: 54, fill: chartColors.putWall, fontSize: 11 }} />
                 )}
                 {data.flip_point && (
-                  <ReferenceLine x={data.flip_point} stroke="#a78bfa" strokeDasharray="2 2"
-                    label={{ value: `FLIP ${data.flip_point.toLocaleString()}`, position: 'bottom', fill: '#a78bfa', fontSize: 11 }} />
+                  <ReferenceLine x={data.flip_point} stroke={chartColors.flip} strokeDasharray="2 2"
+                    label={{ value: `FLIP ${data.flip_point.toLocaleString()}`, position: 'bottom', fill: chartColors.flip, fontSize: 11 }} />
                 )}
+                {data.local_flip_point && data.local_flip_point !== data.flip_point && (
+                  <ReferenceLine x={data.local_flip_point} stroke={chartColors.localFlip} strokeDasharray="1 3"
+                    label={{ value: `FLIP (nearby) ${data.local_flip_point.toLocaleString()}`, position: 'bottom', offset: 20, fill: chartColors.localFlip, fontSize: 10 }} />
+                )}
+                <ReferenceLine y={0} stroke="#ffffff33" />
               </ComposedChart>
             </ResponsiveContainer>
             <p className="text-xs text-gray-500 mt-2">
-              Green = call-side gamma×OI, red = put-side gamma×OI (shown below axis). Amber = spot, purple = gamma flip.
-              GreekNova computes gamma from IV solved off live traded premiums (Black-Scholes), weighted by open interest — unscaled by lot size, so bar height is relative, not ₹ notional.
+              Green = call-side gamma×OI, red = put-side gamma×OI (shown below axis). Violet line = running cumulative net GEX across strikes — where it crosses zero near spot is the (cumulative) Flip Point.
+              Amber = spot. GreekNova computes gamma from IV solved off live traded premiums (Black-Scholes), weighted by open interest — unscaled by lot size, so bar height is relative, not ₹ notional.
             </p>
           </div>
         </>

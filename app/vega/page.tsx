@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import ResultBadge from '@/components/ResultBadge'
+import { chartColors } from '@/lib/chartColors'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
   ResponsiveContainer, Legend,
@@ -280,8 +281,8 @@ function VrpScanner() {
                 labelFormatter={(v) => `Strike ${Number(v).toLocaleString()}`}
                 formatter={(v: any) => [`${v}%`, 'IV']}
               />
-              <ReferenceLine x={surface.spot} stroke="#fbbf24" strokeDasharray="4 3" label={{ value: 'SPOT', position: 'top', fill: '#fbbf24', fontSize: 10 }} />
-              <Line type="monotone" dataKey="iv" stroke="#38bdf8" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
+              <ReferenceLine x={surface.spot} stroke={chartColors.spot} strokeDasharray="4 3" label={{ value: 'SPOT', position: 'top', fill: chartColors.spot, fontSize: 10 }} />
+              <Line type="monotone" dataKey="iv" stroke={chartColors.iv} strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -297,7 +298,7 @@ function VrpScanner() {
                 contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
                 formatter={(v: any) => [`${v}%`, 'ATM IV']}
               />
-              <Line type="monotone" dataKey="atm_iv" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="atm_iv" stroke={chartColors.flip} strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

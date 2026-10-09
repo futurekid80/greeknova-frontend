@@ -4,6 +4,7 @@ import { useAutoRefresh } from "@/lib/useAutoRefresh"
 import { useEffect, useState, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import { RefreshCw, Clock } from 'lucide-react'
+import { chartColors } from '@/lib/chartColors'
 
 interface PCRPoint { time: string; pcr: number; vol_pcr?: number; ce_oi: number; pe_oi: number; ce_vol?: number; pe_vol?: number }
 interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number; expiry: string | null }
@@ -285,9 +286,9 @@ export default function PCRTrend() {
                 <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false}/>
                 <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} domain={['auto', 'auto']}/>
                 <Tooltip content={<CustomTooltip/>} cursor={{ stroke: 'rgba(255,255,255,0.1)' }}/>
-                <ReferenceLine y={1.0} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '1.0 Bullish', fill: '#10b981', fontSize: 10, position: 'insideRight' }}/>
-                <ReferenceLine y={0.8} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '0.8 Bearish', fill: '#ef4444', fontSize: 10, position: 'insideRight' }}/>
-                <Line type="stepAfter" dataKey="pcr_smooth" name="OI PCR" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }}/>
+                <ReferenceLine y={1.0} stroke={chartColors.call} strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '1.0 Bullish', fill: chartColors.call, fontSize: 10, position: 'insideRight' }}/>
+                <ReferenceLine y={0.8} stroke={chartColors.put} strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '0.8 Bearish', fill: chartColors.put, fontSize: 10, position: 'insideRight' }}/>
+                <Line type="stepAfter" dataKey="pcr_smooth" name="OI PCR" stroke={chartColors.spot} strokeWidth={2} dot={false} activeDot={{ r: 4 }}/>
                 {showVolPCR && (
                   <Line type="stepAfter" dataKey="vol_pcr_smooth" name="Vol PCR" stroke="#22d3ee" strokeWidth={1.5} strokeDasharray="5 3" dot={false} activeDot={{ r: 4 }}/>
                 )}

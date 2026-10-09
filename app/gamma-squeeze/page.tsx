@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { RefreshCw, Zap, ArrowUp, ArrowDown, Search, X, CheckCircle2 } from 'lucide-react'
+import { RefreshCw, Zap, ArrowUp, ArrowDown, ArrowRight, Search, X, CheckCircle2 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import SymbolResult from '@/components/SymbolResult'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
@@ -28,6 +28,25 @@ interface StrikeRung {
   put_oi: number | null
   put_oi_trend_pct: number | null
   put_oi_trend_label: 'BUILDING' | 'UNWINDING' | 'STEADY' | null
+}
+
+interface WallTrendPoint {
+  t: string
+  cmp: number | null
+  regime: string | null
+  net_gex: number | null
+  net_gex_near_spot: number | null
+  call_wall_strike: number | null
+  put_wall_strike: number | null
+}
+
+interface WallTrend {
+  symbol: string
+  points: WallTrendPoint[]
+  call_wall_trend: 'flat' | 'up' | 'down' | null
+  put_wall_trend: 'flat' | 'up' | 'down' | null
+  net_gex_trend: 'flat' | 'up' | 'down' | null
+  call_wall_pinned_count: number
 }
 
 interface GexRow {
@@ -233,6 +252,38 @@ function OiTrendBadge({ label, pct }: { label: 'BUILDING' | 'UNWINDING' | 'STEAD
   )
 }
 
+// Wall velocity badge — Oct 9 2026. 'flat' (pinned, writers reloading at the
+// same strike — squeeze likely absorbed) reads very differently from the
+// wall strike actually stepping away from spot ('up' for a call wall
+// retreating higher, 'down' for a put wall retreating lower). Kept
+// deliberately terse (one glyph + tiny label) since it sits inline next to
+// a stat value, not as its own card.
+function WallVelocity({ trend, pinnedCount, kind }: { trend: 'flat' | 'up' | 'down' | null | undefined, pinnedCount?: number, kind: 'call' | 'put' | 'gex' }) {
+  if (!trend) return null
+  if (trend === 'flat') {
+    return (
+      <span title="Wall strike unchanged across recent refreshes — writers likely reloading right at this level rather than giving ground" className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-gray-500">
+        <ArrowRight size={10} /> pinned{pinnedCount && pinnedCount > 2 ? ` ${pinnedCount}x` : ''}
+      </span>
+    )
+  }
+  // For a call wall, "up" (retreating higher, away from spot pushing up) is
+  // the genuine-squeeze read; for a put wall, "down" is the equivalent. For
+  // Net GEX, "down" (more negative) means the short-gamma condition is
+  // deepening — the real accelerating setup.
+  const isGenuine =
+    (kind === 'call' && trend === 'up') ||
+    (kind === 'put' && trend === 'down') ||
+    (kind === 'gex' && trend === 'down')
+  const Icon = trend === 'up' ? ArrowUp : ArrowDown
+  return (
+    <span title={isGenuine ? 'Moving away from spot across recent refreshes — a sign of a genuine squeeze, not just absorption' : 'Moving back toward neutral/spot across recent refreshes — the short-gamma condition is easing'}
+      className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${isGenuine ? 'text-yellow-400' : 'text-gray-500'}`}>
+      <Icon size={10} /> {isGenuine ? 'moving' : 'easing'}
+    </span>
+  )
+}
+
 function StageBadge({ stage }: { stage: 'ACTIVE_SQUEEZE' | 'ON_THE_VERGE' | null }) {
   if (stage === 'ACTIVE_SQUEEZE') {
     return (
@@ -347,6 +398,29 @@ export default function GammaSqueeze() {
 
   useEffect(() => { fetchData() }, [fetchData])
   const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, false)
+
+  // Wall velocity — Oct 9 2026: whether the Call/Put Wall strike itself is
+  // moving session-over-session, not just distance-to-wall. Scoped to the
+  // three indices (matches what the backend's gex_regime_log tracks), and
+  // refetched on the same cadence as the main data so it stays in sync.
+  const [wallTrends, setWallTrends] = useState<Record<string, WallTrend>>({})
+  const fetchWallTrends = useCallback(async () => {
+    const symbols = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+    try {
+      const results = await Promise.all(
+        symbols.map(s =>
+          fetch(`${API}/gamma-wall-trend/${s}?t=${Date.now()}`, { cache: 'no-store' })
+            .then(r => r.ok ? r.json() : null)
+            .catch(() => null)
+        )
+      )
+      const next: Record<string, WallTrend> = {}
+      results.forEach((j, i) => { if (j && j.points) next[symbols[i]] = j })
+      setWallTrends(next)
+    } catch { /* best-effort — page works fine without trend data */ }
+  }, [])
+  useEffect(() => { fetchWallTrends() }, [fetchWallTrends])
+  useAutoRefresh(fetchWallTrends, 5 * 60 * 1000, false)
 
   const shortGamma = watchlist.filter(r => r.regime === 'SHORT_GAMMA')
   const longGamma  = watchlist.filter(r => r.regime === 'LONG_GAMMA')
@@ -841,12 +915,12 @@ export default function GammaSqueeze() {
                   <p className="text-xs text-gray-400 mb-3">{r.desc}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
                     <div>
-                      <p className="text-gray-600">Call Wall</p>
+                      <p className="text-gray-600 flex items-center gap-1.5">Call Wall <WallVelocity trend={wallTrends[r.symbol]?.call_wall_trend} pinnedCount={wallTrends[r.symbol]?.call_wall_pinned_count} kind="call" /></p>
                       <p className="text-white font-semibold">{fmtStrike(r.call_wall_strike)}</p>
                       <p className="text-gray-500">{r.pct_to_call_wall !== null ? `${r.pct_to_call_wall > 0 ? '+' : ''}${r.pct_to_call_wall.toFixed(1)}% away` : '—'}</p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Put Wall</p>
+                      <p className="text-gray-600 flex items-center gap-1.5">Put Wall <WallVelocity trend={wallTrends[r.symbol]?.put_wall_trend} kind="put" /></p>
                       <p className="text-white font-semibold">{fmtStrike(r.put_wall_strike)}</p>
                       <p className="text-gray-500">{r.pct_to_put_wall !== null ? `${r.pct_to_put_wall > 0 ? '+' : ''}${r.pct_to_put_wall.toFixed(1)}% away` : '—'}</p>
                     </div>
@@ -855,7 +929,7 @@ export default function GammaSqueeze() {
                       <p className="text-white font-semibold">{fmtStrike(r.flip_point)}</p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Net GEX (near spot)</p>
+                      <p className="text-gray-600 flex items-center gap-1.5">Net GEX (near spot) <WallVelocity trend={wallTrends[r.symbol]?.net_gex_trend} kind="gex" /></p>
                       <p className={`font-semibold ${r.net_gex_near_spot < 0 ? 'text-red-400' : 'text-emerald-400'}`}>{fmtNum(r.net_gex_near_spot)}</p>
                     </div>
                     <div>
@@ -944,13 +1018,17 @@ export default function GammaSqueeze() {
                             {w.stage === 'ACTIVE_SQUEEZE' && <div className="mt-1"><OiTrendBadge label={w.oi_trend_label} pct={w.oi_trend_pct} /></div>}
                           </td>
                           <td className="px-3 py-2 text-gray-300">₹{w.cmp.toLocaleString('en-IN')}</td>
-                          <td className="px-3 py-2 text-gray-300">{fmtStrike(w.call_wall_strike)}</td>
+                          <td className="px-3 py-2 text-gray-300">
+                            <span className="inline-flex items-center gap-1.5">{fmtStrike(w.call_wall_strike)} <WallVelocity trend={wallTrends[w.symbol]?.call_wall_trend} pinnedCount={wallTrends[w.symbol]?.call_wall_pinned_count} kind="call" /></span>
+                          </td>
                           <td className="px-3 py-2">
                             <span className={w.pct_to_call_wall !== null && Math.abs(w.pct_to_call_wall) <= 1.5 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
                               {w.pct_to_call_wall !== null ? `${w.pct_to_call_wall > 0 ? '+' : ''}${w.pct_to_call_wall.toFixed(1)}%` : '—'}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-gray-300">{fmtStrike(w.put_wall_strike)}</td>
+                          <td className="px-3 py-2 text-gray-300">
+                            <span className="inline-flex items-center gap-1.5">{fmtStrike(w.put_wall_strike)} <WallVelocity trend={wallTrends[w.symbol]?.put_wall_trend} kind="put" /></span>
+                          </td>
                           <td className="px-3 py-2">
                             <span className={w.pct_to_put_wall !== null && Math.abs(w.pct_to_put_wall) <= 1.5 ? 'text-orange-400 font-bold' : 'text-gray-400'}>
                               {w.pct_to_put_wall !== null ? `${w.pct_to_put_wall > 0 ? '+' : ''}${w.pct_to_put_wall.toFixed(1)}%` : '—'}
@@ -958,7 +1036,10 @@ export default function GammaSqueeze() {
                           </td>
                           <td className="px-3 py-2 text-gray-400">{fmtStrike(w.flip_point)}</td>
                           <td className="px-3 py-2">
-                            <span className={w.net_gex_near_spot < 0 ? 'text-red-400' : 'text-emerald-400'}>{fmtNum(w.net_gex_near_spot)}</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className={w.net_gex_near_spot < 0 ? 'text-red-400' : 'text-emerald-400'}>{fmtNum(w.net_gex_near_spot)}</span>
+                              <WallVelocity trend={wallTrends[w.symbol]?.net_gex_trend} kind="gex" />
+                            </span>
                           </td>
                           <td className="px-3 py-2">
                             {w.net_gex_near_spot_rupees_cr !== null ? (

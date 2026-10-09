@@ -4,8 +4,19 @@ import Link from 'next/link'
 
 export default function DisclaimerModal() {
   const [show, setShow] = useState(false)
+  // Oct 9 2026 fix: "Read full disclaimer & terms" navigates to /disclaimer,
+  // which used to always send the user back to "/" afterwards -- so reading
+  // it from a page like /zerodha-login-review (the Kite login demo page,
+  // deliberately not linked from anywhere else) stranded the user on the
+  // dashboard with no way back to where they started. Now carries the
+  // current page forward (read from window.location, not next/navigation's
+  // useSearchParams -- that hook forces a Suspense boundary wherever it's
+  // used, and this modal is mounted once in the root layout above every
+  // page) so /disclaimer's own button can return here.
+  const [returnTo, setReturnTo] = useState('/')
 
   useEffect(() => {
+    setReturnTo(window.location.pathname + window.location.search)
     const accepted = localStorage.getItem('gn_disclaimer_accepted')
     if (!accepted) setShow(true)
   }, [])
@@ -48,7 +59,7 @@ export default function DisclaimerModal() {
           I Understand & Accept
         </button>
         <p className="text-center text-xs text-gray-600">
-          <Link href="/disclaimer" className="hover:text-gray-400 underline">Read full disclaimer & terms</Link>
+          <Link href={`/disclaimer?returnTo=${encodeURIComponent(returnTo)}`} className="hover:text-gray-400 underline">Read full disclaimer & terms</Link>
         </p>
       </div>
     </div>

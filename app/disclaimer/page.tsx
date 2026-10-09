@@ -1,8 +1,22 @@
 'use client'
+import { useEffect, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import Link from 'next/link'
 
 export default function Disclaimer() {
+  // Oct 9 2026 fix: "I Understand" used to always go to "/" -- if someone
+  // arrived here via the disclaimer modal's "Read full disclaimer" link
+  // from somewhere else (e.g. the Kite login demo page), accepting here
+  // stranded them on the dashboard instead of back where they started.
+  // Read via window.location (not useSearchParams) to avoid forcing a
+  // Suspense boundary on this page for one small link.
+  const [returnTo, setReturnTo] = useState('/')
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const rt = params.get('returnTo')
+    if (rt && rt.startsWith('/')) setReturnTo(rt)
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/disclaimer" />
@@ -101,8 +115,12 @@ export default function Disclaimer() {
             <p className="text-gray-500 text-sm">
               By using GreekNova, you confirm that you have read, understood, and agreed to these terms.
             </p>
-            <Link href="/" className="inline-block mt-4 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-colors">
-              I Understand — Take Me to Dashboard
+            <Link
+              href={returnTo}
+              onClick={() => { try { localStorage.setItem('gn_disclaimer_accepted', '1') } catch (e) { /* ignore */ } }}
+              className="inline-block mt-4 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-colors"
+            >
+              {returnTo === '/' ? 'I Understand — Take Me to Dashboard' : 'I Understand — Continue'}
             </Link>
           </div>
 

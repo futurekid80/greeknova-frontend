@@ -59,6 +59,7 @@ interface GexRow {
   put_wall_strike: number | null
   put_wall_gamma_oi: number | null
   flip_point: number | null
+  local_flip_point: number | null
   net_gex: number
   net_gex_near_spot: number
   lot_size: number | null
@@ -927,6 +928,9 @@ export default function GammaSqueeze() {
                     <div>
                       <p className="text-gray-600">Flip Point</p>
                       <p className="text-white font-semibold">{fmtStrike(r.flip_point)}</p>
+                      <p className="text-gray-500">
+                        nearby: {fmtStrike(r.local_flip_point)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-gray-600 flex items-center gap-1.5">Net GEX (near spot) <WallVelocity trend={wallTrends[r.symbol]?.net_gex_trend} kind="gex" /></p>
@@ -1034,7 +1038,12 @@ export default function GammaSqueeze() {
                               {w.pct_to_put_wall !== null ? `${w.pct_to_put_wall > 0 ? '+' : ''}${w.pct_to_put_wall.toFixed(1)}%` : '—'}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-gray-400">{fmtStrike(w.flip_point)}</td>
+                          <td className="px-3 py-2 text-gray-400">
+                            {fmtStrike(w.flip_point)}
+                            {w.local_flip_point !== null && (
+                              <span className="block text-[10px] text-gray-600">nearby: {fmtStrike(w.local_flip_point)}</span>
+                            )}
+                          </td>
                           <td className="px-3 py-2">
                             <span className="inline-flex items-center gap-1.5">
                               <span className={w.net_gex_near_spot < 0 ? 'text-red-400' : 'text-emerald-400'}>{fmtNum(w.net_gex_near_spot)}</span>

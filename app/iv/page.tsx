@@ -171,6 +171,13 @@ export default function IVAnalysis() {
             <span className="text-emerald-400"> Expected Move</span> = ATM straddle × 0.68 = 68% probability price range by expiry ·
             Risk-free rate: 6.5% (India 10yr Gsec)
           </p>
+          <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-800/60">
+            <span className="text-gray-400 font-semibold">Why this can disagree with the Gamma page: </span>
+            IVR here compares today's IV to <span className="text-gray-400">this stock's own IV history</span> — high IVR means IV is near the top of its usual range.
+            The Gamma page's Rich/Fair/Cheap instead compares IV to <span className="text-gray-400">how much the stock is actually moving right now</span> (realized volatility).
+            Both can be true at once — e.g. right before results, IV can sit at a 3-month high (High IV here) while the stock is already moving enough to justify it (Fair there).
+            When they disagree, trust <span className="text-gray-400">IVR for "is premium expensive by this stock's own standards"</span> and <span className="text-gray-400">Gamma's Rich/Fair for "is premium expensive relative to what's actually happening today."</span>
+          </p>
         </div>
 
         {/* Summary boxes */}

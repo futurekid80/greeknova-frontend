@@ -36,6 +36,7 @@ interface WallTrendPoint {
   regime: string | null
   net_gex: number | null
   net_gex_near_spot: number | null
+  net_dex_near_spot: number | null
   call_wall_strike: number | null
   put_wall_strike: number | null
 }
@@ -46,6 +47,9 @@ interface WallTrend {
   call_wall_trend: 'flat' | 'up' | 'down' | null
   put_wall_trend: 'flat' | 'up' | 'down' | null
   net_gex_trend: 'flat' | 'up' | 'down' | null
+  net_dex_trend: 'flat' | 'up' | 'down' | null
+  net_dex_swing: number | null
+  delta_flow: 'building' | 'absorbed' | null
   call_wall_pinned_count: number
 }
 
@@ -281,6 +285,30 @@ function WallVelocity({ trend, pinnedCount, kind }: { trend: 'flat' | 'up' | 'do
     <span title={isGenuine ? 'Moving away from spot across recent refreshes — a sign of a genuine squeeze, not just absorption' : 'Moving back toward neutral/spot across recent refreshes — the short-gamma condition is easing'}
       className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${isGenuine ? 'text-yellow-400' : 'text-gray-500'}`}>
       <Icon size={10} /> {isGenuine ? 'moving' : 'easing'}
+    </span>
+  )
+}
+
+// Delta Flow (Oct 9 2026): the GEX+DEX companion badge. Wall Velocity
+// above tells you whether a wall is holding its ground or retreating;
+// Delta Flow answers the question that caused today's "squeeze through
+// the wall but no rally" confusion — whether dealers' net delta exposure
+// near spot actually moved (real fresh hedge-buying pressure) or stayed
+// flat despite the wall being crossed (writers reloading, absorbing the
+// move as fast as it comes). Only meaningful in SHORT_GAMMA — null
+// otherwise, same as the backend's own gating.
+function DeltaFlow({ flow }: { flow: 'building' | 'absorbed' | null | undefined }) {
+  if (!flow) return null
+  if (flow === 'building') {
+    return (
+      <span title="Net delta exposure near spot is genuinely swinging with the move — real hedge-buying pressure, not just absorption" className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-yellow-400">
+        <Zap size={10} /> delta building
+      </span>
+    )
+  }
+  return (
+    <span title="Net delta exposure near spot has stayed flat even as price tests/crosses the wall — writers are likely reloading and absorbing the move rather than a real squeeze playing out" className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-gray-500">
+      <ArrowRight size={10} /> delta absorbed
     </span>
   )
 }
@@ -898,6 +926,7 @@ export default function GammaSqueeze() {
                           </span>
                         )}
                         <IvRegimeBadge regime={r.iv_regime} ratio={r.iv_rv_ratio} atmIv={r.atm_iv} realizedVol={r.realized_vol} />
+                        <DeltaFlow flow={wallTrends[r.symbol]?.delta_flow} />
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
                       {r.squeeze_strike !== null && (
@@ -1020,6 +1049,7 @@ export default function GammaSqueeze() {
                               {w.confirmed_by_alerts && <CheckCircle2 size={12} className="text-sky-400" />}
                             </div>
                             {w.stage === 'ACTIVE_SQUEEZE' && <div className="mt-1"><OiTrendBadge label={w.oi_trend_label} pct={w.oi_trend_pct} /></div>}
+                            <div className="mt-1"><DeltaFlow flow={wallTrends[w.symbol]?.delta_flow} /></div>
                           </td>
                           <td className="px-3 py-2 text-gray-300">₹{w.cmp.toLocaleString('en-IN')}</td>
                           <td className="px-3 py-2 text-gray-300">

@@ -22,7 +22,7 @@ type ChartData = {
   error?: string
 }
 
-const CHART_HEIGHT = 440
+const CHART_HEIGHT = 480
 
 // BUG FIX (Oct 5 2026): same fix as StockChart.tsx -- lightweight-charts
 // renders numeric Time values in UTC with no display-timezone option, so
@@ -62,7 +62,7 @@ export default function StraddleChartPage() {
         // Spot + VWAP come from the same intraday candle endpoint the Price
         // Chart page uses — option sellers watch spot vs VWAP for direction
         // bias while the straddle premium itself is on a different scale,
-        // so both get plotted on a separate (left) price axis.
+        // so both get plotted in a separate chart pane.
         fetch(`${API}/chart-data/${sym}?interval=minute&range=1d&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
       ])
       const j: ChartData = await res.json()
@@ -146,41 +146,32 @@ export default function StraddleChartPage() {
         height: CHART_HEIGHT,
         timeScale: { borderColor: '#374151', timeVisible: true, secondsVisible: false },
         rightPriceScale: { borderColor: '#374151' },
-        // BUG FIX (Oct 5 2026): lightweight-charts lets you grab either price
-        // axis label and drag it to rescale JUST that axis -- with two price
-        // scales here (Combined/CE/PE on the right, Spot/VWAP on the left),
-        // a drag that starts anywhere near the right axis rescaled only the
-        // right scale, leaving the left scale untouched. That's what made
-        // Spot/VWAP look "frozen"/unaffected while Combined/CE/PE visibly
-        // distorted (even going negative) on drag. Disabling price-axis drag
-        // leaves only time-panning (handleScale.axisPressedMouseMove.time),
-        // which moves the shared time scale and lets both price scales
-        // autoscale together from the same visible window -- so everything
-        // now moves in sync, the way a single-axis chart would.
         handleScale: { axisPressedMouseMove: { time: true, price: false }, mouseWheel: true, pinch: true },
         handleScroll: { pressedMouseMove: true, mouseWheel: true, horzTouchDrag: true, vertTouchDrag: false },
       })
       chartRef.current = chart
 
-      const combinedSeries = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 3, title: 'Combined (CE+PE)' })
+      // DESIGN FIX (Oct 9 2026): Spot/VWAP and Combined/CE/PE used to share
+      // one plot area on two differently-scaled price axes (~22,600 vs
+      // ~150-350). Same axes or not, both sets of lines occupied the same
+      // pixels, so the chart read as a tangle no matter how the legend
+      // labeled them -- that's the "messy, haphazard" complaint. Splitting
+      // them into two stacked panes (same synced time axis, independent
+      // price scales each) removes the overlap at the source instead of
+      // trying to fix it with more labels or colors. Premium (the page's
+      // actual subject) gets the larger top pane; Spot/VWAP is directional
+      // context in a smaller pane below.
+      const combinedSeries = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 3, title: 'Combined (CE+PE)' }, 0)
       combinedSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.combined })) as any)
 
-      const ceSeries = chart.addSeries(LineSeries, { color: '#16a34a', lineWidth: 1, title: 'CE' })
+      const ceSeries = chart.addSeries(LineSeries, { color: '#16a34a', lineWidth: 1, title: 'CE' }, 0)
       ceSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.ce })) as any)
 
-      const peSeries = chart.addSeries(LineSeries, { color: '#dc2626', lineWidth: 1, title: 'PE' })
+      const peSeries = chart.addSeries(LineSeries, { color: '#dc2626', lineWidth: 1, title: 'PE' }, 0)
       peSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.pe })) as any)
 
-      // Spot + VWAP on a separate LEFT price scale -- wildly different
-      // magnitude from the premium (e.g. ~24,600 vs ~150), so they'd be
-      // unreadable sharing the premium's right-hand scale.
       if (spotPoints.length) {
-        const spotSeries = chart.addSeries(LineSeries, {
-          color: '#60a5fa',
-          lineWidth: 1,
-          title: 'Spot',
-          priceScaleId: 'left',
-        })
+        const spotSeries = chart.addSeries(LineSeries, { color: '#60a5fa', lineWidth: 1, title: 'Spot' }, 1)
         spotSeries.setData(spotPoints.map((p) => ({ time: chartTime(p.time), value: p.value })) as any)
       }
       if (vwapPoints.length) {
@@ -189,11 +180,15 @@ export default function StraddleChartPage() {
           lineWidth: 2,
           lineStyle: 2, // dashed
           title: 'VWAP',
-          priceScaleId: 'left',
-        })
+        }, 1)
         vwapSeries.setData(vwapPoints.map((p) => ({ time: chartTime(p.time), value: p.value })) as any)
       }
-      chart.priceScale('left').applyOptions({ visible: true, borderColor: '#374151' })
+
+      // Premium pane gets roughly 2x the vertical space of the Spot/VWAP
+      // context pane below it.
+      const panes = chart.panes()
+      panes[0]?.setStretchFactor(2)
+      panes[1]?.setStretchFactor(1)
 
       chart.timeScale().fitContent()
     }
@@ -246,59 +241,67 @@ export default function StraddleChartPage() {
           </button>
         </div>
 
-        {/* Symbol / strike / expiry controls */}
-        <div className="flex items-center gap-2 flex-wrap mb-5 mt-4">
-          {SYMBOLS.map((s) => (
-            <button
-              key={s}
-              onClick={() => setSymbol(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                symbol === s
-                  ? 'bg-amber-950/40 text-amber-400 border-amber-700/50'
-                  : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-gray-300'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-
-          {data && data.available_expiries.length > 0 && (
-            <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 ml-2">
-              <span className="text-xs text-gray-500">Expiry:</span>
-              <select
-                value={expiry || data.expiry}
-                onChange={(e) => load(symbol, null, e.target.value)}
-                className="bg-transparent text-white text-xs focus:outline-none cursor-pointer"
+        {/* Symbol / strike / expiry controls — one consistent toolbar
+            language (segmented control + divided chip group) instead of
+            three visually different control styles stacked side by side. */}
+        <div className="flex items-center gap-3 flex-wrap mb-5 mt-4 text-xs">
+          <div className="flex items-center bg-gray-900/60 border border-gray-800 rounded-lg overflow-hidden">
+            {SYMBOLS.map((s, i) => (
+              <button
+                key={s}
+                onClick={() => setSymbol(s)}
+                className={`px-3.5 py-2 font-semibold transition-colors ${i > 0 ? 'border-l border-gray-800' : ''} ${
+                  symbol === s
+                    ? 'bg-amber-950/40 text-amber-400'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
               >
-                {data.available_expiries.map((exp) => (
-                  <option key={exp} value={exp} className="bg-gray-900">
-                    {new Date(exp + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+                {s}
+              </button>
+            ))}
+          </div>
 
-          {data && data.available_strikes.length > 0 && (
-            <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5">
-              <span className="text-xs text-gray-500">Strike:</span>
-              <select
-                value={strike ?? data.strike}
-                onChange={(e) => load(symbol, Number(e.target.value), expiry)}
-                className="bg-transparent text-white text-xs focus:outline-none cursor-pointer"
-              >
-                {data.available_strikes.map((s) => (
-                  <option key={s} value={s} className="bg-gray-900">
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {data && (data.available_expiries.length > 0 || data.available_strikes.length > 0 || data.cmp != null) && (
+            <div className="flex items-center bg-gray-900/60 border border-gray-800 rounded-lg divide-x divide-gray-800 overflow-hidden">
+              {data.available_expiries.length > 0 && (
+                <div className="flex items-center gap-2 px-3.5 py-2">
+                  <span className="text-gray-500">Expiry</span>
+                  <select
+                    value={expiry || data.expiry}
+                    onChange={(e) => load(symbol, null, e.target.value)}
+                    className="bg-transparent text-white font-semibold focus:outline-none cursor-pointer"
+                  >
+                    {data.available_expiries.map((exp) => (
+                      <option key={exp} value={exp} className="bg-gray-900">
+                        {new Date(exp + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-          {data?.cmp != null && (
-            <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-400">
-              CMP: <span className="text-white font-semibold">{fmt(data.cmp)}</span>
+              {data.available_strikes.length > 0 && (
+                <div className="flex items-center gap-2 px-3.5 py-2">
+                  <span className="text-gray-500">Strike</span>
+                  <select
+                    value={strike ?? data.strike}
+                    onChange={(e) => load(symbol, Number(e.target.value), expiry)}
+                    className="bg-transparent text-white font-semibold focus:outline-none cursor-pointer"
+                  >
+                    {data.available_strikes.map((s) => (
+                      <option key={s} value={s} className="bg-gray-900">
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {data.cmp != null && (
+                <div className="flex items-center gap-1.5 px-3.5 py-2 text-gray-400">
+                  CMP <span className="text-white font-semibold">{fmt(data.cmp)}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -352,22 +355,34 @@ export default function StraddleChartPage() {
             </div>
 
             <div className="bg-gray-900/20 border border-gray-800 rounded-xl p-4">
-              <div className="flex items-center gap-4 mb-3 text-xs">
-                <span className="flex items-center gap-1.5 text-amber-400">
-                  <span className="w-3 h-0.5 bg-amber-500 inline-block" /> Combined (CE+PE)
-                </span>
-                <span className="flex items-center gap-1.5 text-emerald-400">
-                  <span className="w-3 h-0.5 bg-emerald-500 inline-block" /> CE
-                </span>
-                <span className="flex items-center gap-1.5 text-red-400">
-                  <span className="w-3 h-0.5 bg-red-500 inline-block" /> PE
-                </span>
-                <span className="flex items-center gap-1.5 text-blue-400 ml-2 pl-2 border-l border-gray-800">
-                  <span className="w-3 h-0.5 bg-blue-400 inline-block" /> Spot (left axis)
-                </span>
-                <span className="flex items-center gap-1.5 text-purple-400">
-                  <span className="w-3 h-0.5 bg-purple-400 inline-block border-dashed border-t" /> VWAP (left axis)
-                </span>
+              {/* Legend grouped by pane, so it reads as "two charts, clearly
+                  labeled" instead of one flat row of five mixed-scale lines. */}
+              <div className="flex flex-col gap-2 mb-3 text-xs">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-16 shrink-0">
+                    Premium
+                  </span>
+                  <span className="flex items-center gap-1.5 text-amber-400">
+                    <span className="w-3 h-0.5 bg-amber-500 inline-block" /> Combined (CE+PE)
+                  </span>
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <span className="w-3 h-0.5 bg-emerald-500 inline-block" /> CE
+                  </span>
+                  <span className="flex items-center gap-1.5 text-red-400">
+                    <span className="w-3 h-0.5 bg-red-500 inline-block" /> PE
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-16 shrink-0">
+                    Price
+                  </span>
+                  <span className="flex items-center gap-1.5 text-blue-400">
+                    <span className="w-3 h-0.5 bg-blue-400 inline-block" /> Spot
+                  </span>
+                  <span className="flex items-center gap-1.5 text-purple-400">
+                    <span className="w-3 border-t-2 border-dashed border-purple-400 inline-block" /> VWAP
+                  </span>
+                </div>
               </div>
               <div ref={containerRef} />
             </div>

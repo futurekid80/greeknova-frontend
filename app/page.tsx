@@ -12,6 +12,13 @@ const API = 'https://api.greeknova.com'
 
 const ALL_SYMBOLS = _CANON_SYMBOLS
 
+// Oct 10 2026: Pulse homepage's card row is deliberately the 3 most-liquid
+// indices only, not every tracked index -- FINNIFTY and MIDCPNIFTY are
+// thinner and stay off this glance view by Manish's call (they're still
+// fully live on every other page: Gamma Exposure, GEX chart, OI Profile,
+// Vega, etc).
+const PULSE_CARD_SYMBOLS = ['NIFTY', 'BANKNIFTY', 'SENSEX']
+
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
 interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }
 interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
@@ -1104,7 +1111,7 @@ export default function MarketPulse() {
         ;(indexJson.cmps || []).forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
         setCmps(cmpMap2)
         const indexData = indexJson.rows || []
-        const idxResults = ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX']
+        const idxResults = PULSE_CARD_SYMBOLS
           .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
           .filter(Boolean) as IndexAnalysis[]
         setAnalyses(idxResults)
@@ -1126,7 +1133,7 @@ export default function MarketPulse() {
     // Fetch IV range for index cards
     supabase.from('iv_history')
       .select('symbol, atm_iv, trade_date')
-      .in('symbol', ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'])
+      .in('symbol', PULSE_CARD_SYMBOLS)
       .order('trade_date', { ascending: false })
       .limit(30)
       .then(({ data }) => {

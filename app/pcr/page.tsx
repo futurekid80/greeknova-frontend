@@ -9,7 +9,7 @@ import { chartColors } from '@/lib/chartColors'
 interface PCRPoint { time: string; pcr: number; vol_pcr?: number; ce_oi: number; pe_oi: number; ce_vol?: number; pe_vol?: number }
 interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number; expiry: string | null }
 
-const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
 const API = 'https://api.greeknova.com'
 
 const CustomTooltip = ({ active, payload, label }: any) => {

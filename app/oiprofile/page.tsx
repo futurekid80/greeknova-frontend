@@ -8,7 +8,7 @@ import { STOCKS as _CANON_SYMBOLS } from '@/lib/symbols'
 import { chartColors } from '@/lib/chartColors'
 const API = 'https://api.greeknova.com'
 
-const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
 const STOCKS = _CANON_SYMBOLS.slice().sort()
 
 const MARKET_OPEN_IST  = 9 * 60 + 15

@@ -5,7 +5,7 @@ import Navbar from '@/components/Navbar'
 import { useAutoRefresh } from '@/lib/useAutoRefresh'
 
 const API = 'https://api.greeknova.com'
-const BENCHMARKS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const BENCHMARKS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
 
 interface Item {
   symbol: string; ltp: number; prev: number; open: number

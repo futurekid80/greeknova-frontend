@@ -107,7 +107,7 @@ function renderInline(text: string): React.ReactNode {
   })
 }
 
-const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
 const STOCKS = _CANON_SYMBOLS
 
 const SYSTEM_PROMPT = `You are GreekNova's market data analyst. You help traders understand options market structure using NSE F&O data.

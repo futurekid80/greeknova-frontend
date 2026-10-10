@@ -229,13 +229,13 @@ export default function EODReport() {
         </div>
 
         {/* Market Bias Banner */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <div className="col-span-2 md:col-span-1 bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
             <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Market Bias</p>
             <p className={`text-2xl font-black ${biasColor}`}>{biasLabel}</p>
             <p className="text-xs text-gray-600 mt-1">{mb.bullish} bullish · {mb.bearish} bearish · {mb.neutral} neutral</p>
           </div>
-          {['NIFTY', 'BANKNIFTY', 'FINNIFTY'].map(sym => {
+          {['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'].map(sym => {
             const iv = iv_data[sym]
             return (
               <div key={sym} className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">

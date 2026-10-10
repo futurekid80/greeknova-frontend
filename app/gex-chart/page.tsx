@@ -8,7 +8,7 @@ import {
 import { chartColors } from '@/lib/chartColors'
 
 const API = 'https://api.greeknova.com'
-const SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
 
 function fmtNum(n: number | null | undefined) {
   if (n === null || n === undefined || isNaN(n)) return '—'

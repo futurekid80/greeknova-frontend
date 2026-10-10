@@ -12,7 +12,7 @@
 // are only the bundled fallback -- used until that fetch resolves, or if
 // it fails outright (offline, backend down, etc).
 
-export const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+export const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
 
 // Fallback only -- regenerated Oct 6 2026 from the confirmed-live backend
 // F&O universe (/symbols). Kept only as a safety net; the live fetch below
@@ -67,7 +67,7 @@ export const ALL_SYMBOLS: string[] = [...INDICES, ...STOCKS]
 // is exactly why the live fetch (from Kite's own instrument data via the
 // backend) is the real source of truth from here on, not this list.
 const FALLBACK_LOT_SIZES: Record<string, number> = {
-  NIFTY: 65, BANKNIFTY: 30, FINNIFTY: 60,
+  NIFTY: 65, BANKNIFTY: 30, FINNIFTY: 60, MIDCPNIFTY: 120,
   RELIANCE: 500, TCS: 225, HDFCBANK: 650, INFY: 400, ICICIBANK: 700,
   HINDUNILVR: 300, ITC: 1725, SBIN: 750, BHARTIARTL: 475,
   KOTAKBANK: 2000, LT: 175, AXISBANK: 625, ASIANPAINT: 250,

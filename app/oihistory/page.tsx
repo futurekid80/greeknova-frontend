@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContaine
 
 import { STOCKS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
-const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
 const STOCKS = _CANON_SYMBOLS
 
 function fmtOI(n: number) {

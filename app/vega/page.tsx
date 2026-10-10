@@ -120,7 +120,7 @@ const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
 
 function VrpScanner() {
-  const [symbol, setSymbol] = useState<'NIFTY' | 'BANKNIFTY' | 'FINNIFTY'>('NIFTY')
+  const [symbol, setSymbol] = useState<'NIFTY' | 'BANKNIFTY' | 'FINNIFTY' | 'MIDCPNIFTY'>('NIFTY')
   const [data, setData] = useState<VrpScan | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -181,7 +181,7 @@ function VrpScanner() {
     return () => clearInterval(id)
   }, [symbol, selectedExpiry, load])
 
-  const onSymbolChange = (s: 'NIFTY' | 'BANKNIFTY' | 'FINNIFTY') => {
+  const onSymbolChange = (s: 'NIFTY' | 'BANKNIFTY' | 'FINNIFTY' | 'MIDCPNIFTY') => {
     setSelectedExpiry(null) // reset to nearest on symbol switch
     setSymbol(s)
   }
@@ -378,7 +378,7 @@ function VrpScanner() {
   return (
     <>
       <div className="flex items-center gap-2 flex-wrap mb-5">
-        {(['NIFTY', 'BANKNIFTY', 'FINNIFTY'] as const).map((s) => (
+        {(['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'] as const).map((s) => (
           <button
             key={s}
             onClick={() => onSymbolChange(s)}

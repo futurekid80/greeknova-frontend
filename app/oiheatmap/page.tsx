@@ -6,7 +6,7 @@ import { RefreshCw } from 'lucide-react'
 import { STOCKS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
 
-const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY']
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
 const STOCKS = _CANON_SYMBOLS
 
 interface HeatCell {
@@ -181,7 +181,7 @@ export default function OIHeatmap() {
 
   const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
     if (!atmStrike) return true
-    const strikeInterval = symbol === 'BANKNIFTY' ? 100 : 50
+    const strikeInterval = symbol === 'BANKNIFTY' ? 100 : symbol === 'MIDCPNIFTY' ? 25 : 50
     const range = 15 * strikeInterval
     return Math.abs(strike - atmStrike) <= range
   }) : []

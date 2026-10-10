@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import Navbar from '@/components/Navbar'
 
 const API = 'https://api.greeknova.com'
-const SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY'] as const
+const SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'] as const
 type Symbol = typeof SYMBOLS[number]
 
 type Point = { time: number; ce: number; pe: number; combined: number }

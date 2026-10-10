@@ -9,7 +9,7 @@ import {
 
 import { STOCKS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
-const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
 const STOCKS = _CANON_SYMBOLS
 
 function fmtOI(n: number) {

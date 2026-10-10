@@ -207,7 +207,7 @@ export default function Scanners() {
         const cmp = cmpMap[sym] || 0
         const { pcr, totalCE, totalPE, ceWall, peWall } = computePCR(data, sym, cmp)
         if (!totalCE && !totalPE) continue
-        const isIndex = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'].includes(sym)
+        const isIndex = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX'].includes(sym)
         const distToCE = ceWall > cmp && cmp > 0 ? (ceWall - cmp) / cmp * 100 : 0
         const distToPE = peWall < cmp && cmp > 0 ? (cmp - peWall) / cmp * 100 : 0
         result.push({

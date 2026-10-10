@@ -100,7 +100,7 @@ function analyzeIndex(data: OIRecord[], symbol: string, cmp: number = 0): IndexA
 }
 
 function getWarZoneTag(stock: PulseStock) {
-  const isIndex = ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY'].includes(stock.symbol)
+  const isIndex = ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(stock.symbol)
   if (isIndex) return { label: 'Quiet', icon: '😴', color: 'text-gray-600', bg: 'bg-gray-900/10', border: 'border-gray-800/20' }
   const isNarrow = (stock.width_pct || 1) < 0.3
   const hasSignal = stock.has_oi_signal
@@ -229,7 +229,7 @@ function IndexCard({ a, cpr, cmp, iv }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: 
 
 // ── Today's Spotlight ─────────────────────────────────────────────────────────
 function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
-  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY'].includes(s.symbol))
+  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(s.symbol))
   const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
   const topOIBuilder  = isMarketData
     ? [...stocksOnly].sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))[0]
@@ -238,7 +238,7 @@ function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[
     ? [...stocksOnly].sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))[0]
     : [...stocksOnly].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
   const usedSymbols = new Set([topOIBuilder?.symbol, topOIUnwinder?.symbol])
-  const narrowestCPR = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY'].includes(c.symbol) && !usedSymbols.has(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
+  const narrowestCPR = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(c.symbol) && !usedSymbols.has(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
   const cards = [
     {
       label: isMarketData ? '🔥 Highest OI Buildup' : '🟢 Narrowest Above CPR',
@@ -289,7 +289,7 @@ function ActivityLeaders({ stocks, uoaSignals, onSymbolClick }: {
   uoaSignals: any[]
   onSymbolClick: (sym: string) => void
 }) {
-  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY'].includes(s.symbol))
+  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(s.symbol))
   const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
   const cmpMap = Object.fromEntries(stocks.map(s => [s.symbol, s.cmp]))
   const dayHighBreakouts = isMarketData
@@ -638,7 +638,7 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
           </div>
         ) : filtered.map(s => {
           const tag = getWarZoneTag(s)
-          const isIndex = ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY'].includes(s.symbol)
+          const isIndex = ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(s.symbol)
           const cprPosColor: Record<string,string> = { ABOVE_CPR:'text-emerald-400', BELOW_CPR:'text-red-400', INSIDE_CPR:'text-amber-400' }
           const cprPosShort: Record<string,string> = { ABOVE_CPR:'↑ Above', BELOW_CPR:'↓ Below', INSIDE_CPR:'⟷ Inside' }
           return (
@@ -709,7 +709,7 @@ function MarketPulseFeed({ stocks, cprData }: { stocks: PulseStock[]; cprData: C
 function ExtendedView({ stocks }: { stocks: PulseStock[] }) {
   const [open, setOpen] = useState(true)
   const [activeTab, setActiveTab] = useState<'gainers'|'losers'|'active'>('gainers')
-  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY'].includes(s.symbol))
+  const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(s.symbol))
   const gainers = [...stocksOnly].filter(s => (s.price_chg_pct||0) > 0).sort((a,b) => (b.price_chg_pct||0) - (a.price_chg_pct||0)).slice(0,10)
   const losers  = [...stocksOnly].filter(s => (s.price_chg_pct||0) < 0).sort((a,b) => (a.price_chg_pct||0) - (b.price_chg_pct||0)).slice(0,10)
   const active  = [...stocksOnly].sort((a,b) => Math.abs(b.oi_chg_pct||0) - Math.abs(a.oi_chg_pct||0)).slice(0,10)
@@ -1104,7 +1104,7 @@ export default function MarketPulse() {
         ;(indexJson.cmps || []).forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
         setCmps(cmpMap2)
         const indexData = indexJson.rows || []
-        const idxResults = ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY']
+        const idxResults = ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX']
           .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
           .filter(Boolean) as IndexAnalysis[]
         setAnalyses(idxResults)
@@ -1126,7 +1126,7 @@ export default function MarketPulse() {
     // Fetch IV range for index cards
     supabase.from('iv_history')
       .select('symbol, atm_iv, trade_date')
-      .in('symbol', ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY'])
+      .in('symbol', ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'])
       .order('trade_date', { ascending: false })
       .limit(30)
       .then(({ data }) => {
@@ -1268,7 +1268,7 @@ export default function MarketPulse() {
         
         {/* Sector Performance */}
 {feedStocks.length > 0 && (() => {
-  const sectorPerf = getSectorPerf(feedStocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY'].includes(s.symbol)))
+  const sectorPerf = getSectorPerf(feedStocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(s.symbol)))
   const hasData = sectorPerf.some(s => s.avg !== 0)
   
   const sectorStocks = activeSector

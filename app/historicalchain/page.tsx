@@ -5,7 +5,7 @@ import { RefreshCw, Clock, Calendar } from 'lucide-react'
 import { ALL_SYMBOLS } from '@/lib/symbols'
 
 const API = 'https://api.greeknova.com'
-const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
 
 interface Greeks { ltp: number; iv: number | null; oi: number; volume: number; delta?: number; gamma?: number; theta?: number; vega?: number }
 interface ChainRow { strike: number; is_atm: boolean; ce: Greeks; pe: Greeks }

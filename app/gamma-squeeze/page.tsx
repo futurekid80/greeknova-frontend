@@ -434,7 +434,7 @@ export default function GammaSqueeze() {
   // refetched on the same cadence as the main data so it stays in sync.
   const [wallTrends, setWallTrends] = useState<Record<string, WallTrend>>({})
   const fetchWallTrends = useCallback(async () => {
-    const symbols = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
+    const symbols = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
     try {
       const results = await Promise.all(
         symbols.map(s =>

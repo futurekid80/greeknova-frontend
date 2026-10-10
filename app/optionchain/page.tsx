@@ -8,7 +8,7 @@ import { ALL_SYMBOLS } from '@/lib/symbols'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 
 const API = 'https://api.greeknova.com'
-const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
 
 interface Greeks { ltp: number; iv: number | null; oi: number; volume: number; delta?: number; gamma?: number; theta?: number; vega?: number }
 interface ChainRow { strike: number; is_atm: boolean; ce: Greeks; pe: Greeks }

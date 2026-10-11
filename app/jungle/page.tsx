@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar'
 import AlertToggle from '@/components/AlertToggle'
 import { useAlerts } from '@/contexts/AlertsContext'
 import AlertThresholds from '@/components/AlertThresholds'
+import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, Zap, Search, X } from 'lucide-react'
 
@@ -12,7 +13,7 @@ interface OISpike {
   symbol: string; tradingsymbol: string; strike: number; option_type: string
   expiry: string
   cmp: number; last_price: number; ltp_chg_pct: number
-  is_index: boolean; is_otm: boolean; otm_pct: number
+  is_index: boolean; is_otm: boolean; otm_pct: number; strikes_away: number | null
   volume: number; oi: number; old_oi: number; new_oi: number
   oi_change: number; oi_pct: number; vol_change: number
   direction: 'BUILD' | 'UNWIND'; interpretation: string
@@ -23,7 +24,7 @@ interface VolSpike {
   symbol: string; tradingsymbol: string; strike: number; option_type: string
   expiry: string
   cmp: number; last_price: number; ltp_chg_pct: number
-  is_index: boolean; is_otm: boolean; otm_pct: number
+  is_index: boolean; is_otm: boolean; otm_pct: number; strikes_away: number | null
   volume: number; oi: number; old_volume: number; new_volume: number
   vol_pct: number; oi_pct: number; vol_signal: 'FRESH_BUILD' | 'UNWINDING' | 'CHURN'
 }
@@ -31,7 +32,7 @@ interface VolSpike {
 interface JungleData {
   date: string; ts_new: string; ts_old: string
   open_time: string; close_time: string; snapshots: number
-  oi_threshold: number; vol_threshold: number
+  oi_threshold: number; vol_threshold: number; strike_zone: string
   oi_spikes: OISpike[]; vol_spikes: VolSpike[]
   oi_total: number; vol_total: number
 }
@@ -85,11 +86,13 @@ export default function OptionsJungle() {
   const [availDates, setAvailDates]     = useState<string[]>([])
   const [autoEnabled, setAutoEnabled]   = useState(false)
   const [countdown, setCountdown]       = useState(300)
+  const [strikeZone, setStrikeZone]     = useState('all')
   const intervalRef  = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const dateRef = useRef('')
   const oiRef   = useRef<number|null>(5)
   const volRef  = useRef<number|null>(20)
+  const strikeZoneRef = useRef('all')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -97,6 +100,7 @@ export default function OptionsJungle() {
       const params = new URLSearchParams({
         oi_threshold:  String(oiRef.current ?? 2),
         vol_threshold: String(volRef.current ?? 10),
+        strike_zone:   strikeZoneRef.current,
       })
       if (dateRef.current) params.set('date', dateRef.current)
       const res  = await fetch(`${API}/options-jungle?${params}`)
@@ -126,6 +130,7 @@ export default function OptionsJungle() {
   function handleDateChange(d: string) { setDate(d); dateRef.current = d; fetchData() }
   function handleOIPreset(v: number | null) { setOiThreshold(v); oiRef.current = v; fetchData() }
   function handleVolPreset(v: number | null) { setVolThreshold(v); volRef.current = v; fetchData() }
+  function handleStrikeZone(z: string) { setStrikeZone(z); strikeZoneRef.current = z; fetchData() }
   const [volSortBy, setVolSortBy] = useState<string>('vol_pct')
   const [volSortDir, setVolSortDir] = useState<1|-1>(-1)
   function sortToggle(col: string) { if (sortBy === col) setSortDir(d => d === -1 ? 1 : -1); else { setSortBy(col); setSortDir(-1) } }
@@ -403,6 +408,8 @@ export default function OptionsJungle() {
                 })}
               </div>
             </div>
+            <div className="w-px h-8 bg-gray-800"/>
+            <StrikeZoneFilter value={strikeZone} onChange={handleStrikeZone} />
             <p className="text-[10px] text-gray-600 ml-auto">Lower % = more signals · All → = show everything fetched</p>
           </div>
         </div>

@@ -1,5 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
+import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
@@ -44,6 +45,7 @@ interface ProfileRow {
   is_atm: boolean; in_value_area: boolean
   prev_ce_oi: number; prev_pe_oi: number
   ce_oi_delta: number; pe_oi_delta: number
+  strikes_away: number | null
 }
 
 interface WallPoint {
@@ -54,6 +56,7 @@ interface WallPoint {
 
 interface ProfileData {
   symbol: string; date: string; expiry: string; expiries: string[]
+  strike_zone: string
   cmp: number; atm_strike: number; poc_strike: number
   ce_wall: number; pe_wall: number; vah: number; val: number
   total_ce_oi: number; total_pe_oi: number; pcr: number
@@ -82,6 +85,7 @@ export default function OIProfile() {
   const [loading, setLoading]   = useState(true)
   const [symbol, setSymbol]     = useState('NIFTY')
   const [expiry, setExpiry]     = useState('')
+  const [strikeZone, setStrikeZone] = useState('all')
   const [view, setView]         = useState<'profile'|'migration'>('profile')
   const [showVacuum, setShowVacuum] = useState(true)
   const [showValueArea, setShowValueArea] = useState(true)
@@ -96,7 +100,7 @@ export default function OIProfile() {
     const fetchId = ++fetchIdRef.current
     setLoading(true)
     try {
-      const params = new URLSearchParams()
+      const params = new URLSearchParams({ strike_zone: strikeZone })
       if (expiry) params.set('expiry', expiry)
       const res  = await fetch(`${API}/oi-profile/${symbol}?${params}`)
       const json = await res.json()
@@ -107,7 +111,7 @@ export default function OIProfile() {
       }
     } catch(e) { console.error(e) }
     if (fetchId === fetchIdRef.current) setLoading(false)
-  }, [symbol, expiry])
+  }, [symbol, expiry, strikeZone])
   const fetchDataRef = useRef<typeof fetchData>(async () => {})
   useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
 
@@ -203,6 +207,8 @@ export default function OIProfile() {
             <option value="">Stocks ▾</option>
             {STOCKS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <div className="w-px h-6 bg-gray-800 mx-1"/>
+          <StrikeZoneFilter value={strikeZone} onChange={setStrikeZone} />
         </div>
 
         {/* Key levels */}

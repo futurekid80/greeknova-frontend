@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar'
 import AlertToggle from '@/components/AlertToggle'
 import { useAlerts } from '@/contexts/AlertsContext'
 import AlertThresholds from '@/components/AlertThresholds'
+import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, AlertTriangle, Search, X, MoonStar } from 'lucide-react'
 
@@ -13,7 +14,7 @@ interface UOASignal {
   option_type: string; expiry: string; cmp: number; ltp: number; open_ltp: number
   ltp_chg_from_open: number; volume: number; oi: number
   oi_chg_30min: number; vol_oi_ratio: number; vol_ratio: number
-  vol_chg_30min: number; otm_pct: number; is_otm: boolean
+  vol_chg_30min: number; otm_pct: number; is_otm: boolean; strikes_away: number | null
   signal_type: string; signal_desc: string; bias: string; confirmation: string | null
   score: number; time_tag: string; is_index: boolean
   day_high: number | null; day_high_pct: number | null; at_day_high: boolean
@@ -29,6 +30,7 @@ interface UOAData {
   mins_to_close: number
   is_post_market: boolean
   market_close_time: string
+  strike_zone: string
 }
 
 const SIGNAL_META: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
@@ -132,9 +134,11 @@ export default function UOA() {
   const [openTime, setOpenTime] = useState('')
   const [autoEnabled, setAutoEnabled] = useState(false)
   const [countdown, setCountdown] = useState(300)
+  const [strikeZone, setStrikeZone] = useState('all')
   const intervalRef = useRef<NodeJS.Timeout|null>(null)
   const countdownRef = useRef<NodeJS.Timeout|null>(null)
   const dateRef = useRef('')
+  const strikeZoneRef = useRef('all')
 
   useEffect(() => {
     async function loadDates() {
@@ -154,8 +158,9 @@ export default function UOA() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const url = dateRef.current ? `${API}/uoa?date=${dateRef.current}` : `${API}/uoa`
-      const res = await fetch(url)
+      const params = new URLSearchParams({ strike_zone: strikeZoneRef.current })
+      if (dateRef.current) params.set('date', dateRef.current)
+      const res = await fetch(`${API}/uoa?${params}`)
       const json = await res.json()
       setData(json)
       if (json.timestamp) setCaptureTime(toIST(json.timestamp))
@@ -166,6 +171,7 @@ export default function UOA() {
   }, [])
 
   function handleDateChange(d: string) { setDate(d); dateRef.current = d; fetchData() }
+  function handleStrikeZone(z: string) { setStrikeZone(z); strikeZoneRef.current = z; fetchData() }
 
   function startAuto() {
     setAutoEnabled(true); setCountdown(300)
@@ -516,6 +522,8 @@ export default function UOA() {
             <input type="range" min="1" max="5" value={minScore} onChange={e => setMinScore(Number(e.target.value))} className="w-20 accent-amber-400"/>
             <span className="text-xs font-black text-amber-400">{minScore}+</span>
           </div>
+          <div className="w-px h-5 bg-gray-800 mx-1"/>
+          <StrikeZoneFilter value={strikeZone} onChange={handleStrikeZone} />
         </div>
 
         <p className="text-xs text-gray-600 mb-4">

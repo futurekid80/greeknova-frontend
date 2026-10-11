@@ -16,6 +16,7 @@ interface OISpike {
   volume: number; oi: number; old_oi: number; new_oi: number
   oi_change: number; oi_pct: number; vol_change: number
   direction: 'BUILD' | 'UNWIND'; interpretation: string
+  confirmation: string | null
 }
 
 interface VolSpike {
@@ -279,6 +280,17 @@ export default function OptionsJungle() {
           <AlertToggle signals={['SHORT_COVERING']} label="Short Covering" enabledSignals={enabledSignals} onToggle={toggleSignal} />
           <AlertToggle signals={['LONG_UNWINDING']} label="Long Unwinding" enabledSignals={enabledSignals} onToggle={toggleSignal} />
           <AlertThresholds spikeThreshold={pushSpikeThreshold} volThreshold={pushVolThreshold} onSave={saveThresholds} />
+        </div>
+
+        {/* Technical-level alerts -- opt-in only, off by default even for
+            devices that have never customized their signal list. Kept out
+            of the Alerts row above / SIGNAL_META so they don't show up as
+            dead options in the Signal Type table filter below. */}
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+          <span className="text-xs text-gray-600 mr-1">📊 Technical alerts (opt-in):</span>
+          <AlertToggle signals={['EMA_BULLISH_CROSS', 'EMA_BEARISH_CROSS']} label="9/21 EMA Cross" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['PDH_CROSS', 'PDL_CROSS']} label="Prev Day High/Low Cross" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['PWH_CROSS', 'PWL_CROSS']} label="Prev Week High/Low Cross" enabledSignals={enabledSignals} onToggle={toggleSignal} />
         </div>
 
         {/* Header */}
@@ -645,6 +657,11 @@ export default function OptionsJungle() {
                           <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
                             {m.icon} {m.label}
                           </div>
+                          {s.confirmation && (
+                            <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-950/50 text-amber-400 border border-amber-700/50">
+                              ✓ Confirmed · {s.confirmation}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 text-right">
                           <p className="text-xs text-gray-400">{(s as any).first_seen || '—'}</p>

@@ -14,7 +14,7 @@ interface UOASignal {
   ltp_chg_from_open: number; volume: number; oi: number
   oi_chg_30min: number; vol_oi_ratio: number; vol_ratio: number
   vol_chg_30min: number; otm_pct: number; is_otm: boolean
-  signal_type: string; signal_desc: string; bias: string
+  signal_type: string; signal_desc: string; bias: string; confirmation: string | null
   score: number; time_tag: string; is_index: boolean
   day_high: number | null; day_high_pct: number | null; at_day_high: boolean
   snapshot_count: number; persistence_pct: number; first_seen: string
@@ -240,6 +240,17 @@ export default function UOA() {
             <AlertToggle key={sig} signals={[sig]} label={meta.label} enabledSignals={enabledSignals} onToggle={toggleSignal} />
           ))}
           <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} onSave={saveThresholds} />
+        </div>
+
+        {/* Technical-level alerts -- opt-in only, off by default even for
+            devices that have never customized their signal list. Kept out
+            of SIGNAL_META so they don't show up as dead options in the
+            Signal Type table filter below. */}
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+          <span className="text-xs text-gray-600 mr-1">📊 Technical alerts (opt-in):</span>
+          <AlertToggle signals={['EMA_BULLISH_CROSS', 'EMA_BEARISH_CROSS']} label="9/21 EMA Cross" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['PDH_CROSS', 'PDL_CROSS']} label="Prev Day High/Low Cross" enabledSignals={enabledSignals} onToggle={toggleSignal} />
+          <AlertToggle signals={['PWH_CROSS', 'PWL_CROSS']} label="Prev Week High/Low Cross" enabledSignals={enabledSignals} onToggle={toggleSignal} />
         </div>
 
         {/* Header */}
@@ -567,6 +578,11 @@ export default function UOA() {
                         <div className={`inline-flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-lg border ${m.color} ${m.bg} ${m.border}`}>
                           <span>{m.icon}</span><span>{m.label}</span>
                         </div>
+                        {sig.confirmation && (
+                          <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-950/50 text-amber-400 border border-amber-700/50">
+                            ✓ Confirmed · {sig.confirmation}
+                          </div>
+                        )}
                       </td>
 
                       <td className="px-4 py-3.5">

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 const API = 'https://api.greeknova.com'
 
@@ -20,6 +20,18 @@ export function usePushPreferences() {
   const [spikeThreshold, setSpikeThreshold] = useState<number>(10)
   const [volThreshold, setVolThreshold] = useState<number>(20)
   const [loading, setLoading] = useState(true)
+
+  // BUG FIX (Oct 11 2026): AlertToggle can bundle several signal names into
+  // one button (e.g. ['EMA_BULLISH_CROSS','EMA_BEARISH_CROSS'] for "9/21 EMA
+  // Cross") and fires onToggle for each one in a synchronous forEach. Every
+  // one of those calls closed over the SAME stale `enabledSignals` from when
+  // the click started, so each built its "next" list from the pre-click
+  // state -- the second call's save silently clobbered the first's. A ref
+  // mirroring the latest value (updated synchronously, not just via
+  // setState) lets toggleSignal always build "next" from what the previous
+  // call in the same click just saved, so a multi-signal button actually
+  // saves all of its signals, not just the last one.
+  const enabledSignalsRef = useRef<string[] | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -67,7 +79,9 @@ export function usePushPreferences() {
         const prefs = await res.json()
         if (cancelled) return
         if (!prefs.error) {
-          setEnabledSignals(prefs.enabled_signals || [])
+          const loaded = prefs.enabled_signals || []
+          enabledSignalsRef.current = loaded
+          setEnabledSignals(loaded)
           if (prefs.spike_threshold != null) setSpikeThreshold(Number(prefs.spike_threshold))
           if (prefs.vol_threshold != null) setVolThreshold(Number(prefs.vol_threshold))
         }
@@ -82,10 +96,12 @@ export function usePushPreferences() {
   }, [])
 
   const toggleSignal = useCallback(async (signal: string, on: boolean) => {
-    if (!endpoint || enabledSignals === null) return
+    const current = enabledSignalsRef.current
+    if (!endpoint || current === null) return
     const next = on
-      ? Array.from(new Set([...enabledSignals, signal]))
-      : enabledSignals.filter(s => s !== signal)
+      ? Array.from(new Set([...current, signal]))
+      : current.filter(s => s !== signal)
+    enabledSignalsRef.current = next
     setEnabledSignals(next)
     try {
       await fetch(`${API}/push-preferences`, {
@@ -96,22 +112,23 @@ export function usePushPreferences() {
     } catch (e) {
       console.error('Failed to save alert preference', e)
     }
-  }, [endpoint, enabledSignals])
+  }, [endpoint])
 
   const saveThresholds = useCallback(async (oi: number, vol: number) => {
-    if (!endpoint || enabledSignals === null) return
+    const current = enabledSignalsRef.current
+    if (!endpoint || current === null) return
     setSpikeThreshold(oi)
     setVolThreshold(vol)
     try {
       await fetch(`${API}/push-preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, enabled_signals: enabledSignals, spike_threshold: oi, vol_threshold: vol }),
+        body: JSON.stringify({ endpoint, enabled_signals: current, spike_threshold: oi, vol_threshold: vol }),
       })
     } catch (e) {
       console.error('Failed to save thresholds', e)
     }
-  }, [endpoint, enabledSignals])
+  }, [endpoint])
 
   return { endpoint, enabledSignals, spikeThreshold, volThreshold, loading, toggleSignal, saveThresholds }
 }

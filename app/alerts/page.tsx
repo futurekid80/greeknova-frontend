@@ -28,6 +28,19 @@ export default function Alerts() {
   const [typeFilter, setTypeFilter]   = useState('all')
   const [sortOrder, setSortOrder]     = useState<'newest'|'oldest'>('newest')
 
+  // Watchlist filter -- reads the same 'gn_watchlist' list the /watchlist
+  // page writes to localStorage, so "only alerts for stocks I'm tracking"
+  // works without a separate watchlist just for this page. Read-only here;
+  // managing the list itself still happens on /watchlist.
+  const [watchlist, setWatchlist] = useState<string[]>([])
+  const [watchlistOnly, setWatchlistOnly] = useState(false)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('gn_watchlist')
+      setWatchlist(saved ? JSON.parse(saved) : [])
+    } catch { setWatchlist([]) }
+  }, [])
+
   // Date picker: `/alerts` defaults to TODAY only when no `since_id` is given,
   // for every query -- symbol search, signal filter, the lot. That silently
   // made yesterday's alerts (or any past day's) unreachable the moment
@@ -154,6 +167,7 @@ export default function Alerts() {
       return true
     })
     .filter(a => typeFilter === 'all' || a.signal === typeFilter)
+    .filter(a => !watchlistOnly || watchlist.includes(a.symbol))
     .sort((a, b) => sortOrder === 'newest' ? b.id - a.id : a.id - b.id)
 
   const statusText = () => {
@@ -363,6 +377,20 @@ export default function Alerts() {
                 <option key={t} value={t}>{(SIGNAL_META[t] || DEFAULT_META).label}</option>
               ))}
             </select>
+
+            <button
+              onClick={() => setWatchlistOnly(v => !v)}
+              disabled={watchlist.length === 0}
+              title={watchlist.length === 0 ? 'Add stocks on the Watchlist page first' : `Watchlist: ${watchlist.join(', ')}`}
+              className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-all ${
+                watchlistOnly
+                  ? 'bg-amber-950/50 text-amber-400 border-amber-700/60'
+                  : watchlist.length === 0
+                  ? 'bg-gray-900 border-gray-800 text-gray-600 cursor-not-allowed'
+                  : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-white'
+              }`}>
+              ⭐ {watchlistOnly ? 'Watchlist only' : 'My watchlist'}
+            </button>
 
             <button onClick={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
               className="text-xs bg-gray-900 border border-gray-700 text-gray-400 hover:text-white px-3 py-2 rounded-lg transition-all">

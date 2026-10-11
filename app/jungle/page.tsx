@@ -10,6 +10,7 @@ const API = 'https://api.greeknova.com'
 
 interface OISpike {
   symbol: string; tradingsymbol: string; strike: number; option_type: string
+  expiry: string
   cmp: number; last_price: number; ltp_chg_pct: number
   is_index: boolean; is_otm: boolean; otm_pct: number
   volume: number; oi: number; old_oi: number; new_oi: number
@@ -19,6 +20,7 @@ interface OISpike {
 
 interface VolSpike {
   symbol: string; tradingsymbol: string; strike: number; option_type: string
+  expiry: string
   cmp: number; last_price: number; ltp_chg_pct: number
   is_index: boolean; is_otm: boolean; otm_pct: number
   volume: number; oi: number; old_volume: number; new_volume: number
@@ -628,11 +630,13 @@ export default function OptionsJungle() {
                             {s.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
                             {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">⚡ 2-WAY</span>}
                           </div>
-                          <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{s.cmp.toLocaleString()}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                          CMP: ₹{s.cmp.toLocaleString()}
+                          {s.expiry && <span className="text-gray-400 font-semibold"> · Exp {s.expiry.slice(5).replace('-','/')}</span>}
+                        </p>
                         </td>
                         <td className="px-4 py-3.5">
                           <p className="text-sm font-bold text-gray-300">{s.strike.toLocaleString()}</p>
-                          {(s as any).expiry && <p className="text-[10px] text-gray-600 mt-0.5">{(s as any).expiry.slice(5).replace('-','/')}</p>}
                         </td>
                         <td className="px-4 py-3.5">
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isCE?'bg-red-950/50 text-red-400 border border-red-800/50':'bg-emerald-950/50 text-emerald-400 border border-emerald-800/50'}`}>{s.option_type}</span>
@@ -737,11 +741,13 @@ export default function OptionsJungle() {
                             {s.is_index && <span className="text-xs px-1.5 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800/50 rounded-md">IDX</span>}
                             {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">⚡ 2-WAY</span>}
                           </div>
-                          <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{s.cmp.toLocaleString()}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            CMP: ₹{s.cmp.toLocaleString()}
+                            {s.expiry && <span className="text-gray-400 font-semibold"> · Exp {s.expiry.slice(5).replace('-','/')}</span>}
+                          </p>
                         </td>
                        <td className="px-4 py-3.5">
                           <p className="text-sm font-bold text-gray-300">{s.strike.toLocaleString()}</p>
-                          {(s as any).expiry && <p className="text-[10px] text-gray-600 mt-0.5">{(s as any).expiry.slice(5).replace('-','/')}</p>}
                         </td>
                         <td className="px-4 py-3.5">
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isCE?'bg-red-950/50 text-red-400 border border-red-800/50':'bg-emerald-950/50 text-emerald-400 border border-emerald-800/50'}`}>{s.option_type}</span>

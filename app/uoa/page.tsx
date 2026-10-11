@@ -10,7 +10,7 @@ const API = 'https://api.greeknova.com'
 
 interface UOASignal {
   symbol: string; tradingsymbol: string; strike: number
-  option_type: string; cmp: number; ltp: number; open_ltp: number
+  option_type: string; expiry: string; cmp: number; ltp: number; open_ltp: number
   ltp_chg_from_open: number; volume: number; oi: number
   oi_chg_30min: number; vol_oi_ratio: number; vol_ratio: number
   vol_chg_30min: number; otm_pct: number; is_otm: boolean
@@ -545,7 +545,10 @@ export default function UOA() {
                           {isTwoWay && <span className="text-xs px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md">⚡ 2-WAY</span>}
                           {sig.at_day_high && <StockAtHighBadge atDayHigh={sig.at_day_high} pct={sig.day_high_pct}/>}
                         </div>
-                        <p className="text-xs text-gray-600 mt-0.5">CMP: ₹{sig.cmp.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          CMP: ₹{sig.cmp.toLocaleString()}
+                          {sig.expiry && <span className="text-gray-400 font-semibold"> · Exp {sig.expiry.slice(5).replace('-','/')}</span>}
+                        </p>
                         {sig.day_high && !sig.at_day_high && sig.day_high_pct !== null && sig.day_high_pct < 2 && (
                           <p className="text-xs text-gray-600">{sig.day_high_pct.toFixed(1)}% to stock high</p>
                         )}

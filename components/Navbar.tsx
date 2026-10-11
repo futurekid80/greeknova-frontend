@@ -48,6 +48,7 @@ const NAV_GROUPS = [
     label: '⚡ Intraday',
     links: [
       { href: '/jungle',      label: '🌿 Options Jungle' },
+      { href: '/custom-scanner', label: '🎯 Custom Scanner' },
       { href: '/premarket',  label: '☀️ Pre-Market Brief' },
       { href: '/uoa',         label: 'UOA' },
       { href: '/spotvolume', label: '⚡ Spot Volume Breakout' },

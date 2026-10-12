@@ -30,6 +30,8 @@ interface Data {
   symbol: string; date_a: string; date_b: string
   expiry: string; expiries: string[]; dates: string[]; rows: Row[]
   cmp?: number; atm_strike?: number
+  structure?: 'BEARISH' | 'BULLISH' | 'BEARISH_BIAS' | 'BULLISH_BIAS' | 'NEUTRAL'
+  structure_desc?: string
 }
 
 const CustomTooltip = ({ active, payload, label, atm }: any) => {
@@ -91,7 +93,21 @@ export default function OIHistory() {
   const totalCEUnwound = data?.rows.filter(r => r.ce_chg < 0).reduce((s, r) => s + r.ce_chg, 0) || 0
   const totalPEBuilt   = data?.rows.filter(r => r.pe_chg > 0).reduce((s, r) => s + r.pe_chg, 0) || 0
   const totalPEUnwound = data?.rows.filter(r => r.pe_chg < 0).reduce((s, r) => s + r.pe_chg, 0) || 0
-  const bullish = totalPEBuilt + totalCEUnwound > totalCEBuilt + totalPEUnwound
+  // BUG FIX (Oct 12 2026): this used to recompute its own "bullish" flag as
+  // `totalPEBuilt + totalCEUnwound > totalCEBuilt + totalPEUnwound` -- but
+  // totalCEUnwound/totalPEUnwound are sums of NEGATIVE ce_chg/pe_chg values
+  // (see above), so adding them SUBTRACTED their magnitude instead of adding
+  // it as bullish/bearish pressure. A case with huge CE unwinding and PE
+  // buildup (textbook bullish) could flip to BEARISH once CE unwinding was
+  // large enough to swing the raw (signed) sum negative -- caught live on
+  // ITC 08->09 Oct where CE unwound -2.09Cr vs PE built +1.52Cr, PE unwound
+  // only -18.7L vs CE built +73.8L, clearly bullish, but the banner showed
+  // BEARISH. The backend's own `structure` field (api/oi_history.py) already
+  // computes this correctly with abs() on the unwind sums -- use that single
+  // source of truth instead of a second, divergent client-side formula.
+  const structure = data?.structure
+  const bullish  = structure === 'BULLISH' || structure === 'BULLISH_BIAS'
+  const bearish  = structure === 'BEARISH' || structure === 'BEARISH_BIAS'
   // "Major buildup" rows -- top quartile by |net_chg|, so the biggest
   // moves are visually obvious instead of requiring the reader to scan
   // every row's numbers. Needs a real spread of values to bother ranking.
@@ -217,17 +233,21 @@ export default function OIHistory() {
               </div>
             </div>
 
-            {/* Bias banner */}
-            <div className={`rounded-xl p-4 mb-6 border flex items-center gap-3 ${bullish ? 'bg-emerald-950/20 border-emerald-800/40' : 'bg-red-950/20 border-red-800/40'}`}>
-              <span className="text-2xl">{bullish ? '🐂' : '🐻'}</span>
+            {/* Bias banner — driven by the backend's `structure`/`structure_desc`
+                (api/oi_history.py get_oi_comparison), not a separate client-side
+                formula, so there's one source of truth for the verdict */}
+            <div className={`rounded-xl p-4 mb-6 border flex items-center gap-3 ${
+              bullish ? 'bg-emerald-950/20 border-emerald-800/40'
+              : bearish ? 'bg-red-950/20 border-red-800/40'
+              : 'bg-gray-900/30 border-gray-700/40'}`}>
+              <span className="text-2xl">{bullish ? '🐂' : bearish ? '🐻' : '⚖️'}</span>
               <div>
-                <p className={`font-bold text-sm ${bullish ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {bullish ? 'BULLISH OI STRUCTURE' : 'BEARISH OI STRUCTURE'} — {fmtDate(dateB)} → {fmtDate(dateA)}
+                <p className={`font-bold text-sm ${
+                  bullish ? 'text-emerald-400' : bearish ? 'text-red-400' : 'text-gray-400'}`}>
+                  {bullish ? 'BULLISH OI STRUCTURE' : bearish ? 'BEARISH OI STRUCTURE' : 'NEUTRAL OI STRUCTURE'} — {fmtDate(dateB)} → {fmtDate(dateA)}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {bullish
-                    ? 'More PE buildup + CE unwinding → support growing, resistance easing'
-                    : 'More CE buildup + PE unwinding → resistance growing, support easing'}
+                  {data?.structure_desc || 'Balanced OI changes — no clear directional bias'}
                 </p>
               </div>
             </div>
@@ -242,7 +262,23 @@ export default function OIHistory() {
                   Showing change from {fmtDate(dateB)} → {fmtDate(dateA)} · Top 20 strikes · Positive = buildup · Negative = unwinding
                 </p>
                 <ResponsiveContainer width="100%" height={350}>
-                  <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  {/* Oct 12 2026 fixes from live user feedback (vinu1smile), comparing
+                      against Opstra's equivalent chart:
+                      1. Legend swatches weren't showing Call=red/Put=green because each
+                         <Bar> only had per-Cell fills, not its own `fill` -- Recharts'
+                         auto-Legend reads the Bar's own `fill`/`stroke`, not its Cells, so
+                         it fell back to a default color. Added explicit fill= on both Bars.
+                      2. ATM used to repaint the bar amber regardless of CE/PE, which reads
+                         as "something changed color" with no meaning until you hover. The
+                         x-axis tick already marks ATM with a star, which is enough on its
+                         own -- so ATM strikes now keep their real red/green color (just
+                         full opacity + a highlighted outline) instead of losing it.
+                      3. CE/PE bars sat in two visibly separate columns; Opstra overlaps
+                         them. A negative barGap pulls the two bars at each strike on top
+                         of each other; kept at medium opacity so both remain readable
+                         where they overlap. */}
+                  <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+                    barGap={-14} barCategoryGap="20%">
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
                     <XAxis dataKey="strike" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false}
                       tickFormatter={v => {
@@ -254,14 +290,16 @@ export default function OIHistory() {
                     <Tooltip content={<CustomTooltip atm={atm} />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                     <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                     <ReferenceLine y={0} stroke="#374151" />
-                    <Bar dataKey="CE Change" name="CE Change" radius={[3, 3, 0, 0]}>
+                    <Bar dataKey="CE Change" name="Call (CE) Change" fill="#ef4444" radius={[3, 3, 0, 0]}>
                       {chartData.map((entry, index) => (
-                        <Cell key={index} fill={entry.isATM ? '#f59e0b' : '#ef4444'} opacity={entry.isATM ? 1 : 0.85} />
+                        <Cell key={index} fill="#ef4444" opacity={entry.isATM ? 1 : 0.65}
+                          stroke={entry.isATM ? '#fbbf24' : undefined} strokeWidth={entry.isATM ? 1.5 : 0} />
                       ))}
                     </Bar>
-                    <Bar dataKey="PE Change" name="PE Change" radius={[3, 3, 0, 0]}>
+                    <Bar dataKey="PE Change" name="Put (PE) Change" fill="#10b981" radius={[3, 3, 0, 0]}>
                       {chartData.map((entry, index) => (
-                        <Cell key={index} fill={entry.isATM ? '#f59e0b' : '#10b981'} opacity={entry.isATM ? 1 : 0.85} />
+                        <Cell key={index} fill="#10b981" opacity={entry.isATM ? 1 : 0.65}
+                          stroke={entry.isATM ? '#fbbf24' : undefined} strokeWidth={entry.isATM ? 1.5 : 0} />
                       ))}
                     </Bar>
                   </BarChart>

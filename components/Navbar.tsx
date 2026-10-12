@@ -14,6 +14,16 @@ import VixGauge from '@/components/VixGauge'
 // persona's hero/landing screen. The Greeks suite (Gamma/Theta/Vega/Premium
 // Screen) stays fully separate under Option Sellers per Manish's call --
 // that's GreekNova's differentiated depth, not something to blend together.
+//
+// Oct 12 2026: added a cross-cutting "Open Interest" group on top of the
+// persona grouping, per live user feedback (vinu1smile) -- OI data is
+// something every persona reaches for (an intraday scalper, a positional
+// swing trader and a seller all read OI build/unwind), so it kept getting
+// hunted for across three different menus. Same precedent as the Oct 2
+// regroup: nothing moved or removed, these links are the exact same pages
+// (same hrefs) as they already appear under Positional/Intraday/Option
+// Sellers above -- this is a second, OI-specific front door to them, not a
+// replacement for the persona grouping.
 const NAV_GROUPS = [
   {
     label: 'Market',
@@ -26,6 +36,20 @@ const NAV_GROUPS = [
       // and the homepage's Stock Command Centre search links to a
       // specific symbol's chart directly.
       { href: '/stock-chart/NIFTY', label: '📈 Price Chart' },
+    ]
+  },
+  {
+    label: '📊 Open Interest',
+    links: [
+      { href: '/oiprofile',  label: '📊 OI Profile' },
+      { href: '/oihistory',  label: '🕑 OI History' },
+      { href: '/oi-buildup-period', label: '📅 Weekly/Monthly OI Buildup' },
+      { href: '/oiheatmap',  label: '🌡️ OI Heatmap' },
+      { href: '/jungle',      label: '🌿 Options Jungle' },
+      { href: '/uoa',         label: '🔎 UOA' },
+      { href: '/custom-scanner', label: '🎯 Custom Scanner' },
+      { href: '/signals/wall-migration', label: '🧱 Wall Migration' },
+      { href: '/maxpain',     label: '🎯 Max Pain' },
     ]
   },
   {

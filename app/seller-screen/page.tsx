@@ -80,8 +80,12 @@ type StrikeRung = {
   put_oi_trend_pct?: number | null
 }
 
-type Scored = Row & { score: number; vScore: number; tScore: number; gScore: number; rScore: number; rReasons: string[] }
-type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots' | 'term_ratio' | 'rScore'
+type Scored = Row & {
+  score: number; vScore: number; tScore: number; gScore: number
+  rScore: number; rReasons: string[]
+  rScoreV2: number; rReasonsV2: string[]
+}
+type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots' | 'term_ratio' | 'rScore' | 'rScoreV2'
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
@@ -128,21 +132,40 @@ function invertedWall(wallStrike: number | null | undefined, cmp: number, side: 
   return side === 'PE' ? wallStrike > cmp : wallStrike < cmp
 }
 
-function strategyLink(r: Row) {
+// Carries screening context into Strategy Builder (Oct 12 2026, external-
+// review ask) so it doesn't disappear the moment a candidate is picked —
+// Range Score V1/V2, market stress level, verdict and gamma regime, plus
+// wall-quality flags, all read-only/informational on the other end.
+function strategyLink(r: Scored & { verdict: Verdict }, stress: MarketStress) {
   const params = new URLSearchParams({ symbol: r.symbol })
   if (r.call_wall_strike) params.set('sellCE', String(r.call_wall_strike))
   if (r.put_wall_strike) params.set('sellPE', String(r.put_wall_strike))
+  params.set('rv1', String(Math.round(r.rScore * 100)))
+  params.set('rv2', String(Math.round(r.rScoreV2 * 100)))
+  params.set('verdict', r.verdict.label)
+  if (r.regime) params.set('gamma', r.regime === 'LONG_GAMMA' ? 'Long' : 'Short')
+  params.set('stress', stress.level)
+  const putWeak = insideExpectedMove(r.put_wall_strike, r.em_low, r.em_high, 'PE')
+  const callWeak = insideExpectedMove(r.call_wall_strike, r.em_low, r.em_high, 'CE')
+  const putInverted = invertedWall(r.put_wall_strike, r.cmp, 'PE')
+  const callInverted = invertedWall(r.call_wall_strike, r.cmp, 'CE')
+  const wallFlags: string[] = []
+  if (putInverted || callInverted) wallFlags.push('Inverted wall')
+  else if (putWeak || callWeak) wallFlags.push('Weak wall')
+  if (wallFlags.length) params.set('wallFlags', wallFlags.join(','))
   return `/strategy-builder?${params.toString()}`
 }
 
-function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, filterSummary: string) {
+function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, filterSummary: string, stress: MarketStress) {
   const headers = [
     'Symbol', 'CMP', 'Verdict', 'Score', 'DTE', 'IV/RV', 'Decay %/day', 'IV Percentile', '1SD Move %',
     'Gamma Regime', 'To Flip %',
     'Put Wall (support)', 'Put Wall Quality', 'Call Wall (resistance)', 'Call Wall Quality',
     'Call Beyond 1SD Strike', 'Call Beyond 1SD Prob ITM %', 'Call Beyond 1SD Premium/Lot',
     'Put Beyond 1SD Strike', 'Put Beyond 1SD Prob ITM %', 'Put Beyond 1SD Premium/Lot',
-    'Range Score', 'Range Flags',
+    'Range Score V1 (live)', 'Range V1 Flags',
+    'Range Score V2 (shadow, stock-specific only)', 'Range V2 Flags',
+    'Market Stress (shared, all rows)',
   ]
   const rows = list.map((r) => {
     const putWeak = insideExpectedMove(r.put_wall_strike, r.em_low, r.em_high, 'PE')
@@ -161,13 +184,15 @@ function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, f
       r.call_1sd_strike ?? '', r.call_1sd_prob_itm ?? '', r.call_1sd_per_lot ?? '',
       r.put_1sd_strike ?? '', r.put_1sd_prob_itm ?? '', r.put_1sd_per_lot ?? '',
       Math.round(r.rScore * 100), r.rReasons.join('; '),
+      Math.round(r.rScoreV2 * 100), r.rReasonsV2.join('; '),
+      stress.label,
     ]
   })
   // Leading comment row (Oct 12 2026): an export that silently reflects
   // whatever filters happen to be active, with no record of it in the file
   // itself, reads like a data gap later -- "218 vs 168 instruments, why?"
   // is unanswerable from the CSV alone otherwise.
-  const coverageLine = [`# Exported ${list.length} of ${totalRows} total instruments scanned. Active filters: ${filterSummary || 'none'}.`]
+  const coverageLine = [`# Exported ${list.length} of ${totalRows} total instruments scanned. Active filters: ${filterSummary || 'none'}. Range Score V1 still drives all live filters/presets; V2 is shadow-mode only, for comparison.`]
   const lines = [coverageLine, headers, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -188,7 +213,15 @@ function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, f
 // (1.0) and each real-world red flag subtracts from it, rather than
 // building up from zero -- a day with no data for a signal yet (early
 // morning, say) should read as "no reason for concern yet," not "unscored."
-function rangeScore(r: Row): { rScore: number; rReasons: string[] } {
+// Range Score V1 (Oct 12 2026 original) — kept byte-for-byte as the live,
+// filter-driving formula. The VIX-move penalty here uses one shared,
+// market-wide reading applied identically to every stock, which on a
+// sharply-up-VIX day caps nearly the whole universe at a similar ceiling
+// regardless of individual stock behavior. Confirmed via external review +
+// code audit Oct 12 2026 (see rangeScoreV2 below) and intentionally left
+// unchanged so every live filter, preset and the index-risk banner keep
+// behaving exactly as before while V2 runs alongside it in shadow mode.
+function rangeScoreV1(r: Row): { rScore: number; rReasons: string[] } {
   const reasons: string[] = []
   let score = 1.0
 
@@ -221,6 +254,87 @@ function rangeScore(r: Row): { rScore: number; rReasons: string[] } {
   return { rScore: clamp(score), rReasons: reasons }
 }
 
+// Range Score V2 (Oct 12 2026, shadow mode) — stock-specific components
+// only. Market-wide VIX is deliberately removed here, not just zeroed out:
+// it now lives solely in marketStress() below, as its own status layer
+// (shown in the banner + Strategy Builder) rather than double-counted
+// inside a per-stock ranking score. The three remaining signals (opening-
+// range break, OI skew, max-pain drift) are rescaled from V1's own
+// relative weights (0.30 : 0.15 : 0.20, the budget V1 gave them out of a
+// 1.0 total alongside VIX's 0.35) up to fill the full 1.0 range now that
+// VIX no longer shares it — same relative importance to each other, not an
+// arbitrary new formula, and NOT simply "V1 + 35 points." The DTE-near-
+// expiry cap is kept as-is: it is a stock-specific regime fact (this
+// stock's own gamma is strike-concentrated right now), not a market-wide
+// one, so it stays in both versions.
+const V1_OR_WEIGHT = 0.30, V1_OI_WEIGHT = 0.15, V1_MP_WEIGHT = 0.20
+const V1_NON_VIX_BUDGET = V1_OR_WEIGHT + V1_OI_WEIGHT + V1_MP_WEIGHT // 0.65
+const V2_OR_WEIGHT = V1_OR_WEIGHT / V1_NON_VIX_BUDGET // ≈0.4615
+const V2_OI_WEIGHT = V1_OI_WEIGHT / V1_NON_VIX_BUDGET // ≈0.2308
+const V2_MP_WEIGHT = V1_MP_WEIGHT / V1_NON_VIX_BUDGET // ≈0.3077
+
+function rangeScoreV2(r: Row): { rScore: number; rReasons: string[] } {
+  const reasons: string[] = []
+  let score = 1.0
+
+  if (r.or_status === 'ABOVE' || r.or_status === 'BELOW') {
+    const mag = r.or_pct_outside ?? 0
+    score -= clamp(mag / 1.5) * V2_OR_WEIGHT
+    reasons.push(`Price broke ${r.or_status === 'ABOVE' ? 'above' : 'below'} the opening range and hasn't reclaimed it`)
+  }
+
+  if (r.oi_skew_pct !== null && r.oi_skew_pct !== undefined && Math.abs(r.oi_skew_pct) >= 40) {
+    score -= V2_OI_WEIGHT
+    reasons.push(`${r.oi_skew_pct > 0 ? 'Call' : 'Put'} OI building much faster than the other side today`)
+  }
+
+  if (r.max_pain_drift_confirms) {
+    score -= V2_MP_WEIGHT
+    reasons.push('Max pain is crawling with price — fresh positioning, not just OI decay')
+  }
+
+  if (r.days_to_expiry !== null && r.days_to_expiry !== undefined && r.days_to_expiry <= 1) {
+    score = Math.min(score, 0.6)
+    reasons.push(`Only ${r.days_to_expiry} day(s) to expiry — gamma is strike-concentrated, regime read is less stable`)
+  }
+
+  return { rScore: clamp(score), rReasons: reasons }
+}
+
+type MarketStress = { level: 'ELEVATED' | 'WATCH' | 'NORMAL' | 'UNKNOWN'; label: string; guidance: string; cls: string; emoji: string }
+
+// Market Stress (Oct 12 2026) — the market-wide VIX-move signal, now kept
+// OUT of the per-stock Range Score and surfaced here instead as its own
+// status. This is advisory: GreekNova has no live order execution or
+// position-sizing engine today, so "restricts new trades and position
+// sizing" means a prominent, hard-to-miss guidance banner a trader has to
+// see before acting — not an automated block. If/when GreekNova ever wires
+// into actual order placement, this is the layer that status would gate.
+function marketStress(vixChangePct: number | null | undefined): MarketStress {
+  if (vixChangePct === null || vixChangePct === undefined) {
+    return { level: 'UNKNOWN', label: 'No VIX reading yet', guidance: 'Market-wide stress signal unavailable right now.', cls: 'bg-gray-800/60 text-gray-400 border-gray-700', emoji: '⚪' }
+  }
+  if (vixChangePct >= 5) {
+    return {
+      level: 'ELEVATED', label: `Elevated — VIX up ${fmt(vixChangePct, 1)}% today`,
+      guidance: 'Market-wide stress is high. Reduce size on fresh non-directional entries across every stock, not just the ones flagged individually — this is a shared condition, not a stock-specific one.',
+      cls: 'bg-red-950/40 text-red-300 border-red-900/50', emoji: '🔴',
+    }
+  }
+  if (vixChangePct >= 3) {
+    return {
+      level: 'WATCH', label: `Watch — VIX up ${fmt(vixChangePct, 1)}% today`,
+      guidance: 'Market-wide stress is building. Size new non-directional entries a notch smaller than usual; no action needed on existing positions yet.',
+      cls: 'bg-amber-950/40 text-amber-300 border-amber-900/50', emoji: '🟡',
+    }
+  }
+  return {
+    level: 'NORMAL', label: `Normal — VIX ${vixChangePct >= 0 ? '+' : ''}${fmt(vixChangePct, 1)}% today`,
+    guidance: 'No market-wide stress signal active right now.',
+    cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900/50', emoji: '🟢',
+  }
+}
+
 function scoreRow(r: Row): Scored {
   // Vega: IV richer than realized vol scores higher (ratio 0.9 -> 0, 1.8 -> 1)
   const ratio = r.iv_rv_basis ?? r.iv_rv_ratio
@@ -238,8 +352,9 @@ function scoreRow(r: Row): Scored {
   // Front premium: near-expiry IV rich versus next-month IV adds up to 8 points, a cheap front takes up to 8 away
   const adj = r.term_ratio ? Math.max(-1, Math.min(1, (r.term_ratio - 1) / 0.3)) * 8 : 0
   const score = Math.max(0, Math.min(100, Math.round(vScore * 45 + tScore * 20 + gScore * 35 + adj)))
-  const { rScore, rReasons } = rangeScore(r)
-  return { ...r, score, vScore, tScore, gScore, rScore, rReasons }
+  const { rScore, rReasons } = rangeScoreV1(r)
+  const { rScore: rScoreV2, rReasons: rReasonsV2 } = rangeScoreV2(r)
+  return { ...r, score, vScore, tScore, gScore, rScore, rReasons, rScoreV2, rReasonsV2 }
 }
 
 const INDEX_SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
@@ -378,6 +493,44 @@ export default function SellerScreenPage() {
 
   const scored = useMemo(() => rows.map(scoreRow).map((s) => ({ ...s, verdict: verdictFor(s) })), [rows])
 
+  // Market-wide, same value on every row (backend broadcasts one vix_change_pct
+  // per refresh cycle) — pull it from any row rather than per-symbol.
+  const stress = useMemo(() => marketStress(rows[0]?.vix_change_pct), [rows])
+
+  // Shadow-mode comparison (Oct 12 2026): V1 stays the live, filter-driving
+  // score untouched; this is purely informational so the before/after shift
+  // can be reviewed before any decision to switch the live filter to V2.
+  const v1v2Compare = useMemo(() => {
+    if (!scored.length) return null
+    const n = scored.length
+    const avg = (f: (s: Scored) => number) => scored.reduce((a, s) => a + f(s), 0) / n
+    const avgV1 = avg((s) => s.rScore * 100)
+    const avgV2 = avg((s) => s.rScoreV2 * 100)
+    const bucket = (v: number) => (v >= 70 ? 'holding' : v >= 40 ? 'wobbling' : 'at_risk')
+    let bucketShifts = 0
+    for (const s of scored) if (bucket(s.rScore * 100) !== bucket(s.rScoreV2 * 100)) bucketShifts++
+    // Candidate-count impact: how many stocks would pass each preset's own
+    // Min Range Score threshold under V1 vs under V2, with every other
+    // preset filter applied as-is. Hypothetical only — does not change the
+    // live filter.
+    const presetThresholds: { name: string; minRangeScore: number }[] = [
+      { name: 'Conservative (≥60)', minRangeScore: 60 },
+      { name: 'Balanced (≥45)', minRangeScore: 45 },
+      { name: 'Higher premium (≥35)', minRangeScore: 35 },
+    ]
+    const presetCounts = presetThresholds.map((p) => ({
+      name: p.name,
+      v1: scored.filter((s) => s.rScore * 100 >= p.minRangeScore).length,
+      v2: scored.filter((s) => s.rScoreV2 * 100 >= p.minRangeScore).length,
+    }))
+    const atCapV1 = scored.filter((s) => Math.round(s.rScore * 100) === 65).length
+    const biggestMovers = [...scored]
+      .map((s) => ({ symbol: s.symbol, delta: Math.round(s.rScoreV2 * 100) - Math.round(s.rScore * 100), v1: Math.round(s.rScore * 100), v2: Math.round(s.rScoreV2 * 100) }))
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 5)
+    return { n, avgV1, avgV2, bucketShifts, presetCounts, atCapV1, biggestMovers }
+  }, [scored])
+
   const shown = useMemo(() => {
     const q = search.trim().toUpperCase()
     const list = scored.filter((r) => {
@@ -460,7 +613,7 @@ export default function SellerScreenPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => exportCsv(shown, rows.length, filterSummary)} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Export CSV</button>
+          <button onClick={() => exportCsv(shown, rows.length, filterSummary, stress)} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Export CSV</button>
           <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Refresh</button>
         </div>
       </div>
@@ -476,6 +629,17 @@ export default function SellerScreenPage() {
         const v = worst ? rVerdict(worst.rScore) : null
         return (
         <>
+          {stress.level !== 'NORMAL' && (
+            <div className={`rounded-xl border px-5 py-4 mb-3 ${stress.cls}`}>
+              <div className="flex items-start justify-between flex-wrap gap-2">
+                <div>
+                  <p className="font-bold text-base">{stress.emoji} Market Stress — {stress.label}</p>
+                  <p className="text-sm mt-1 opacity-90">{stress.guidance}</p>
+                </div>
+                <p className="text-[11px] opacity-60 whitespace-nowrap max-w-[220px] text-right">Shared across every stock today · advisory only, not an automated block</p>
+              </div>
+            </div>
+          )}
           {worst && v && (
             <div className={`rounded-xl border px-5 py-4 mb-5 ${v.cls}`}>
               <div className="flex items-start justify-between flex-wrap gap-2">
@@ -486,7 +650,7 @@ export default function SellerScreenPage() {
                     <p className="text-xs mt-2 opacity-75">{worst.rReasons.join(' · ')}</p>
                   )}
                 </div>
-                <p className="text-[11px] opacity-60 whitespace-nowrap">Range Confidence · not a recommendation, a data read</p>
+                <p className="text-[11px] opacity-60 whitespace-nowrap">Range Confidence V1 (live) · not a recommendation, a data read</p>
               </div>
             </div>
           )}
@@ -545,6 +709,36 @@ export default function SellerScreenPage() {
             </div>
           </details>
 
+          {v1v2Compare && (
+            <details className="mb-4 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400">
+              <summary className="cursor-pointer text-gray-300 font-semibold">Range Score V1 vs V2 — shadow comparison ({v1v2Compare.n} stocks)</summary>
+              <div className="mt-3 space-y-3">
+                <p>
+                  V1 (live, drives all filters/presets today) averages <b className="text-gray-200">{fmt(v1v2Compare.avgV1, 0)}</b>.
+                  V2 (shadow — stock-specific only, VIX moved to Market Stress above) averages <b className="text-gray-200">{fmt(v1v2Compare.avgV2, 0)}</b>.
+                  {v1v2Compare.atCapV1 > 0 && <> {v1v2Compare.atCapV1} of {v1v2Compare.n} stocks sit at exactly 65 under V1 today (the shared-VIX ceiling); V2 spreads those out by each stock's own signals instead.</>}
+                </p>
+                <p><b className="text-gray-200">{v1v2Compare.bucketShifts}</b> of {v1v2Compare.n} stocks would land in a different Range tier (Holding / Wobbling / At risk) under V2 vs V1.</p>
+                <div>
+                  <p className="text-gray-300 font-semibold mb-1">Candidate count if a preset's Range threshold were applied to each version (hypothetical — live filter is still V1):</p>
+                  <table className="text-[11px]">
+                    <thead><tr className="text-gray-500"><th className="text-left pr-4 py-1">Preset threshold</th><th className="text-right pr-4">V1 passes</th><th className="text-right">V2 passes</th></tr></thead>
+                    <tbody>
+                      {v1v2Compare.presetCounts.map((p) => (
+                        <tr key={p.name}><td className="text-left pr-4 py-1">{p.name}</td><td className="text-right pr-4">{p.v1}</td><td className="text-right">{p.v2}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div>
+                  <p className="text-gray-300 font-semibold mb-1">Biggest V1→V2 movers today:</p>
+                  <p>{v1v2Compare.biggestMovers.map((m) => `${m.symbol} (${m.v1}→${m.v2}, ${m.delta > 0 ? '+' : ''}${m.delta})`).join(' · ')}</p>
+                </div>
+                <p className="text-gray-600">This panel is for review before any decision to switch the live filter/presets to V2 — nothing here changes what's currently filtered, sized, or export-flagged as a candidate.</p>
+              </div>
+            </details>
+          )}
+
           <div className="overflow-x-auto rounded-xl border border-gray-800">
             <table className="w-full text-sm">
               <thead className="bg-gray-900/60">
@@ -564,7 +758,8 @@ export default function SellerScreenPage() {
                   <th className={th}>Put beyond 1SD</th>
                   {more && <th className={th} onClick={() => sortBy('atm_vol_lots')}>ATM vol (lots){arrow('atm_vol_lots')}</th>}
                   <th className={th}>Gamma</th>
-                  <th className={th} onClick={() => sortBy('rScore')} title="Is today's move likely to hold a direction long enough to breach your strikes? Combines VIX move (shared market-wide, so it can cap every stock on a high-VIX day), opening-range break, OI skew, max-pain drift and DTE — separate from the richness/decay/gamma score above.">Range{arrow('rScore')}</th>
+                  <th className={th} onClick={() => sortBy('rScore')} title="Range Score V1 (live — drives all filters/presets today). Combines VIX move (shared market-wide, so it can cap every stock on a high-VIX day), opening-range break, OI skew, max-pain drift and DTE — separate from the richness/decay/gamma score above. See Market Stress banner for the VIX read on its own.">Range V1{arrow('rScore')}</th>
+                  {more && <th className={th} onClick={() => sortBy('rScoreV2')} title="Range Score V2 (shadow mode — not live, does not drive any filter yet). Stock-specific only: opening-range break, OI skew, max-pain drift and DTE. VIX is intentionally excluded here and shown instead as the separate Market Stress banner above.">Range V2 (shadow){arrow('rScoreV2')}</th>}
                   <th className={th + ' !text-left'} title="Strikes carrying the most gamma-weighted OI on each side — candidates to research, not a recommendation to sell there. ✍️writing means fresh OI is still being added today (actively defended); ⚠stale means it's unwinding. ⚠1SD means the strike sits inside this stock's own expected move, no real safety margin. ⚠WRONG SIDE means the wall landed on the wrong side of spot entirely (a 'put wall' above price, say) — treat as a data flag, not support/resistance.">Candidate strikes</th>
                   <th className={th} onClick={() => sortBy('pct_to_flip')}>To flip %{arrow('pct_to_flip')}</th>
                   <th className={th + ' !text-left'}>Flags</th>
@@ -599,6 +794,11 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2.5 text-right whitespace-nowrap" title={r.rReasons.length ? r.rReasons.join(' · ') : 'No range-risk flags right now'}>
                       <span className={dot(r.rScore)}>● </span>{Math.round(r.rScore * 100)}
                     </td>
+                    {more && (
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap" title={r.rReasonsV2.length ? r.rReasonsV2.join(' · ') : 'No stock-specific range-risk flags right now'}>
+                        <span className={dot(r.rScoreV2)}>● </span>{Math.round(r.rScoreV2 * 100)}
+                      </td>
+                    )}
                     <td className="px-3 py-2.5 text-left whitespace-nowrap text-[11px]">
                       {r.put_wall_strike ? (() => {
                         const t = wallTrend(r, r.put_wall_strike, 'PE')
@@ -647,7 +847,7 @@ export default function SellerScreenPage() {
                       ))}
                     </td>
                     <td className="px-3 py-2.5 text-left whitespace-nowrap">
-                      <Link href={strategyLink(r)} className="px-2 py-1 rounded-md text-[11px] font-semibold border border-cyan-900/60 text-cyan-400 hover:bg-cyan-950/40">
+                      <Link href={strategyLink(r, stress)} className="px-2 py-1 rounded-md text-[11px] font-semibold border border-cyan-900/60 text-cyan-400 hover:bg-cyan-950/40">
                         🛠️ Build →
                       </Link>
                     </td>
@@ -668,7 +868,8 @@ export default function SellerScreenPage() {
               <li><b>1SD move %:</b> the one-standard-deviation move the options imply until expiry. About two thirds of the time price is expected to finish inside that range. The Call and Put beyond 1SD columns show the first strike outside it, its probability of finishing in the money, and the premium per lot. Probabilities are model estimates from implied volatility.</li>
               <li><b>ATM vol (lots) and Thin liquidity:</b> options volume at the at-the-money strike. Thin means fills may be poor and spreads wide.</li>
               <li><b>Flags:</b> IV crush = rich IV with expiry within 10 days. Results = results date falls before expiry. Thin = low ATM liquidity. Short γ = short gamma, moves can amplify. Near flip = gamma flip within 1.5% of price. Delivery = expiry within 5 days, and stock options settle by delivery in India, so in-the-money positions carry delivery and higher margin implications. Weak wall = the put or call wall sits inside this stock's own 1SD expected move — an ordinary move can reach it, so it isn't acting as a real safety margin the way a wall outside the expected move would. Inverted wall = the "support" put wall landed above spot, or the "resistance" call wall landed below it — the OI-concentration pick has no built-in check that it lands on the sensible side of price, so this is a data flag to investigate, not a level to trade off.</li>
-              <li><b>Range score and VIX:</b> the VIX-move penalty inside Range Confidence uses one shared, market-wide reading, the same for every stock that day — so on a day VIX is up sharply, it can cap most or all stocks at a similar ceiling regardless of how any individual stock is actually behaving. A cluster of stocks landing on the same Range score on such a day reflects that shared market factor, not a coincidence or a broken scale.</li>
+              <li><b>Range Score V1 (live) vs V2 (shadow):</b> V1 is the original formula and still drives every filter, preset and the index-risk banner — unchanged. It blends a market-wide VIX-move penalty (same for every stock that day) with stock-specific signals, which meant a sharply-up-VIX day could cap most or all stocks at a similar ceiling regardless of individual behavior. V2 removes VIX from the per-stock score entirely — it's opening-range break, OI skew, max-pain drift and DTE only, VIX moved out to its own Market Stress status instead — and is shown in shadow mode (More columns) purely for comparison. Nothing is filtered, sized, or export-flagged by V2 yet; see the "V1 vs V2 shadow comparison" panel above the table for today's before/after numbers.</li>
+              <li><b>Market Stress:</b> the VIX-move signal, now its own status (banner at the top when VIX is up ≥3% today) rather than baked into every stock's Range Score. It's advisory — GreekNova doesn't place trades or size positions automatically, so this is guidance to read before sizing, not an enforced block.</li>
               <li><b>Presets (Conservative / Balanced / Higher premium):</b> starting-point filter combinations across IV/RV, IV percentile, DTE, Range score, 1SD move, gamma-flip distance and gamma regime — not backtested thresholds, just a quicker way to go from 218 stocks to a short list. Every value they set is editable afterward in Advanced number filters.</li>
               <li><b>More columns:</b> adds ₹ per lot for decay and IV sensitivity, and ATM volume in lots.</li>
               <li><b>Theta (20 points):</b> whether the ATM straddle decays faster than is normal for how close expiry is. Decay %/day always rises near expiry, so being high in expiry week is normal and scores little on its own.</li>

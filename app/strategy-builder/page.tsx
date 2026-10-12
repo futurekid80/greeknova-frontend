@@ -67,6 +67,15 @@ function StrategyBuilderInner() {
   const urlSymbol = searchParams.get('symbol')?.toUpperCase() || 'NIFTY'
   const urlSellCE = searchParams.get('sellCE')
   const urlSellPE = searchParams.get('sellPE')
+  // Screening context carried over from the Premium Screen (Oct 12 2026,
+  // external-review ask) — display only, nothing here feeds back into the
+  // chain fetch or payoff math.
+  const urlRv1 = searchParams.get('rv1')
+  const urlRv2 = searchParams.get('rv2')
+  const urlVerdict = searchParams.get('verdict')
+  const urlGamma = searchParams.get('gamma')
+  const urlStress = searchParams.get('stress')
+  const urlWallFlags = searchParams.get('wallFlags')
   const appliedFromUrl = useRef(false)
 
   const [symbol, setSymbol] = useState(urlSymbol)
@@ -250,9 +259,25 @@ function StrategyBuilderInner() {
           Pick a premade strategy or build your own from the live option chain — see the payoff before you place anything.
         </p>
         {(urlSellCE || urlSellPE) && (
-          <p className="text-xs text-cyan-400 mb-4 -mt-3">
+          <p className="text-xs text-cyan-400 mb-2 -mt-3">
             Pre-filled from the Premium Screen: selling {urlSellPE ? `PE ${urlSellPE}` : ''}{urlSellPE && urlSellCE ? ' and ' : ''}{urlSellCE ? `CE ${urlSellCE}` : ''} — the strikes carrying the most gamma-weighted OI on each side.
           </p>
+        )}
+        {(urlRv1 || urlVerdict) && (
+          <div className="flex items-center gap-3 flex-wrap mb-5 px-3 py-2 rounded-lg border border-gray-800 bg-gray-900/40 text-[11px] text-gray-400">
+            <span className="text-gray-500 uppercase tracking-wide">Screening context:</span>
+            {urlVerdict && <span>Verdict <b className="text-gray-200">{urlVerdict}</b></span>}
+            {urlRv1 && <span title="Range Score V1 — live, drives Premium Screen filters">Range V1 <b className="text-gray-200">{urlRv1}/100</b></span>}
+            {urlRv2 && <span title="Range Score V2 — shadow mode, stock-specific only (no VIX)">Range V2 (shadow) <b className="text-gray-200">{urlRv2}/100</b></span>}
+            {urlGamma && <span>Gamma <b className="text-gray-200">{urlGamma}</b></span>}
+            {urlStress && urlStress !== 'NORMAL' && urlStress !== 'UNKNOWN' && (
+              <span className={urlStress === 'ELEVATED' ? 'text-red-400 font-semibold' : 'text-amber-400 font-semibold'}>
+                Market Stress: {urlStress === 'ELEVATED' ? 'Elevated' : 'Watch'}
+              </span>
+            )}
+            {urlWallFlags && <span className="text-red-400 font-semibold">{urlWallFlags}</span>}
+            <span className="text-gray-600">from the Premium Screen, read-only here</span>
+          </div>
         )}
 
         {/* Symbol + expiry */}

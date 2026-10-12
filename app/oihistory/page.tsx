@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid, Legend, Cell } from 'recharts'
@@ -55,7 +55,19 @@ export default function OIHistory() {
   const [expiry, setExpiry]   = useState('')
   const [view, setView]       = useState<'table' | 'chart'>('chart')
 
+  // BUG FIX (Oct 12 2026): changing symbol resets dateA/dateB/expiry to ''
+  // in a separate effect below, and that reset itself re-triggers this
+  // fetch -- so switching symbol quickly (or clicking Refresh while a
+  // previous fetch is still in flight) could fire 2+ overlapping requests.
+  // With no sequencing, whichever one happened to resolve LAST won, even
+  // if it was the stale/earlier one -- caught live switching NIFTY->ITC,
+  // where the page kept showing NIFTY's CMP/ATM and (worse) an ITC date
+  // range's tile numbers next to a BULLISH/BEARISH banner computed from a
+  // different, earlier request. requestId guards against applying a
+  // response that's no longer the most recent request issued.
+  const requestId = useRef(0)
   const fetchData = useCallback(async () => {
+    const thisRequest = ++requestId.current
     setLoading(true)
     try {
       const params = new URLSearchParams()
@@ -64,6 +76,7 @@ export default function OIHistory() {
       if (expiry) params.set('expiry', expiry)
       const res  = await fetch(`${API}/oi-history/${symbol}?${params}`)
       const json = await res.json()
+      if (thisRequest !== requestId.current) return // a newer request superseded this one
       setData(json)
       if (!dateA && json.date_a) setDateA(json.date_a)
       if (!dateB && json.date_b) setDateB(json.date_b)

@@ -101,6 +101,20 @@ function wallTrend(r: Row, strike: number | null | undefined, side: 'PE' | 'CE')
   return { label, pct }
 }
 
+// Wall quality (Oct 12 2026): an OI wall only works as a real boundary if
+// it sits OUTSIDE the stock's own 1SD expected move -- a wall inside that
+// band can be reached by an perfectly ordinary move, so treating it as
+// "safe to sell at" is the mistake a raw OI-concentration pick can make.
+function insideExpectedMove(
+  wallStrike: number | null | undefined,
+  emLow: number | null | undefined,
+  emHigh: number | null | undefined,
+  side: 'CE' | 'PE'
+): boolean | null {
+  if (!wallStrike || emLow === null || emLow === undefined || emHigh === null || emHigh === undefined) return null
+  return side === 'CE' ? wallStrike < emHigh : wallStrike > emLow
+}
+
 function strategyLink(r: Row) {
   const params = new URLSearchParams({ symbol: r.symbol })
   if (r.call_wall_strike) params.set('sellCE', String(r.call_wall_strike))
@@ -109,13 +123,20 @@ function strategyLink(r: Row) {
 }
 
 function exportCsv(list: (Scored & { verdict: Verdict })[]) {
-  const headers = ['Symbol', 'CMP', 'Verdict', 'Score', 'DTE', 'IV/RV', 'Decay %/day', 'IV Percentile', '1SD Move %', 'Gamma Regime', 'To Flip %', 'Put Wall (support)', 'Call Wall (resistance)', 'Range Score', 'Range Flags']
-  const rows = list.map((r) => [
-    r.symbol, r.cmp, r.verdict.label, r.score, r.days_to_expiry,
-    r.iv_rv_basis ?? r.iv_rv_ratio ?? '', r.atm_theta_pct ?? '', r.iv_pctile ?? '', r.em_pct ?? '',
-    r.regime ?? '', r.pct_to_flip ?? '', r.put_wall_strike ?? '', r.call_wall_strike ?? '',
-    Math.round(r.rScore * 100), r.rReasons.join('; '),
-  ])
+  const headers = ['Symbol', 'CMP', 'Verdict', 'Score', 'DTE', 'IV/RV', 'Decay %/day', 'IV Percentile', '1SD Move %', 'Gamma Regime', 'To Flip %', 'Put Wall (support)', 'Put Wall Quality', 'Call Wall (resistance)', 'Call Wall Quality', 'Range Score', 'Range Flags']
+  const rows = list.map((r) => {
+    const putWeak = insideExpectedMove(r.put_wall_strike, r.em_low, r.em_high, 'PE')
+    const callWeak = insideExpectedMove(r.call_wall_strike, r.em_low, r.em_high, 'CE')
+    return [
+      r.symbol, r.cmp, r.verdict.label, r.score, r.days_to_expiry,
+      r.iv_rv_basis ?? r.iv_rv_ratio ?? '', r.atm_theta_pct ?? '', r.iv_pctile ?? '', r.em_pct ?? '',
+      r.regime ?? '', r.pct_to_flip ?? '', r.put_wall_strike ?? '',
+      putWeak === null ? '' : putWeak ? 'Inside 1SD' : 'Outside 1SD',
+      r.call_wall_strike ?? '',
+      callWeak === null ? '' : callWeak ? 'Inside 1SD' : 'Outside 1SD',
+      Math.round(r.rScore * 100), r.rReasons.join('; '),
+    ]
+  })
   const lines = [headers, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -265,6 +286,13 @@ export default function SellerScreenPage() {
   const [minDecay, setMinDecay] = useState(0)
   const [maxDte, setMaxDte] = useState(30)
   const [minPctile, setMinPctile] = useState(0)
+  const [maxPctile, setMaxPctile] = useState(100)
+  const [minDte, setMinDte] = useState(0)
+  const [maxEmPct, setMaxEmPct] = useState(100)
+  const [minRangeScore, setMinRangeScore] = useState(0)
+  const [minFlipDist, setMinFlipDist] = useState(0)
+  const [hideWeakWalls, setHideWeakWalls] = useState(false)
+  const [preset, setPreset] = useState<'NONE' | 'CONSERVATIVE' | 'BALANCED' | 'PREMIUM'>('NONE')
   const [hideThin, setHideThin] = useState(false)
   const [noResults, setNoResults] = useState(false)
   const [more, setMore] = useState(false)
@@ -289,6 +317,34 @@ export default function SellerScreenPage() {
   }, [])
   useEffect(() => { load() }, [load])
 
+  // Three starting-point presets (Oct 12 2026), not empirically backtested
+  // thresholds -- a quick way to go from "218 stocks" to "a short, defensible
+  // list," with Balanced/Higher-premium trading safety margin for more
+  // candidates. All individually editable afterward via Advanced filters.
+  function applyPreset(p: 'CONSERVATIVE' | 'BALANCED' | 'PREMIUM') {
+    setPreset(p)
+    setSearch('')
+    if (p === 'CONSERVATIVE') {
+      setMinIvRv(1.25); setMinPctile(65); setMaxPctile(95); setMinDte(10); setMaxDte(25)
+      setMinRangeScore(60); setMaxEmPct(6); setMinFlipDist(3); setGammaPref('LONG')
+      setHideThin(true); setNoResults(true); setHideWeakWalls(true)
+    } else if (p === 'BALANCED') {
+      setMinIvRv(1.1); setMinPctile(50); setMaxPctile(100); setMinDte(7); setMaxDte(30)
+      setMinRangeScore(45); setMaxEmPct(8); setMinFlipDist(2); setGammaPref('LONG')
+      setHideThin(true); setNoResults(true); setHideWeakWalls(false)
+    } else {
+      setMinIvRv(1.0); setMinPctile(40); setMaxPctile(100); setMinDte(5); setMaxDte(35)
+      setMinRangeScore(35); setMaxEmPct(12); setMinFlipDist(1); setGammaPref('ANY')
+      setHideThin(false); setNoResults(false); setHideWeakWalls(false)
+    }
+  }
+  function clearFilters() {
+    setPreset('NONE')
+    setMinIvRv(0); setMinDecay(0); setMaxDte(30); setMinPctile(0); setMaxPctile(100)
+    setMinDte(0); setMinRangeScore(0); setMaxEmPct(100); setMinFlipDist(0)
+    setHideThin(false); setNoResults(false); setGammaPref('ANY'); setHideWeakWalls(false)
+  }
+
   const scored = useMemo(() => rows.map(scoreRow).map((s) => ({ ...s, verdict: verdictFor(s) })), [rows])
 
   const shown = useMemo(() => {
@@ -300,6 +356,16 @@ export default function SellerScreenPage() {
       if ((r.atm_theta_pct ?? 0) < minDecay) return false
       if (r.days_to_expiry > maxDte) return false
       if (minPctile > 0 && (r.iv_pctile ?? -1) < minPctile) return false
+      if (maxPctile < 100 && (r.iv_pctile ?? 101) > maxPctile) return false
+      if (minDte > 0 && r.days_to_expiry < minDte) return false
+      if (maxEmPct < 100 && (r.em_pct ?? 0) > maxEmPct) return false
+      if (minRangeScore > 0 && r.rScore * 100 < minRangeScore) return false
+      if (minFlipDist > 0 && (r.pct_to_flip === null || r.pct_to_flip === undefined || Math.abs(r.pct_to_flip) < minFlipDist)) return false
+      if (hideWeakWalls) {
+        const callWeak = insideExpectedMove(r.call_wall_strike, r.em_low, r.em_high, 'CE')
+        const putWeak = insideExpectedMove(r.put_wall_strike, r.em_low, r.em_high, 'PE')
+        if (callWeak || putWeak) return false
+      }
       if (hideThin && r.liq_thin) return false
       if (noResults && r.result_before_expiry) return false
       if (gammaPref === 'LONG' && r.regime !== 'LONG_GAMMA') return false
@@ -317,7 +383,7 @@ export default function SellerScreenPage() {
       if (bv === null || bv === undefined) return -1
       return (av - bv) * dir
     })
-  }, [scored, search, minIvRv, minDecay, maxDte, minPctile, hideThin, noResults, gammaPref, audience, sortKey, sortDir])
+  }, [scored, search, minIvRv, minDecay, maxDte, minPctile, maxPctile, minDte, maxEmPct, minRangeScore, minFlipDist, hideWeakWalls, hideThin, noResults, gammaPref, audience, sortKey, sortDir])
 
   function sortBy(k: SortKey) {
     if (k === sortKey) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -379,11 +445,21 @@ export default function SellerScreenPage() {
             <button className={chip(audience === 'BUYERS')} onClick={() => setAudience('BUYERS')}>🔵 Buyers</button>
           </div>
 
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <span className="text-[11px] text-gray-500 mr-1">Presets:</span>
+            <button className={chip(preset === 'CONSERVATIVE')} onClick={() => applyPreset('CONSERVATIVE')} title="IV/RV ≥1.25 · IV pctile 65–95 · DTE 10–25 · Range ≥60 · 1SD ≤6% · flip ≥3% away · long gamma · liquid · no pre-expiry results · walls outside 1SD only">Conservative</button>
+            <button className={chip(preset === 'BALANCED')} onClick={() => applyPreset('BALANCED')} title="IV/RV ≥1.1 · IV pctile ≥50 · DTE 7–30 · Range ≥45 · 1SD ≤8% · flip ≥2% away · long gamma · liquid · no pre-expiry results">Balanced</button>
+            <button className={chip(preset === 'PREMIUM')} onClick={() => applyPreset('PREMIUM')} title="IV/RV ≥1.0 · IV pctile ≥40 · DTE 5–35 · Range ≥35 · 1SD ≤12% · flip ≥1% away · any gamma — wider net, less safety margin">Higher premium</button>
+            {preset !== 'NONE' && <button className="text-[11px] text-gray-500 hover:text-gray-300 underline" onClick={clearFilters}>Clear filters</button>}
+            <span className="text-[11px] text-gray-600">Starting points, not backtested — tune in Advanced filters below.</span>
+          </div>
+
           <div className="flex items-end gap-4 flex-wrap mb-4">
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search stock"
               className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-sm text-gray-200 w-40" />
             <button className={chip(hideThin)} onClick={() => setHideThin(!hideThin)}>Hide thin liquidity</button>
             <button className={chip(noResults)} onClick={() => setNoResults(!noResults)}>Exclude results before expiry</button>
+            <button className={chip(hideWeakWalls)} onClick={() => setHideWeakWalls(!hideWeakWalls)} title="Hide stocks whose put or call wall sits inside the stock's own 1SD expected move — a wall that close isn't a safety margin, an ordinary move can reach it">Hide weak walls</button>
             <div className="flex gap-2">
               <button className={chip(gammaPref === 'ANY')} onClick={() => setGammaPref('ANY')}>Any gamma</button>
               <button className={chip(gammaPref === 'LONG')} onClick={() => setGammaPref('LONG')}>Long gamma only</button>
@@ -404,6 +480,16 @@ export default function SellerScreenPage() {
                 <input type="number" step="1" value={maxDte} onChange={(e) => setMaxDte(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
               <label className="text-[11px] text-gray-500">Min IV percentile
                 <input type="number" step="10" value={minPctile} onChange={(e) => setMinPctile(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+              <label className="text-[11px] text-gray-500">Max IV percentile
+                <input type="number" step="10" value={maxPctile} onChange={(e) => setMaxPctile(Number(e.target.value) || 100)} className={inp + ' block mt-1'} /></label>
+              <label className="text-[11px] text-gray-500">Min days to expiry
+                <input type="number" step="1" value={minDte} onChange={(e) => setMinDte(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+              <label className="text-[11px] text-gray-500">Max 1SD move %
+                <input type="number" step="0.5" value={maxEmPct} onChange={(e) => setMaxEmPct(Number(e.target.value) || 100)} className={inp + ' block mt-1'} /></label>
+              <label className="text-[11px] text-gray-500" title="Minimum % distance between spot and the gamma flip level. Stocks with no flip-distance data are excluded when this is set above 0, not passed through as a free pass.">Min flip distance %
+                <input type="number" step="0.5" value={minFlipDist} onChange={(e) => setMinFlipDist(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
+              <label className="text-[11px] text-gray-500" title="Minimum Range Confidence score (0-100) — is today's move likely to hold a direction long enough to breach strikes.">Min Range score
+                <input type="number" step="5" value={minRangeScore} onChange={(e) => setMinRangeScore(Number(e.target.value) || 0)} className={inp + ' block mt-1'} /></label>
             </div>
           </details>
 
@@ -464,22 +550,26 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2.5 text-left whitespace-nowrap text-[11px]">
                       {r.put_wall_strike ? (() => {
                         const t = wallTrend(r, r.put_wall_strike, 'PE')
+                        const weak = insideExpectedMove(r.put_wall_strike, r.em_low, r.em_high, 'PE')
                         return (
-                          <span className="text-emerald-400" title={`Put wall — most gamma-weighted PE open interest, acting as support${r.pct_to_put_wall !== null && r.pct_to_put_wall !== undefined ? ` (${fmt(r.pct_to_put_wall)}% below spot)` : ''}${t ? ` — OI ${t.label.toLowerCase()}${t.pct !== null && t.pct !== undefined ? ` (${t.pct > 0 ? '+' : ''}${fmt(t.pct, 0)}%)` : ''} since day's open` : ''}`}>
+                          <span className="text-emerald-400" title={`Put wall — most gamma-weighted PE open interest, acting as support${r.pct_to_put_wall !== null && r.pct_to_put_wall !== undefined ? ` (${fmt(r.pct_to_put_wall)}% below spot)` : ''}${t ? ` — OI ${t.label.toLowerCase()}${t.pct !== null && t.pct !== undefined ? ` (${t.pct > 0 ? '+' : ''}${fmt(t.pct, 0)}%)` : ''} since day's open` : ''}${weak ? ' — inside this stock\'s own 1SD expected move: an ordinary move can reach it, not a real safety margin' : ''}`}>
                             PE {fmt(r.put_wall_strike, 0)}
                             {t?.label === 'BUILDING' && <span className="ml-1 text-emerald-300">✍️writing</span>}
                             {t?.label === 'UNWINDING' && <span className="ml-1 text-amber-400">⚠stale</span>}
+                            {weak && <span className="ml-1 text-red-400">⚠1SD</span>}
                           </span>
                         )
                       })() : <span className="text-gray-600">—</span>}
                       {' / '}
                       {r.call_wall_strike ? (() => {
                         const t = wallTrend(r, r.call_wall_strike, 'CE')
+                        const weak = insideExpectedMove(r.call_wall_strike, r.em_low, r.em_high, 'CE')
                         return (
-                          <span className="text-sky-400" title={`Call wall — most gamma-weighted CE open interest, acting as resistance${r.pct_to_call_wall !== null && r.pct_to_call_wall !== undefined ? ` (${fmt(r.pct_to_call_wall)}% above spot)` : ''}${t ? ` — OI ${t.label.toLowerCase()}${t.pct !== null && t.pct !== undefined ? ` (${t.pct > 0 ? '+' : ''}${fmt(t.pct, 0)}%)` : ''} since day's open` : ''}`}>
+                          <span className="text-sky-400" title={`Call wall — most gamma-weighted CE open interest, acting as resistance${r.pct_to_call_wall !== null && r.pct_to_call_wall !== undefined ? ` (${fmt(r.pct_to_call_wall)}% above spot)` : ''}${t ? ` — OI ${t.label.toLowerCase()}${t.pct !== null && t.pct !== undefined ? ` (${t.pct > 0 ? '+' : ''}${fmt(t.pct, 0)}%)` : ''} since day's open` : ''}${weak ? ' — inside this stock\'s own 1SD expected move: an ordinary move can reach it, not a real safety margin' : ''}`}>
                             CE {fmt(r.call_wall_strike, 0)}
                             {t?.label === 'BUILDING' && <span className="ml-1 text-sky-300">✍️writing</span>}
                             {t?.label === 'UNWINDING' && <span className="ml-1 text-amber-400">⚠stale</span>}
+                            {weak && <span className="ml-1 text-red-400">⚠1SD</span>}
                           </span>
                         )
                       })() : <span className="text-gray-600">—</span>}
@@ -495,6 +585,7 @@ export default function SellerScreenPage() {
                         r.regime === 'SHORT_GAMMA' && 'Short γ',
                         r.pct_to_flip !== null && r.pct_to_flip !== undefined && Math.abs(r.pct_to_flip) < 1.5 && 'Near flip',
                         r.days_to_expiry <= 5 && 'Delivery',
+                        (insideExpectedMove(r.put_wall_strike, r.em_low, r.em_high, 'PE') || insideExpectedMove(r.call_wall_strike, r.em_low, r.em_high, 'CE')) && 'Weak wall',
                       ].filter(Boolean).map((f) => (
                         <span key={String(f)} className="mr-1 px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-400 border border-amber-900/50">{f}</span>
                       ))}
@@ -520,7 +611,8 @@ export default function SellerScreenPage() {
               <li><b>IV percentile:</b> the share of past sessions with lower IV. The number in brackets is how many sessions it is based on. For stocks whose option history is still short, a blue number with a ~ and (RV range) is a stand-in: today's IV ranked against the range of realized volatility the stock has shown over the past year. It will switch to the true IV percentile as history builds.</li>
               <li><b>1SD move %:</b> the one-standard-deviation move the options imply until expiry. About two thirds of the time price is expected to finish inside that range. The Call and Put beyond 1SD columns show the first strike outside it, its probability of finishing in the money, and the premium per lot. Probabilities are model estimates from implied volatility.</li>
               <li><b>ATM vol (lots) and Thin liquidity:</b> options volume at the at-the-money strike. Thin means fills may be poor and spreads wide.</li>
-              <li><b>Flags:</b> IV crush = rich IV with expiry within 10 days. Results = results date falls before expiry. Thin = low ATM liquidity. Short γ = short gamma, moves can amplify. Near flip = gamma flip within 1.5% of price. Delivery = expiry within 5 days, and stock options settle by delivery in India, so in-the-money positions carry delivery and higher margin implications.</li>
+              <li><b>Flags:</b> IV crush = rich IV with expiry within 10 days. Results = results date falls before expiry. Thin = low ATM liquidity. Short γ = short gamma, moves can amplify. Near flip = gamma flip within 1.5% of price. Delivery = expiry within 5 days, and stock options settle by delivery in India, so in-the-money positions carry delivery and higher margin implications. Weak wall = the put or call wall sits inside this stock's own 1SD expected move — an ordinary move can reach it, so it isn't acting as a real safety margin the way a wall outside the expected move would.</li>
+              <li><b>Presets (Conservative / Balanced / Higher premium):</b> starting-point filter combinations across IV/RV, IV percentile, DTE, Range score, 1SD move, gamma-flip distance and gamma regime — not backtested thresholds, just a quicker way to go from 218 stocks to a short list. Every value they set is editable afterward in Advanced number filters.</li>
               <li><b>More columns:</b> adds ₹ per lot for decay and IV sensitivity, and ATM volume in lots.</li>
               <li><b>Theta (20 points):</b> whether the ATM straddle decays faster than is normal for how close expiry is. Decay %/day always rises near expiry, so being high in expiry week is normal and scores little on its own.</li>
               <li><b>Gamma (35 points):</b> long gamma (dealer hedging tends to dampen moves) scores full, halved when the gamma flip level is within 1.5% of price. Short gamma scores zero.</li>

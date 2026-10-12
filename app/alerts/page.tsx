@@ -4,8 +4,22 @@ import { useEffect, useRef, useState } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock, Search, X, ExternalLink } from 'lucide-react'
 import { useAlerts } from '@/contexts/AlertsContext'
 import AlertThresholds from '@/components/AlertThresholds'
+import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
 import { formatReceivedAt } from '@/lib/formatTime'
+
+// Oct 12 2026 (mentee feedback via Manish): same ATM/±1/±2/±5/±10/All filter
+// as Jungle/UOA/OI Profile, mirroring services/strike_zones.py's in_zone()
+// client-side -- strikesAway is already computed server-side at the moment
+// each alert fires (see push_notifications.py), so this is just the same
+// "does n fall in this zone" check, not a recompute.
+function inStrikeZone(n: number | null | undefined, zone: string): boolean {
+  if (!zone || zone === 'all') return true
+  if (n === null || n === undefined) return false
+  if (zone === 'ATM') return n === 0
+  const bound = parseInt(zone, 10)
+  return Number.isFinite(bound) ? Math.abs(n) <= bound : true
+}
 
 export default function Alerts() {
   const {
@@ -27,6 +41,7 @@ export default function Alerts() {
   const [search, setSearch]           = useState('')
   const [typeFilter, setTypeFilter]   = useState('all')
   const [sortOrder, setSortOrder]     = useState<'newest'|'oldest'>('newest')
+  const [strikeZone, setStrikeZone]   = useState('all')
 
   // Watchlist filter -- reads the same 'gn_watchlist' list the /watchlist
   // page writes to localStorage, so "only alerts for stocks I'm tracking"
@@ -168,6 +183,7 @@ export default function Alerts() {
     })
     .filter(a => typeFilter === 'all' || a.signal === typeFilter)
     .filter(a => !watchlistOnly || watchlist.includes(a.symbol))
+    .filter(a => inStrikeZone(a.strikesAway, strikeZone))
     .sort((a, b) => sortOrder === 'newest' ? b.id - a.id : a.id - b.id)
 
   const statusText = () => {
@@ -271,6 +287,7 @@ export default function Alerts() {
             <p className="text-xs text-gray-500 mb-3">Near-ATM OI collapsing fast — a support/resistance wall is breaking right now. Higher conviction than routine OI spikes. Showing today's full list, not just the latest few.</p>
             <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
               {unwindAll
+                .filter(a => inStrikeZone(a.strikesAway, strikeZone))
                 .sort((a, b) => b.id - a.id)
                 .map(alert => (
                   <div key={alert.id}
@@ -354,6 +371,12 @@ export default function Alerts() {
         </div>
 
         {baseAlerts.length > 0 && (
+          <div className="mb-4">
+            <StrikeZoneFilter value={strikeZone} onChange={setStrikeZone} label="🎯 Strike zone:" />
+          </div>
+        )}
+
+        {baseAlerts.length > 0 && (
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
@@ -435,7 +458,7 @@ export default function Alerts() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border border-gray-800/50 rounded-2xl">
             <p className="text-gray-500 text-sm">No alerts match current filters</p>
-            <button onClick={() => { setSearch(''); setTypeFilter('all') }}
+            <button onClick={() => { setSearch(''); setTypeFilter('all'); setStrikeZone('all') }}
               className="mt-3 text-xs text-emerald-400 hover:text-emerald-300">
               Clear filters
             </button>

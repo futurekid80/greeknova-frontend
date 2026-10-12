@@ -8,6 +8,11 @@ export interface Alert {
   optionType?: string; message: string; url: string
   receivedAt: string; score?: number; bias?: string
   oiPct?: number; volPct?: number; ltp?: number; direction?: string
+  // Oct 12 2026: how many strikes this alert's strike sat from its symbol's
+  // ATM at the moment it fired (null/undefined for alerts logged before this
+  // shipped, or ones with no strike). Powers the Alerts page's ATM strike-
+  // zone filter -- see services/strike_zones.py on the backend.
+  strikesAway?: number | null
 }
 
 const API = 'https://api.greeknova.com'

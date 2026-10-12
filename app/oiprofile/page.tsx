@@ -45,8 +45,14 @@ interface ProfileRow {
   is_atm: boolean; in_value_area: boolean
   prev_ce_oi: number; prev_pe_oi: number
   ce_oi_delta: number; pe_oi_delta: number
+  // Only present when fetched with at_time (Timeline slider, Task #38) --
+  // change vs today's 9:15 open, computed server-side in api/oi_profile.py
+  open_ce_oi?: number; open_pe_oi?: number
+  ce_oi_chg_open?: number; pe_oi_chg_open?: number
   strikes_away: number | null
 }
+
+interface TimelineTick { ts: string; label: string }
 
 interface WallPoint {
   date: string; ce_wall: number; pe_wall: number
@@ -63,6 +69,9 @@ interface ProfileData {
   profile: ProfileRow[]; wall_migration: WallPoint[]
   vacuum_count: number
   has_prev_oi?: boolean
+  has_open_oi?: boolean
+  snapshot_ts?: string
+  at_time?: string | null
   error?: string
 }
 
@@ -86,7 +95,7 @@ export default function OIProfile() {
   const [symbol, setSymbol]     = useState('NIFTY')
   const [expiry, setExpiry]     = useState('')
   const [strikeZone, setStrikeZone] = useState('all')
-  const [view, setView]         = useState<'profile'|'migration'>('profile')
+  const [view, setView]         = useState<'profile'|'timeline'|'migration'>('profile')
   const [showVacuum, setShowVacuum] = useState(true)
   const [showValueArea, setShowValueArea] = useState(true)
   const [autoEnabled, setAutoEnabled] = useState(false)
@@ -96,12 +105,21 @@ export default function OIProfile() {
   const fetchIdRef   = useRef(0)
   const isStock = STOCKS.includes(symbol)
 
-  const fetchData = useCallback(async () => {
+  // ── Open Interest Timeline slider state (Task #38, Oct 12 2026) ─────────
+  const [timelineTimes, setTimelineTimes] = useState<TimelineTick[]>([])
+  const [timelineIdx, setTimelineIdx]     = useState(-1) // -1 until loaded, then defaults to latest
+  const [timelinePlaying, setTimelinePlaying] = useState(false)
+  const timelineDebounceRef = useRef<NodeJS.Timeout|null>(null)
+  const playTimerRef        = useRef<NodeJS.Timeout|null>(null)
+  const selectedTs = timelineIdx >= 0 ? timelineTimes[timelineIdx]?.ts : undefined
+
+  const fetchData = useCallback(async (atTime?: string) => {
     const fetchId = ++fetchIdRef.current
     setLoading(true)
     try {
       const params = new URLSearchParams({ strike_zone: strikeZone })
       if (expiry) params.set('expiry', expiry)
+      if (atTime) params.set('at_time', atTime)
       const res  = await fetch(`${API}/oi-profile/${symbol}?${params}`)
       const json = await res.json()
       // Only update state if this is still the latest fetch AND symbol matches
@@ -112,14 +130,62 @@ export default function OIProfile() {
     } catch(e) { console.error(e) }
     if (fetchId === fetchIdRef.current) setLoading(false)
   }, [symbol, expiry, strikeZone])
+
+  // Load the day's capture timestamps once the Timeline tab is opened (or
+  // the symbol changes while it's open), to populate the slider.
+  const fetchTimelineTimes = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API}/oi-timeline-times/${symbol}`)
+      const json = await res.json()
+      if (json.symbol === symbol && Array.isArray(json.timestamps)) {
+        setTimelineTimes(json.timestamps)
+        setTimelineIdx(json.timestamps.length - 1) // start at the latest capture
+      }
+    } catch (e) { console.error(e) }
+  }, [symbol])
+
+  useEffect(() => {
+    if (view === 'timeline') fetchTimelineTimes()
+  }, [view, fetchTimelineTimes])
+
+  // Scrubbing the slider refetches the profile at that timestamp, debounced
+  // so a drag doesn't fire one request per pixel.
+  useEffect(() => {
+    if (view !== 'timeline' || !selectedTs) return
+    if (timelineDebounceRef.current) clearTimeout(timelineDebounceRef.current)
+    timelineDebounceRef.current = setTimeout(() => { fetchData(selectedTs) }, 150)
+    return () => { if (timelineDebounceRef.current) clearTimeout(timelineDebounceRef.current) }
+  }, [view, selectedTs, fetchData])
+
+  // Play button -- steps through the day's captures automatically.
+  useEffect(() => {
+    if (!timelinePlaying) {
+      if (playTimerRef.current) { clearInterval(playTimerRef.current); playTimerRef.current = null }
+      return
+    }
+    playTimerRef.current = setInterval(() => {
+      setTimelineIdx(i => {
+        if (i >= timelineTimes.length - 1) { setTimelinePlaying(false); return i }
+        return i + 1
+      })
+    }, 900)
+    return () => { if (playTimerRef.current) { clearInterval(playTimerRef.current); playTimerRef.current = null } }
+  }, [timelinePlaying, timelineTimes.length])
   const fetchDataRef = useRef<typeof fetchData>(async () => {})
   useEffect(() => { fetchDataRef.current = fetchData }, [fetchData])
+  const viewRef = useRef(view)
+  useEffect(() => { viewRef.current = view }, [view])
 
   function startAuto() {
     setAutoEnabled(true); setCountdown(300)
     if (intervalRef.current)  clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
-    intervalRef.current  = setInterval(() => { fetchDataRef.current(); setCountdown(300) }, 5*60*1000)
+    intervalRef.current  = setInterval(() => {
+      // Don't clobber a scrubbed Timeline position with a plain latest-data
+      // refetch -- the Timeline tab refreshes its own capture list instead.
+      if (viewRef.current !== 'timeline') fetchDataRef.current()
+      setCountdown(300)
+    }, 5*60*1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p-1)), 1000)
   }
   function stopAuto() {
@@ -129,7 +195,14 @@ export default function OIProfile() {
   }
 
   useEffect(() => { setExpiry('') }, [symbol])
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    // The Timeline tab fetches with at_time via its own debounced effect
+    // above -- skip this plain fetch while it's active so the two don't
+    // race (this one would otherwise clobber a scrubbed timestamp with
+    // the day's latest every time symbol/expiry/strikeZone changed).
+    if (view === 'timeline') return
+    fetchData()
+  }, [fetchData, view])
 
   useEffect(() => {
     if (isMarketHours()) startAuto()
@@ -141,10 +214,20 @@ export default function OIProfile() {
 
   const profile = data?.profile || []
   const maxCombined = Math.max(...profile.map(p => Math.max(p.ce_oi, p.pe_oi))) || 1
+  // Timeline view shows change-since-today's-open instead of change-since-
+  // yesterday's-close -- same row layout, different baseline/delta source
+  // (Task #38, Oct 12 2026).
+  const useOpenBaseline = view === 'timeline'
+  const hasBaseline = useOpenBaseline ? !!data?.has_open_oi : !!data?.has_prev_oi
+  const baselineLabel = useOpenBaseline ? "today's open (09:15)" : "yesterday's close"
   const displayProfile = [...profile].map(p => ({
     ...p,
     ce_bar_pct: Math.round(p.ce_oi / maxCombined * 100),
     pe_bar_pct: Math.round(p.pe_oi / maxCombined * 100),
+    baseCE: useOpenBaseline ? (p.open_ce_oi ?? 0) : p.prev_ce_oi,
+    basePE: useOpenBaseline ? (p.open_pe_oi ?? 0) : p.prev_pe_oi,
+    deltaCE: useOpenBaseline ? (p.ce_oi_chg_open ?? 0) : p.ce_oi_delta,
+    deltaPE: useOpenBaseline ? (p.pe_oi_chg_open ?? 0) : p.pe_oi_delta,
   })).reverse()
 
   const mins = Math.floor(countdown/60)
@@ -187,7 +270,7 @@ export default function OIProfile() {
                 {autoEnabled ? `${mins}:${secs.toString().padStart(2,'0')}` : 'Auto OFF'}
               </button>
             )}
-            <button onClick={fetchData} disabled={loading}
+            <button onClick={() => fetchData(view === 'timeline' ? selectedTs : undefined)} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 disabled:opacity-50 transition-all">
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
             </button>
@@ -248,14 +331,14 @@ export default function OIProfile() {
               <span className="text-base font-black text-white">{fmtOI(data.total_pe_oi)}</span>
             </div>
             <div className="ml-auto flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
-              {(['profile','migration'] as const).map(v => (
+              {(['profile','timeline','migration'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)}
                   className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${view===v ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}>
-                  {v==='profile' ? '📊 OI Profile' : '🏔️ Wall Migration'}
+                  {v==='profile' ? '📊 OI Profile' : v==='timeline' ? '🕐 Timeline' : '🏔️ Wall Migration'}
                 </button>
               ))}
             </div>
-            {view === 'profile' && (
+            {(view === 'profile' || view === 'timeline') && (
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowVacuum(v => !v)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${showVacuum ? 'bg-amber-950/40 text-amber-400 border-amber-800/50' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}>
@@ -270,8 +353,38 @@ export default function OIProfile() {
           </div>
         )}
 
+        {/* Timeline slider */}
+        {view === 'timeline' && (
+          <div className="bg-gray-900/30 border border-gray-800 rounded-xl px-4 py-3 mb-4">
+            <div className="flex items-center gap-3 mb-2">
+              <button onClick={() => setTimelinePlaying(p => !p)} disabled={timelineTimes.length < 2}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all disabled:opacity-40 ${timelinePlaying ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/60 text-gray-300 border-gray-700'}`}>
+                {timelinePlaying ? '⏸ Pause' : '▶ Play'}
+              </button>
+              <input type="range" min={0} max={Math.max(0, timelineTimes.length - 1)} value={Math.max(0, timelineIdx)}
+                onChange={e => { setTimelinePlaying(false); setTimelineIdx(Number(e.target.value)) }}
+                disabled={timelineTimes.length < 2}
+                className="flex-1 accent-emerald-500 disabled:opacity-40"/>
+              <div className="flex items-center gap-2 min-w-[92px] justify-end">
+                <span className="text-sm font-black text-amber-400 font-mono">
+                  {timelineTimes[timelineIdx]?.label || '—'}
+                </span>
+                {timelineIdx === timelineTimes.length - 1 && timelineTimes.length > 0 && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>LIVE
+                  </span>
+                )}
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-600">
+              Scrub through today's 5-min OI captures · bars show Total OI at that moment, small numbers show change since {baselineLabel}
+              {timelineTimes.length === 0 && ' · loading captures…'}
+            </p>
+          </div>
+        )}
+
         {/* Legend */}
-        {view === 'profile' && (
+        {(view === 'profile' || view === 'timeline') && (
           <div className="flex items-center gap-4 mb-3 px-1">
             {[
               { color: 'bg-red-500/70', label: 'CE OI (resistance)' },
@@ -297,7 +410,7 @@ export default function OIProfile() {
             <div className="text-4xl mb-4">📊</div>
             <p className="text-gray-500">{data.error}</p>
           </div>
-        ) : view === 'profile' ? (
+        ) : (view === 'profile' || view === 'timeline') ? (
           <div className="bg-gray-900/20 border border-gray-800 rounded-2xl overflow-hidden">
             <div className="grid grid-cols-[80px_1fr_80px_1fr_80px] gap-0 px-4 py-2 border-b border-gray-800 bg-gray-900/40">
               <div className="text-[10px] text-red-400 font-bold text-right pr-2">CE OI</div>
@@ -321,23 +434,23 @@ export default function OIProfile() {
                     className={`grid grid-cols-[80px_1fr_80px_1fr_80px] gap-0 items-center px-4 py-1.5 hover:bg-gray-800/20 transition-colors ${rowBg} ${rowBorder}`}>
                     <div className="text-right pr-3">
                       <span className="text-xs font-mono text-red-400/80">{fmtOI(row.ce_oi)}</span>
-                      {data?.has_prev_oi && row.ce_oi_delta !== 0 && (
-                        <span className={`block text-[9px] font-bold ${row.ce_oi_delta > 0 ? 'text-red-300' : 'text-gray-600'}`}>
-                          {row.ce_oi_delta > 0 ? `+${fmtOI(row.ce_oi_delta)}` : fmtOI(row.ce_oi_delta)}
+                      {hasBaseline && row.deltaCE !== 0 && (
+                        <span className={`block text-[9px] font-bold ${row.deltaCE > 0 ? 'text-red-300' : 'text-gray-600'}`}>
+                          {row.deltaCE > 0 ? `+${fmtOI(row.deltaCE)}` : fmtOI(row.deltaCE)}
                         </span>
                       )}
                     </div>
                     <div className="flex justify-end items-center h-5">
                       <div className="flex justify-end w-full relative h-4">
-                        {/* Yesterday watermark */}
-                        {data?.has_prev_oi && row.prev_ce_oi > 0 && (
+                        {/* Baseline watermark -- yesterday's close, or today's open in Timeline view */}
+                        {hasBaseline && row.baseCE > 0 && (
                           <div className="absolute right-0 top-0 bottom-0 bg-red-900/30 rounded-l-sm"
-                            style={{ width: `${Math.round(row.prev_ce_oi / maxCombined * 100)}%` }}/>
+                            style={{ width: `${Math.round(row.baseCE / maxCombined * 100)}%` }}/>
                         )}
                         {/* Today's bar */}
                         <div className={`h-4 rounded-l-sm relative z-10 ${
                           row.is_ce_wall ? 'bg-red-400' : row.is_poc ? 'bg-purple-500' :
-                          row.ce_oi_delta > 0 ? 'bg-red-500' : 'bg-red-700/40'
+                          row.deltaCE > 0 ? 'bg-red-500' : 'bg-red-700/40'
                         }`} style={{ width: `${(row as any).ce_bar_pct}%`, minWidth: row.ce_oi > 0 ? '2px' : '0' }}/>
                       </div>
                     </div>
@@ -360,20 +473,20 @@ export default function OIProfile() {
                         {/* Today's bar */}
                         <div className={`h-4 rounded-r-sm relative z-10 ${
                           row.is_pe_wall ? 'bg-emerald-400' : row.is_poc ? 'bg-purple-500' :
-                          row.pe_oi_delta > 0 ? 'bg-emerald-500' : 'bg-emerald-700/40'
+                          row.deltaPE > 0 ? 'bg-emerald-500' : 'bg-emerald-700/40'
                         }`} style={{ width: `${(row as any).pe_bar_pct}%`, minWidth: row.pe_oi > 0 ? '2px' : '0' }}/>
-                        {/* Yesterday watermark */}
-                        {data?.has_prev_oi && row.prev_pe_oi > 0 && (
+                        {/* Baseline watermark -- yesterday's close, or today's open in Timeline view */}
+                        {hasBaseline && row.basePE > 0 && (
                           <div className="absolute left-0 top-0 bottom-0 bg-emerald-900/30 rounded-r-sm"
-                            style={{ width: `${Math.round(row.prev_pe_oi / maxCombined * 100)}%` }}/>
+                            style={{ width: `${Math.round(row.basePE / maxCombined * 100)}%` }}/>
                         )}
                       </div>
                     </div>
                     <div className="text-left pl-3">
                       <span className="text-xs font-mono text-emerald-400/80">{fmtOI(row.pe_oi)}</span>
-                      {data?.has_prev_oi && row.pe_oi_delta !== 0 && (
-                        <span className={`block text-[9px] font-bold ${row.pe_oi_delta > 0 ? 'text-emerald-300' : 'text-gray-600'}`}>
-                          {row.pe_oi_delta > 0 ? `+${fmtOI(row.pe_oi_delta)}` : fmtOI(row.pe_oi_delta)}
+                      {hasBaseline && row.deltaPE !== 0 && (
+                        <span className={`block text-[9px] font-bold ${row.deltaPE > 0 ? 'text-emerald-300' : 'text-gray-600'}`}>
+                          {row.deltaPE > 0 ? `+${fmtOI(row.deltaPE)}` : fmtOI(row.deltaPE)}
                         </span>
                       )}
                     </div>
@@ -382,7 +495,12 @@ export default function OIProfile() {
               })}
             </div>
             <div className="px-5 py-3 border-t border-gray-800 bg-gray-900/40 flex items-center gap-6">
-              <p className="text-xs text-gray-500">{data?.symbol} · {data?.date} · {fmtDate(data?.expiry || '')} expiry</p>
+              <p className="text-xs text-gray-500">
+                {data?.symbol} · {data?.date} · {fmtDate(data?.expiry || '')} expiry
+                {view === 'timeline' && timelineTimes[timelineIdx]?.label && (
+                  <span className="text-amber-400 font-semibold"> · snapshot at {timelineTimes[timelineIdx].label}</span>
+                )}
+              </p>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-purple-400"/>
                 <span className="text-xs text-gray-500">POC at {data?.poc_strike?.toLocaleString()}</span>

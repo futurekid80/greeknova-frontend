@@ -59,6 +59,14 @@ type Row = {
   vix_change_pct?: number | null
   or_status?: 'INSIDE' | 'ABOVE' | 'BELOW' | null
   or_pct_outside?: number | null
+  // or_high/or_low/or_width_pct/spot_open (Oct 12 2026, V2.1): exposed so a
+  // continuous "distance from boundary" can be computed even when
+  // or_status is "INSIDE" -- or_pct_outside alone is hardcoded to 0 in that
+  // case and carries no information on where inside price actually sits.
+  or_high?: number | null
+  or_low?: number | null
+  or_width_pct?: number | null
+  spot_open?: number | null
   oi_skew_pct?: number | null
   ce_oi_chg_pct?: number | null
   pe_oi_chg_pct?: number | null
@@ -84,8 +92,12 @@ type Scored = Row & {
   score: number; vScore: number; tScore: number; gScore: number
   rScore: number; rReasons: string[]
   rScoreV2: number; rReasonsV2: string[]
+  // V2.1 (Oct 12 2026, shadow): rScoreV2_1 is null, not a number, when the
+  // stock has no usable data for any of the three components -- see
+  // rangeScoreV2_1(). Never treat a null here as "scored safe."
+  rScoreV2_1: number | null; rReasonsV2_1: string[]; rQualityV2_1: 'FULL' | 'PARTIAL' | 'UNKNOWN'
 }
-type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots' | 'term_ratio' | 'rScore' | 'rScoreV2'
+type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots' | 'term_ratio' | 'rScore' | 'rScoreV2' | 'rScoreV2_1'
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
@@ -143,6 +155,16 @@ function strategyLink(r: Scored & { verdict: Verdict }, stress: MarketStress, as
   params.set('rv1', String(Math.round(r.rScore * 100)))
   params.set('rv2', String(Math.round(r.rScoreV2 * 100)))
   params.set('rv2ver', RANGE_SCORE_V2_VERSION)
+  // V2.1 (Oct 12 2026, shadow): rv21 is omitted entirely when the score is
+  // null (UNKNOWN — no usable component data), rather than passing a
+  // misleading placeholder number through the URL.
+  if (r.rScoreV2_1 !== null) {
+    params.set('rv21', String(Math.round(r.rScoreV2_1 * 100)))
+    params.set('rv21q', r.rQualityV2_1)
+  } else {
+    params.set('rv21q', 'UNKNOWN')
+  }
+  params.set('rv21ver', RANGE_SCORE_V2_1_VERSION)
   if (asOf) params.set('asOf', asOf)
   params.set('verdict', r.verdict.label)
   if (r.regime) params.set('gamma', r.regime === 'LONG_GAMMA' ? 'Long' : 'Short')
@@ -167,6 +189,7 @@ function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, f
     'Put Beyond 1SD Strike', 'Put Beyond 1SD Prob ITM %', 'Put Beyond 1SD Premium/Lot',
     'Range Score V1 (live)', 'Range V1 Flags',
     `Range Score V2 (shadow ${RANGE_SCORE_V2_VERSION}, stock-specific only)`, 'Range V2 Flags',
+    `Range Score V2.1 (shadow ${RANGE_SCORE_V2_1_VERSION}, continuous scoring)`, 'Range V2.1 Data Quality', 'Range V2.1 Flags',
     'Market Stress (shared, all rows)',
   ]
   const rows = list.map((r) => {
@@ -187,6 +210,11 @@ function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, f
       r.put_1sd_strike ?? '', r.put_1sd_prob_itm ?? '', r.put_1sd_per_lot ?? '',
       Math.round(r.rScore * 100), r.rReasons.join('; '),
       Math.round(r.rScoreV2 * 100), r.rReasonsV2.join('; '),
+      // Never write a bare number for a null (UNKNOWN) V2.1 score — an
+      // empty string in the CSV is visibly "no value," not a fabricated 0
+      // or 100 that a downstream sort/filter could silently treat as real.
+      r.rScoreV2_1 !== null ? Math.round(r.rScoreV2_1 * 100) : '',
+      r.rQualityV2_1, r.rReasonsV2_1.join('; '),
       stress.label,
     ]
   })
@@ -194,7 +222,7 @@ function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, f
   // whatever filters happen to be active, with no record of it in the file
   // itself, reads like a data gap later -- "218 vs 168 instruments, why?"
   // is unanswerable from the CSV alone otherwise.
-  const coverageLine = [`# Exported ${list.length} of ${totalRows} total instruments scanned, data as of ${asOf || 'unknown time'} IST. Active filters: ${filterSummary || 'none'}. Range Score V1 still drives all live filters/presets; V2 (${RANGE_SCORE_V2_VERSION}) is shadow-mode only, for comparison — treat any saved V2 numbers as tied to formula version ${RANGE_SCORE_V2_VERSION} and this timestamp, since opening-range/OI-skew/max-pain-drift inputs are intraday and the weights may be recalibrated later.`]
+  const coverageLine = [`# Exported ${list.length} of ${totalRows} total instruments scanned, data as of ${asOf || 'unknown time'} IST. Active filters: ${filterSummary || 'none'}. Range Score V1 still drives all live filters/presets; V2 (${RANGE_SCORE_V2_VERSION}) and V2.1 (${RANGE_SCORE_V2_1_VERSION}) are shadow-mode only, for comparison — treat any saved V2/V2.1 numbers as tied to their formula version and this timestamp, since opening-range/OI-skew/max-pain-drift inputs are intraday and the weights may be recalibrated later. A blank V2.1 cell means UNKNOWN (insufficient data that session), not a zero or a perfect score.`]
   const lines = [coverageLine, headers, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -308,6 +336,138 @@ function rangeScoreV2(r: Row): { rScore: number; rReasons: string[] } {
   return { rScore: clamp(score), rReasons: reasons }
 }
 
+// Range Score V2.1 (Oct 12 2026, shadow mode) — conditionally approved by
+// external review. Same three stock-specific components as V2 (OR break,
+// OI skew, max-pain drift), same relative weights (V2_OR/OI/MP_WEIGHT,
+// unchanged), but each penalty is now continuous/graduated instead of a
+// binary threshold -- the direct fix for V2's ceiling-clustering problem
+// (51/218 stocks tied at exactly 100), which the component audit traced to
+// three valid-but-unused continuous observations being collapsed into
+// flat zero penalties, not to missing data. Per the review's explicit,
+// component-by-component decisions:
+//   - OR containment: continuous normalized distance from the nearest OR
+//     boundary, including while still "inside" it (or_pct_outside alone
+//     is hardcoded to 0.0 whenever status is INSIDE and loses all
+//     proximity information -- see or_high/or_low below). OR width
+//     (or_width_pct) and the window's own data are recorded in the reasons
+//     list but deliberately NOT folded into the penalty yet -- the review
+//     was explicit that midpoint containment should not yet be treated as
+//     proven predictive evidence, so a 1% OR and a 5% OR both at their
+//     midpoint still get the same (zero) containment penalty today.
+//   - OI skew: continuous magnitude scaling replaces the old 40% hard
+//     gate. Sign is reported (which side is building faster) but NOT
+//     auto-interpreted as bullish/bearish -- per review, that
+//     interpretation needs historical validation first.
+//   - Max-pain drift: continuous magnitude, but ONLY for same-direction
+//     ("confirms") drift. Contrarian drift gets NO bonus and NO penalty —
+//     strictly neutral, per explicit review instruction, since max pain
+//     hasn't been shown to be a reliable mean-reversion magnet. Unchanged
+//     max pain is likewise neutral.
+//   - DTE stays a separate cap/modifier, identical to V1/V2 — never folded
+//     into the three-component weighted formula.
+//   - UNKNOWN safeguard: a stock with NO usable data for any of the three
+//     components returns rScore: null, never a silent 100. A null score
+//     must never be read by any caller as "fully safe" — it means "not
+//     enough data yet, not scored." Partial data (1 or 2 of 3 components
+//     present) still produces a real number, just flagged dataQuality:
+//     'PARTIAL' so a consumer can tell the difference from a 'FULL' read.
+// Bump RANGE_SCORE_V2_1_VERSION whenever this formula/weights change, same
+// discipline as RANGE_SCORE_V2_VERSION above, for the same reason.
+const RANGE_SCORE_V2_1_VERSION = 'v2.1-shadow'
+
+type V2_1Result = { rScore: number | null; rReasons: string[]; dataQuality: 'FULL' | 'PARTIAL' | 'UNKNOWN' }
+
+function rangeScoreV2_1(r: Row): V2_1Result {
+  const reasons: string[] = []
+  let componentsWithData = 0
+  let penalty = 0
+
+  // 1. OR containment — continuous distance from the nearest boundary
+  const haveOrData = r.or_status !== null && r.or_status !== undefined
+    && r.or_high !== null && r.or_high !== undefined
+    && r.or_low !== null && r.or_low !== undefined
+    && r.or_high > r.or_low
+  if (haveOrData) {
+    componentsWithData++
+    if (r.or_status === 'ABOVE' || r.or_status === 'BELOW') {
+      const mag = r.or_pct_outside ?? 0
+      penalty += clamp(mag / 1.5) * V2_OR_WEIGHT
+      reasons.push(`Price broke ${r.or_status === 'ABOVE' ? 'above' : 'below'} the opening range and hasn't reclaimed it`)
+    } else {
+      // INSIDE: normalize distance from the nearer boundary to the half-
+      // width (0 at a boundary, 1 at dead center). Risk fraction is the
+      // complement, so a stock hugging the edge still carries a graduated
+      // penalty instead of V1/V2's flat zero for every "inside" reading
+      // regardless of where inside it is.
+      const half = (r.or_high! - r.or_low!) / 2
+      const mid = (r.or_high! + r.or_low!) / 2
+      const normalizedDistFromBoundary = half > 0 ? clamp(1 - Math.abs(r.cmp - mid) / half) : 0
+      const riskFraction = 1 - normalizedDistFromBoundary
+      if (riskFraction > 0.02) {
+        penalty += riskFraction * V2_OR_WEIGHT
+        reasons.push('Price is sitting close to the opening-range boundary (inside it, but not centered)')
+      }
+      if (r.or_width_pct !== null && r.or_width_pct !== undefined) {
+        reasons.push(`Opening range formed ${fmt(r.or_width_pct, 2)}% wide today (recorded, not yet weighted into the score)`)
+      }
+    }
+  } else {
+    reasons.push('Opening-range data unavailable — containment component UNKNOWN')
+  }
+
+  // 2. OI skew — continuous magnitude, sign preserved but not auto-interpreted
+  const haveOiData = r.oi_skew_pct !== null && r.oi_skew_pct !== undefined
+  if (haveOiData) {
+    componentsWithData++
+    const mag = Math.abs(r.oi_skew_pct!)
+    // Graduated between ~10% (noise floor) and 80% (double V2's old hard
+    // gate) instead of a binary cliff at exactly 40%.
+    const fraction = clamp((mag - 10) / 70)
+    if (fraction > 0) {
+      penalty += fraction * V2_OI_WEIGHT
+      reasons.push(`${r.oi_skew_pct! > 0 ? 'Call' : 'Put'}-side OI building faster today (magnitude-scaled risk flag, not a directional call)`)
+    }
+  } else {
+    reasons.push('OI-skew data unavailable — OI component UNKNOWN')
+  }
+
+  // 3. Max-pain drift — continuous magnitude, same-direction only.
+  // Contrarian and unchanged are BOTH strictly neutral: no bonus, no
+  // penalty, per explicit review decision.
+  const haveMpData = r.max_pain_now !== null && r.max_pain_now !== undefined
+    && r.max_pain_open !== null && r.max_pain_open !== undefined
+    && r.spot_open !== null && r.spot_open !== undefined
+  if (haveMpData) {
+    componentsWithData++
+    if (r.max_pain_drift_confirms === true) {
+      const driftMag = Math.abs(r.max_pain_now! - r.max_pain_open!) / r.spot_open! * 100
+      const fraction = clamp(driftMag / 2) // 2% of spot drift = full weight
+      penalty += fraction * V2_MP_WEIGHT
+      reasons.push('Max pain is crawling with price — fresh positioning, not just OI decay (magnitude-scaled)')
+    } else if (r.max_pain_drift_confirms === false) {
+      reasons.push('Max pain drifted against price — recorded as neutral, no bonus (not yet validated as a mean-reversion signal)')
+    }
+    // max_pain_drift_confirms === null → max pain unchanged → neutral, no reason needed
+  } else {
+    reasons.push('Max-pain data unavailable — drift component UNKNOWN')
+  }
+
+  // Safeguard: zero usable components → UNKNOWN, never a silent clean 100.
+  if (componentsWithData === 0) {
+    return { rScore: null, rReasons: ['Insufficient data for all three Range Score V2.1 components'], dataQuality: 'UNKNOWN' }
+  }
+
+  let score = clamp(1 - penalty)
+
+  // DTE stays a separate modifier, identical to V1/V2.
+  if (r.days_to_expiry !== null && r.days_to_expiry !== undefined && r.days_to_expiry <= 1) {
+    score = Math.min(score, 0.6)
+    reasons.push(`Only ${r.days_to_expiry} day(s) to expiry — gamma is strike-concentrated, regime read is less stable`)
+  }
+
+  return { rScore: score, rReasons: reasons, dataQuality: componentsWithData === 3 ? 'FULL' : 'PARTIAL' }
+}
+
 type MarketStress = { level: 'ELEVATED' | 'WATCH' | 'NORMAL' | 'UNKNOWN'; label: string; guidance: string; cls: string; emoji: string }
 
 // Market Stress (Oct 12 2026) — the market-wide VIX-move signal, now kept
@@ -361,7 +521,8 @@ function scoreRow(r: Row): Scored {
   const score = Math.max(0, Math.min(100, Math.round(vScore * 45 + tScore * 20 + gScore * 35 + adj)))
   const { rScore, rReasons } = rangeScoreV1(r)
   const { rScore: rScoreV2, rReasons: rReasonsV2 } = rangeScoreV2(r)
-  return { ...r, score, vScore, tScore, gScore, rScore, rReasons, rScoreV2, rReasonsV2 }
+  const { rScore: rScoreV2_1, rReasons: rReasonsV2_1, dataQuality: rQualityV2_1 } = rangeScoreV2_1(r)
+  return { ...r, score, vScore, tScore, gScore, rScore, rReasons, rScoreV2, rReasonsV2, rScoreV2_1, rReasonsV2_1, rQualityV2_1 }
 }
 
 const INDEX_SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
@@ -555,9 +716,39 @@ export default function SellerScreenPage() {
       .map((s) => ({ symbol: s.symbol, delta: Math.round(s.rScoreV2 * 100) - Math.round(s.rScore * 100), v1: Math.round(s.rScore * 100), v2: Math.round(s.rScoreV2 * 100) }))
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
       .slice(0, 5)
+
+    // V2.1 stats (Oct 12 2026) — the direct check on whether continuous
+    // scoring actually relieved V2's ceiling-clustering problem, plus the
+    // UNKNOWN/PARTIAL data-quality breakdown the review's safeguards
+    // require surfacing (no genuinely-missing-data stock should be
+    // invisible inside an average as if it were a clean, scored 100).
+    const unknownV2_1 = scored.filter((s) => s.rQualityV2_1 === 'UNKNOWN')
+    const partialV2_1 = scored.filter((s) => s.rQualityV2_1 === 'PARTIAL')
+    const scoredV2_1 = scored.filter((s) => s.rScoreV2_1 !== null)
+    const avgV2_1 = scoredV2_1.length ? scoredV2_1.reduce((a, s) => a + (s.rScoreV2_1 as number) * 100, 0) / scoredV2_1.length : 0
+    const atCeilingV2_1 = scoredV2_1.filter((s) => Math.round((s.rScoreV2_1 as number) * 100) === 100).length
+    // Ranking-stability spot check: of the stocks V2 ties at its ceiling
+    // (100), how many does V2.1 actually manage to spread apart? This is
+    // the acceptance-test item "ceiling concentration materially reduced,"
+    // measured directly rather than inferred from the overall average.
+    const v2CeilingStocks = scored.filter((s) => Math.round(s.rScoreV2 * 100) === 100 && s.rScoreV2_1 !== null)
+    const v2CeilingSpread = v2CeilingStocks.length
+      ? Math.max(...v2CeilingStocks.map((s) => Math.round((s.rScoreV2_1 as number) * 100))) -
+        Math.min(...v2CeilingStocks.map((s) => Math.round((s.rScoreV2_1 as number) * 100)))
+      : 0
+    const v2CeilingStillAt100 = v2CeilingStocks.filter((s) => Math.round((s.rScoreV2_1 as number) * 100) === 100).length
+    const biggestMoversV2_1 = [...scoredV2_1]
+      .map((s) => ({ symbol: s.symbol, delta: Math.round((s.rScoreV2_1 as number) * 100) - Math.round(s.rScoreV2 * 100), v2: Math.round(s.rScoreV2 * 100), v2_1: Math.round((s.rScoreV2_1 as number) * 100) }))
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 5)
+
     return {
       n, avgV1, avgV2, bucketShifts, presetCounts, atCapV1, atCeilingV2, biggestMovers,
       hardExcludedCount: excluded.length, avgV2Excluded: avgV2ExcludedClean, avgV2NotExcluded,
+      avgV2_1, atCeilingV2_1, scoredV2_1Count: scoredV2_1.length,
+      unknownV2_1Count: unknownV2_1.length, partialV2_1Count: partialV2_1.length,
+      v2CeilingCount: v2CeilingStocks.length, v2CeilingSpread, v2CeilingStillAt100,
+      biggestMoversV2_1,
     }
   }, [scored])
 
@@ -775,6 +966,34 @@ export default function SellerScreenPage() {
             </details>
           )}
 
+          {v1v2Compare && (
+            <details className="mb-4 rounded-lg border border-gray-800 bg-[#0c0c16] p-4 text-xs text-gray-400">
+              <summary className="cursor-pointer text-gray-300 font-semibold">Range Score V2.1 — continuous scoring, shadow comparison ({v1v2Compare.n} stocks)</summary>
+              <div className="mt-3 space-y-3">
+                <p>
+                  V2.1 (shadow — same three components as V2, but continuous/graduated instead of binary thresholds) scores <b className="text-gray-200">{v1v2Compare.scoredV2_1Count}</b> of {v1v2Compare.n} stocks, averaging <b className="text-gray-200">{fmt(v1v2Compare.avgV2_1, 0)}</b> among those scored.
+                  {v1v2Compare.unknownV2_1Count > 0 && <> <b className="text-amber-300">{v1v2Compare.unknownV2_1Count}</b> stocks are UNKNOWN today (no usable data for any of the three components — excluded from that average, never silently scored as a clean 100).</>}
+                  {v1v2Compare.partialV2_1Count > 0 && <> <b className="text-gray-200">{v1v2Compare.partialV2_1Count}</b> are PARTIAL (only 1–2 of 3 components had data).</>}
+                </p>
+                <p>
+                  <b className="text-gray-200">{v1v2Compare.atCeilingV2_1}</b> of {v1v2Compare.scoredV2_1Count} scored stocks sit at V2.1's ceiling (100), versus <b className="text-gray-200">{v1v2Compare.atCeilingV2}</b> of {v1v2Compare.n} under V2 — the direct read on whether continuous scoring is actually relieving the ceiling-clustering problem the component audit flagged, not just adding decimal precision.
+                </p>
+                {v1v2Compare.v2CeilingCount > 0 && (
+                  <p>
+                    Of the <b className="text-gray-200">{v1v2Compare.v2CeilingCount}</b> stocks tied at exactly 100 under V2, V2.1 spreads them across a <b className="text-gray-200">{v1v2Compare.v2CeilingSpread}-point</b> range — <b className="text-gray-200">{v1v2Compare.v2CeilingStillAt100}</b> of them are still at 100 under V2.1 too (meaning even the continuous versions of all three components found literally nothing for that stock today, not that the formula failed to differentiate).
+                  </p>
+                )}
+                <div>
+                  <p className="text-gray-300 font-semibold mb-1">Biggest V2→V2.1 movers today (scored stocks only):</p>
+                  <p>{v1v2Compare.biggestMoversV2_1.map((m) => `${m.symbol} (${m.v2}→${m.v2_1}, ${m.delta > 0 ? '+' : ''}${m.delta})`).join(' · ') || '—'}</p>
+                </div>
+                <p className="text-gray-600">
+                  V2.1 is a conditionally-approved design, shadow-mode only — it does not drive any live filter, preset or capital-sizing decision, same as V2. Weights are unchanged from V2 (same relative importance between OR/OI/max-pain); only the shape of each penalty changed from a step function to a continuous one. Contrarian max-pain drift is scored strictly neutral (no bonus) per explicit review decision, pending historical validation. Formula version: {RANGE_SCORE_V2_1_VERSION}.
+                </p>
+              </div>
+            </details>
+          )}
+
           <div className="overflow-x-auto rounded-xl border border-gray-800">
             <table className="w-full text-sm">
               <thead className="bg-gray-900/60">
@@ -796,6 +1015,7 @@ export default function SellerScreenPage() {
                   <th className={th}>Gamma</th>
                   <th className={th} onClick={() => sortBy('rScore')} title="Range Score V1 (live — drives all filters/presets today). Combines VIX move (shared market-wide, so it can cap every stock on a high-VIX day), opening-range break, OI skew, max-pain drift and DTE — separate from the richness/decay/gamma score above. See Market Stress banner for the VIX read on its own.">Range V1{arrow('rScore')}</th>
                   {more && <th className={th} onClick={() => sortBy('rScoreV2')} title="Range Score V2 (shadow mode — not live, does not drive any filter yet). Stock-specific only: opening-range break, OI skew, max-pain drift and DTE. VIX is intentionally excluded here and shown instead as the separate Market Stress banner above.">Range V2 (shadow){arrow('rScoreV2')}</th>}
+                  {more && <th className={th} onClick={() => sortBy('rScoreV2_1')} title="Range Score V2.1 (shadow mode — not live). Same three V2 components, but continuous/graduated instead of binary thresholds, to relieve V2's ceiling-clustering. '—' means UNKNOWN: no usable data for any component today, never a silently-clean score.">Range V2.1 (shadow){arrow('rScoreV2_1')}</th>}
                   <th className={th + ' !text-left'} title="Strikes carrying the most gamma-weighted OI on each side — candidates to research, not a recommendation to sell there. ✍️writing means fresh OI is still being added today (actively defended); ⚠stale means it's unwinding. ⚠1SD means the strike sits inside this stock's own expected move, no real safety margin. ⚠WRONG SIDE means the wall landed on the wrong side of spot entirely (a 'put wall' above price, say) — treat as a data flag, not support/resistance.">Candidate strikes</th>
                   <th className={th} onClick={() => sortBy('pct_to_flip')}>To flip %{arrow('pct_to_flip')}</th>
                   <th className={th + ' !text-left'}>Flags</th>
@@ -833,6 +1053,18 @@ export default function SellerScreenPage() {
                     {more && (
                       <td className="px-3 py-2.5 text-right whitespace-nowrap" title={r.rReasonsV2.length ? r.rReasonsV2.join(' · ') : 'No stock-specific range-risk flags right now'}>
                         <span className={dot(r.rScoreV2)}>● </span>{Math.round(r.rScoreV2 * 100)}
+                      </td>
+                    )}
+                    {more && (
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap" title={r.rScoreV2_1 === null ? 'UNKNOWN — no usable data for any of the three V2.1 components today' : (r.rReasonsV2_1.length ? `[${r.rQualityV2_1}] ${r.rReasonsV2_1.join(' · ')}` : 'No range-risk flags right now')}>
+                        {r.rScoreV2_1 === null ? (
+                          <span className="text-gray-600">—</span>
+                        ) : (
+                          <>
+                            <span className={dot(r.rScoreV2_1)}>● </span>{Math.round(r.rScoreV2_1 * 100)}
+                            {r.rQualityV2_1 === 'PARTIAL' && <span className="text-amber-400 text-[10px] ml-1" title="Only 1–2 of 3 components had usable data">p</span>}
+                          </>
+                        )}
                       </td>
                     )}
                     <td className="px-3 py-2.5 text-left whitespace-nowrap text-[11px]">

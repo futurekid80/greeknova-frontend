@@ -73,6 +73,9 @@ function StrategyBuilderInner() {
   const urlRv1 = searchParams.get('rv1')
   const urlRv2 = searchParams.get('rv2')
   const urlRv2Ver = searchParams.get('rv2ver')
+  const urlRv21 = searchParams.get('rv21')
+  const urlRv21Q = searchParams.get('rv21q')
+  const urlRv21Ver = searchParams.get('rv21ver')
   const urlAsOf = searchParams.get('asOf')
   const urlVerdict = searchParams.get('verdict')
   const urlGamma = searchParams.get('gamma')
@@ -273,6 +276,15 @@ function StrategyBuilderInner() {
             {urlRv2 && (
               <span title={`Range Score V2 — shadow mode, stock-specific only (no VIX). Formula ${urlRv2Ver || 'unversioned'}, from data as of ${urlAsOf || 'an earlier snapshot'} — opening-range/OI-skew/max-pain inputs are intraday, so don't compare this number against one pulled at a different time of day without checking the formula version matches too.`}>
                 Range V2 (shadow{urlRv2Ver ? ` ${urlRv2Ver}` : ''}) <b className="text-gray-200">{urlRv2}/100</b>
+              </span>
+            )}
+            {urlRv21Q === 'UNKNOWN' ? (
+              <span title={`Range Score V2.1 — shadow mode, continuous scoring. Formula ${urlRv21Ver || 'unversioned'}. UNKNOWN: no usable data for any of the three components at screening time — never read this as a clean/safe score, it means not enough data, not scored.`}>
+                Range V2.1 (shadow{urlRv21Ver ? ` ${urlRv21Ver}` : ''}) <b className="text-gray-500">UNKNOWN</b>
+              </span>
+            ) : urlRv21 && (
+              <span title={`Range Score V2.1 — shadow mode, continuous scoring (same three components as V2, graduated instead of binary). Formula ${urlRv21Ver || 'unversioned'}, data quality ${urlRv21Q || 'unknown'}, from data as of ${urlAsOf || 'an earlier snapshot'} — don't compare against a number pulled at a different time without checking the formula version matches too.`}>
+                Range V2.1 (shadow{urlRv21Ver ? ` ${urlRv21Ver}` : ''}) <b className="text-gray-200">{urlRv21}/100</b>{urlRv21Q === 'PARTIAL' && <span className="text-amber-400 text-[10px] ml-1">partial data</span>}
               </span>
             )}
             {urlGamma && <span>Gamma <b className="text-gray-200">{urlGamma}</b></span>}

@@ -53,6 +53,18 @@ type Row = {
   pct_to_call_wall?: number | null
   pct_to_put_wall?: number | null
   strike_ladder?: StrikeRung[] | null
+  // Range Confidence raw inputs (Oct 12 2026) — see scoreRow() for how
+  // these combine into rScore. Raw, not pre-blended, so the weighting can
+  // be tuned here without a backend redeploy, same as vScore/tScore/gScore.
+  vix_change_pct?: number | null
+  or_status?: 'INSIDE' | 'ABOVE' | 'BELOW' | null
+  or_pct_outside?: number | null
+  oi_skew_pct?: number | null
+  ce_oi_chg_pct?: number | null
+  pe_oi_chg_pct?: number | null
+  max_pain_now?: number | null
+  max_pain_open?: number | null
+  max_pain_drift_confirms?: boolean | null
 }
 
 type StrikeRung = {
@@ -68,8 +80,8 @@ type StrikeRung = {
   put_oi_trend_pct?: number | null
 }
 
-type Scored = Row & { score: number; vScore: number; tScore: number; gScore: number }
-type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots' | 'term_ratio'
+type Scored = Row & { score: number; vScore: number; tScore: number; gScore: number; rScore: number; rReasons: string[] }
+type SortKey = 'symbol' | 'score' | 'days_to_expiry' | 'iv_rv_ratio' | 'atm_theta_pct' | 'atm_theta_per_lot' | 'atm_vega_per_lot' | 'pct_to_flip' | 'iv_pctile' | 'em_pct' | 'atm_vol_lots' | 'term_ratio' | 'rScore'
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
@@ -97,11 +109,12 @@ function strategyLink(r: Row) {
 }
 
 function exportCsv(list: (Scored & { verdict: Verdict })[]) {
-  const headers = ['Symbol', 'CMP', 'Verdict', 'Score', 'DTE', 'IV/RV', 'Decay %/day', 'IV Percentile', '1SD Move %', 'Gamma Regime', 'To Flip %', 'Put Wall (support)', 'Call Wall (resistance)']
+  const headers = ['Symbol', 'CMP', 'Verdict', 'Score', 'DTE', 'IV/RV', 'Decay %/day', 'IV Percentile', '1SD Move %', 'Gamma Regime', 'To Flip %', 'Put Wall (support)', 'Call Wall (resistance)', 'Range Score', 'Range Flags']
   const rows = list.map((r) => [
     r.symbol, r.cmp, r.verdict.label, r.score, r.days_to_expiry,
     r.iv_rv_basis ?? r.iv_rv_ratio ?? '', r.atm_theta_pct ?? '', r.iv_pctile ?? '', r.em_pct ?? '',
     r.regime ?? '', r.pct_to_flip ?? '', r.put_wall_strike ?? '', r.call_wall_strike ?? '',
+    Math.round(r.rScore * 100), r.rReasons.join('; '),
   ])
   const lines = [headers, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -113,6 +126,47 @@ function exportCsv(list: (Scored & { verdict: Verdict })[]) {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+// Range Confidence (Oct 12 2026): separate from vScore/tScore/gScore on
+// purpose -- those answer "is premium rich enough to sell," this answers
+// "is today's move going to hold a direction long enough to breach my
+// strikes," which is a different question a non-directional seller needs
+// answered regardless of how rich premium looks. Starts at full confidence
+// (1.0) and each real-world red flag subtracts from it, rather than
+// building up from zero -- a day with no data for a signal yet (early
+// morning, say) should read as "no reason for concern yet," not "unscored."
+function rangeScore(r: Row): { rScore: number; rReasons: string[] } {
+  const reasons: string[] = []
+  let score = 1.0
+
+  if (r.vix_change_pct !== null && r.vix_change_pct !== undefined) {
+    if (r.vix_change_pct >= 5) { score -= 0.35; reasons.push(`VIX up ${fmt(r.vix_change_pct, 1)}% today`) }
+    else if (r.vix_change_pct >= 3) { score -= 0.2; reasons.push(`VIX up ${fmt(r.vix_change_pct, 1)}% today`) }
+  }
+
+  if (r.or_status === 'ABOVE' || r.or_status === 'BELOW') {
+    const mag = r.or_pct_outside ?? 0
+    score -= clamp(mag / 1.5) * 0.3
+    reasons.push(`Price broke ${r.or_status === 'ABOVE' ? 'above' : 'below'} the opening range and hasn't reclaimed it`)
+  }
+
+  if (r.oi_skew_pct !== null && r.oi_skew_pct !== undefined && Math.abs(r.oi_skew_pct) >= 40) {
+    score -= 0.15
+    reasons.push(`${r.oi_skew_pct > 0 ? 'Call' : 'Put'} OI building much faster than the other side today`)
+  }
+
+  if (r.max_pain_drift_confirms) {
+    score -= 0.2
+    reasons.push('Max pain is crawling with price — fresh positioning, not just OI decay')
+  }
+
+  if (r.days_to_expiry !== null && r.days_to_expiry !== undefined && r.days_to_expiry <= 1) {
+    score = Math.min(score, 0.6)
+    reasons.push(`Only ${r.days_to_expiry} day(s) to expiry — gamma is strike-concentrated, regime read is less stable`)
+  }
+
+  return { rScore: clamp(score), rReasons: reasons }
 }
 
 function scoreRow(r: Row): Scored {
@@ -132,7 +186,16 @@ function scoreRow(r: Row): Scored {
   // Front premium: near-expiry IV rich versus next-month IV adds up to 8 points, a cheap front takes up to 8 away
   const adj = r.term_ratio ? Math.max(-1, Math.min(1, (r.term_ratio - 1) / 0.3)) * 8 : 0
   const score = Math.max(0, Math.min(100, Math.round(vScore * 45 + tScore * 20 + gScore * 35 + adj)))
-  return { ...r, score, vScore, tScore, gScore }
+  const { rScore, rReasons } = rangeScore(r)
+  return { ...r, score, vScore, tScore, gScore, rScore, rReasons }
+}
+
+const INDEX_SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
+
+function rVerdict(rScore: number): { label: string; action: string; cls: string; emoji: string } {
+  if (rScore >= 0.7) return { label: 'Range holding', action: 'Normal sizing for non-directional positions', cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900/50', emoji: '🟢' }
+  if (rScore >= 0.4) return { label: 'Range wobbling', action: 'Reduce size on fresh non-directional entries; tighten stops on existing ones', cls: 'bg-amber-950/40 text-amber-300 border-amber-900/50', emoji: '🟡' }
+  return { label: 'Range at risk', action: 'Avoid fresh non-directional entries; consider trimming existing ones toward breakeven', cls: 'bg-red-950/40 text-red-300 border-red-900/50', emoji: '🔴' }
 }
 
 type Verdict = {
@@ -289,8 +352,26 @@ export default function SellerScreenPage() {
       {error && <div className="mb-4 bg-red-950/30 border border-red-800/40 rounded-xl px-4 py-3 text-sm text-red-400">{error}</div>}
       {loading && <p className="text-gray-500 text-sm">Loading…</p>}
 
-      {!loading && !error && rows.length > 0 && (
+      {!loading && !error && rows.length > 0 && (() => {
+        const indexRows = scored.filter((r) => INDEX_SYMBOLS.includes(r.symbol))
+        const worst = indexRows.length ? indexRows.reduce((a, b) => (b.rScore < a.rScore ? b : a)) : null
+        const v = worst ? rVerdict(worst.rScore) : null
+        return (
         <>
+          {worst && v && (
+            <div className={`rounded-xl border px-5 py-4 mb-5 ${v.cls}`}>
+              <div className="flex items-start justify-between flex-wrap gap-2">
+                <div>
+                  <p className="font-bold text-base">{v.emoji} {v.label} — {worst.symbol} ({fmt(worst.rScore * 100, 0)}/100)</p>
+                  <p className="text-sm mt-1 opacity-90">{v.action}</p>
+                  {worst.rReasons.length > 0 && (
+                    <p className="text-xs mt-2 opacity-75">{worst.rReasons.join(' · ')}</p>
+                  )}
+                </div>
+                <p className="text-[11px] opacity-60 whitespace-nowrap">Range Confidence · not a recommendation, a data read</p>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2 flex-wrap mb-3">
             <span className="text-[11px] text-gray-500 mr-1">Show for:</span>
             <button className={chip(audience === 'ALL')} onClick={() => setAudience('ALL')}>Everyone</button>
@@ -345,6 +426,7 @@ export default function SellerScreenPage() {
                   <th className={th}>Put beyond 1SD</th>
                   {more && <th className={th} onClick={() => sortBy('atm_vol_lots')}>ATM vol (lots){arrow('atm_vol_lots')}</th>}
                   <th className={th}>Gamma</th>
+                  <th className={th} onClick={() => sortBy('rScore')} title="Is today's move likely to hold a direction long enough to breach your strikes? Combines VIX move, opening-range break, OI skew, max-pain drift and DTE — separate from the richness/decay/gamma score above.">Range{arrow('rScore')}</th>
                   <th className={th + ' !text-left'} title="Strikes carrying the most gamma-weighted OI on each side — where writers are concentrated. ✍️writing means fresh OI is still being added there today (the wall is actively defended); ⚠stale means it's unwinding and may not hold.">Strikes to write</th>
                   <th className={th} onClick={() => sortBy('pct_to_flip')}>To flip %{arrow('pct_to_flip')}</th>
                   <th className={th + ' !text-left'}>Flags</th>
@@ -376,6 +458,9 @@ export default function SellerScreenPage() {
                     <td className="px-3 py-2.5 text-right text-gray-300 whitespace-nowrap">{r.put_1sd_strike ? <>{fmt(r.put_1sd_strike, 0)}<span className="text-gray-500 text-[10px] ml-1">{fmt(r.put_1sd_prob_itm, 0)}% · ₹{fmt(r.put_1sd_per_lot, 0)}</span></> : '—'}</td>
                     {more && <td className="px-3 py-2.5 text-right text-gray-400">{r.atm_vol_lots !== null && r.atm_vol_lots !== undefined ? fmt(r.atm_vol_lots, 0) : '—'}</td>}
                     <td className="px-3 py-2.5 text-right whitespace-nowrap"><span className={dot(r.gScore)}>● </span>{r.regime === 'LONG_GAMMA' ? 'Long' : r.regime === 'SHORT_GAMMA' ? 'Short' : '—'}</td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap" title={r.rReasons.length ? r.rReasons.join(' · ') : 'No range-risk flags right now'}>
+                      <span className={dot(r.rScore)}>● </span>{Math.round(r.rScore * 100)}
+                    </td>
                     <td className="px-3 py-2.5 text-left whitespace-nowrap text-[11px]">
                       {r.put_wall_strike ? (() => {
                         const t = wallTrend(r, r.put_wall_strike, 'PE')
@@ -460,7 +545,8 @@ export default function SellerScreenPage() {
 
           <p className="mt-4 text-[11px] text-gray-600">Informational and educational only. Not SEBI registered. Not investment advice.</p>
         </>
-      )}
+        )
+      })()}
       {!loading && !error && rows.length === 0 && <p className="text-gray-500 text-sm">No data available yet.</p>}
     </div>
     </div>

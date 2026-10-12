@@ -72,6 +72,8 @@ function StrategyBuilderInner() {
   // chain fetch or payoff math.
   const urlRv1 = searchParams.get('rv1')
   const urlRv2 = searchParams.get('rv2')
+  const urlRv2Ver = searchParams.get('rv2ver')
+  const urlAsOf = searchParams.get('asOf')
   const urlVerdict = searchParams.get('verdict')
   const urlGamma = searchParams.get('gamma')
   const urlStress = searchParams.get('stress')
@@ -268,7 +270,11 @@ function StrategyBuilderInner() {
             <span className="text-gray-500 uppercase tracking-wide">Screening context:</span>
             {urlVerdict && <span>Verdict <b className="text-gray-200">{urlVerdict}</b></span>}
             {urlRv1 && <span title="Range Score V1 — live, drives Premium Screen filters">Range V1 <b className="text-gray-200">{urlRv1}/100</b></span>}
-            {urlRv2 && <span title="Range Score V2 — shadow mode, stock-specific only (no VIX)">Range V2 (shadow) <b className="text-gray-200">{urlRv2}/100</b></span>}
+            {urlRv2 && (
+              <span title={`Range Score V2 — shadow mode, stock-specific only (no VIX). Formula ${urlRv2Ver || 'unversioned'}, from data as of ${urlAsOf || 'an earlier snapshot'} — opening-range/OI-skew/max-pain inputs are intraday, so don't compare this number against one pulled at a different time of day without checking the formula version matches too.`}>
+                Range V2 (shadow{urlRv2Ver ? ` ${urlRv2Ver}` : ''}) <b className="text-gray-200">{urlRv2}/100</b>
+              </span>
+            )}
             {urlGamma && <span>Gamma <b className="text-gray-200">{urlGamma}</b></span>}
             {urlStress && urlStress !== 'NORMAL' && urlStress !== 'UNKNOWN' && (
               <span className={urlStress === 'ELEVATED' ? 'text-red-400 font-semibold' : 'text-amber-400 font-semibold'}>
@@ -276,7 +282,7 @@ function StrategyBuilderInner() {
               </span>
             )}
             {urlWallFlags && <span className="text-red-400 font-semibold">{urlWallFlags}</span>}
-            <span className="text-gray-600">from the Premium Screen, read-only here</span>
+            <span className="text-gray-600">from the Premium Screen, read-only here{urlAsOf ? ` · data as of ${urlAsOf} IST` : ''}</span>
           </div>
         )}
 

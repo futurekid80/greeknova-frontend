@@ -136,12 +136,14 @@ function invertedWall(wallStrike: number | null | undefined, cmp: number, side: 
 // review ask) so it doesn't disappear the moment a candidate is picked —
 // Range Score V1/V2, market stress level, verdict and gamma regime, plus
 // wall-quality flags, all read-only/informational on the other end.
-function strategyLink(r: Scored & { verdict: Verdict }, stress: MarketStress) {
+function strategyLink(r: Scored & { verdict: Verdict }, stress: MarketStress, asOf: string) {
   const params = new URLSearchParams({ symbol: r.symbol })
   if (r.call_wall_strike) params.set('sellCE', String(r.call_wall_strike))
   if (r.put_wall_strike) params.set('sellPE', String(r.put_wall_strike))
   params.set('rv1', String(Math.round(r.rScore * 100)))
   params.set('rv2', String(Math.round(r.rScoreV2 * 100)))
+  params.set('rv2ver', RANGE_SCORE_V2_VERSION)
+  if (asOf) params.set('asOf', asOf)
   params.set('verdict', r.verdict.label)
   if (r.regime) params.set('gamma', r.regime === 'LONG_GAMMA' ? 'Long' : 'Short')
   params.set('stress', stress.level)
@@ -156,7 +158,7 @@ function strategyLink(r: Scored & { verdict: Verdict }, stress: MarketStress) {
   return `/strategy-builder?${params.toString()}`
 }
 
-function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, filterSummary: string, stress: MarketStress) {
+function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, filterSummary: string, stress: MarketStress, asOf: string) {
   const headers = [
     'Symbol', 'CMP', 'Verdict', 'Score', 'DTE', 'IV/RV', 'Decay %/day', 'IV Percentile', '1SD Move %',
     'Gamma Regime', 'To Flip %',
@@ -164,7 +166,7 @@ function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, f
     'Call Beyond 1SD Strike', 'Call Beyond 1SD Prob ITM %', 'Call Beyond 1SD Premium/Lot',
     'Put Beyond 1SD Strike', 'Put Beyond 1SD Prob ITM %', 'Put Beyond 1SD Premium/Lot',
     'Range Score V1 (live)', 'Range V1 Flags',
-    'Range Score V2 (shadow, stock-specific only)', 'Range V2 Flags',
+    `Range Score V2 (shadow ${RANGE_SCORE_V2_VERSION}, stock-specific only)`, 'Range V2 Flags',
     'Market Stress (shared, all rows)',
   ]
   const rows = list.map((r) => {
@@ -192,7 +194,7 @@ function exportCsv(list: (Scored & { verdict: Verdict })[], totalRows: number, f
   // whatever filters happen to be active, with no record of it in the file
   // itself, reads like a data gap later -- "218 vs 168 instruments, why?"
   // is unanswerable from the CSV alone otherwise.
-  const coverageLine = [`# Exported ${list.length} of ${totalRows} total instruments scanned. Active filters: ${filterSummary || 'none'}. Range Score V1 still drives all live filters/presets; V2 is shadow-mode only, for comparison.`]
+  const coverageLine = [`# Exported ${list.length} of ${totalRows} total instruments scanned, data as of ${asOf || 'unknown time'} IST. Active filters: ${filterSummary || 'none'}. Range Score V1 still drives all live filters/presets; V2 (${RANGE_SCORE_V2_VERSION}) is shadow-mode only, for comparison — treat any saved V2 numbers as tied to formula version ${RANGE_SCORE_V2_VERSION} and this timestamp, since opening-range/OI-skew/max-pain-drift inputs are intraday and the weights may be recalibrated later.`]
   const lines = [coverageLine, headers, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -267,6 +269,11 @@ function rangeScoreV1(r: Row): { rScore: number; rReasons: string[] } {
 // expiry cap is kept as-is: it is a stock-specific regime fact (this
 // stock's own gamma is strike-concentrated right now), not a market-wide
 // one, so it stays in both versions.
+// Bump this whenever V2's weights/components change, so a CSV or Strategy
+// Builder link exported under one formula can never be mistaken for another
+// later on (Oct 12 2026 external-review ask — calibration history must stay
+// distinguishable from the formula that produced it).
+const RANGE_SCORE_V2_VERSION = 'v2.0-shadow'
 const V1_OR_WEIGHT = 0.30, V1_OI_WEIGHT = 0.15, V1_MP_WEIGHT = 0.20
 const V1_NON_VIX_BUDGET = V1_OR_WEIGHT + V1_OI_WEIGHT + V1_MP_WEIGHT // 0.65
 const V2_OR_WEIGHT = V1_OR_WEIGHT / V1_NON_VIX_BUDGET // ≈0.4615
@@ -524,11 +531,34 @@ export default function SellerScreenPage() {
       v2: scored.filter((s) => s.rScoreV2 * 100 >= p.minRangeScore).length,
     }))
     const atCapV1 = scored.filter((s) => Math.round(s.rScore * 100) === 65).length
+    // V2's own ceiling-clustering check (Oct 12 2026 external-review ask):
+    // a stock with none of the three stock-specific flags today sits at the
+    // V2 max (100) by construction -- worth surfacing on its own, the same
+    // way the V1 65%-cap was, since a cluster at the top can limit how well
+    // Conservative-style top-percentile thresholds actually differentiate.
+    const atCeilingV2 = scored.filter((s) => Math.round(s.rScoreV2 * 100) === 100).length
+    // Hard-exclusion independence check: Event risk / thin liquidity / wrong-
+    // side walls are separate filter predicates in `shown` (see hideThin,
+    // noResults, hideWeakWalls below) that never read rScore or rScoreV2 --
+    // their average V2 should land close to the non-excluded average if that
+    // independence holds in practice, not just in the code path.
+    const isHardExcluded = (s: Scored) => {
+      const putInverted = invertedWall(s.put_wall_strike, s.cmp, 'PE')
+      const callInverted = invertedWall(s.call_wall_strike, s.cmp, 'CE')
+      return !!(s.result_before_expiry || s.liq_thin || putInverted || callInverted)
+    }
+    const excluded = scored.filter(isHardExcluded)
+    const notExcluded = scored.filter((s) => !isHardExcluded(s))
+    const avgV2NotExcluded = notExcluded.length ? notExcluded.reduce((a, s) => a + s.rScoreV2 * 100, 0) / notExcluded.length : 0
+    const avgV2ExcludedClean = excluded.length ? excluded.reduce((a, s) => a + s.rScoreV2 * 100, 0) / excluded.length : 0
     const biggestMovers = [...scored]
       .map((s) => ({ symbol: s.symbol, delta: Math.round(s.rScoreV2 * 100) - Math.round(s.rScore * 100), v1: Math.round(s.rScore * 100), v2: Math.round(s.rScoreV2 * 100) }))
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
       .slice(0, 5)
-    return { n, avgV1, avgV2, bucketShifts, presetCounts, atCapV1, biggestMovers }
+    return {
+      n, avgV1, avgV2, bucketShifts, presetCounts, atCapV1, atCeilingV2, biggestMovers,
+      hardExcludedCount: excluded.length, avgV2Excluded: avgV2ExcludedClean, avgV2NotExcluded,
+    }
   }, [scored])
 
   const shown = useMemo(() => {
@@ -613,7 +643,7 @@ export default function SellerScreenPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => exportCsv(shown, rows.length, filterSummary, stress)} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Export CSV</button>
+          <button onClick={() => exportCsv(shown, rows.length, filterSummary, stress, asOf)} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Export CSV</button>
           <button onClick={load} className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">Refresh</button>
         </div>
       </div>
@@ -719,6 +749,12 @@ export default function SellerScreenPage() {
                   {v1v2Compare.atCapV1 > 0 && <> {v1v2Compare.atCapV1} of {v1v2Compare.n} stocks sit at exactly 65 under V1 today (the shared-VIX ceiling); V2 spreads those out by each stock's own signals instead.</>}
                 </p>
                 <p><b className="text-gray-200">{v1v2Compare.bucketShifts}</b> of {v1v2Compare.n} stocks would land in a different Range tier (Holding / Wobbling / At risk) under V2 vs V1.</p>
+                <p>
+                  <b className="text-gray-200">{v1v2Compare.atCeilingV2}</b> of {v1v2Compare.n} stocks sit at V2's own ceiling (100) today — none of its three flags (opening-range break, OI skew, max-pain drift) fired for them, so V2 can't yet tell those stocks apart from each other. A top-percentile threshold (e.g. "top 15%") will be comparing mostly-tied scores until the formula or its components are revisited.
+                </p>
+                <p>
+                  Hard exclusions (Event risk, thin liquidity, inverted walls — {v1v2Compare.hardExcludedCount} of {v1v2Compare.n} stocks today) are a separate filter step that never reads Range Score: excluded stocks average <b className="text-gray-200">{fmt(v1v2Compare.avgV2Excluded, 0)}</b> under V2, non-excluded stocks average <b className="text-gray-200">{fmt(v1v2Compare.avgV2NotExcluded, 0)}</b> — close to each other, consistent with the two being independent rather than one driving the other.
+                </p>
                 <div>
                   <p className="text-gray-300 font-semibold mb-1">Candidate count if a preset's Range threshold were applied to each version (hypothetical — live filter is still V1):</p>
                   <table className="text-[11px]">
@@ -847,7 +883,7 @@ export default function SellerScreenPage() {
                       ))}
                     </td>
                     <td className="px-3 py-2.5 text-left whitespace-nowrap">
-                      <Link href={strategyLink(r, stress)} className="px-2 py-1 rounded-md text-[11px] font-semibold border border-cyan-900/60 text-cyan-400 hover:bg-cyan-950/40">
+                      <Link href={strategyLink(r, stress, asOf)} className="px-2 py-1 rounded-md text-[11px] font-semibold border border-cyan-900/60 text-cyan-400 hover:bg-cyan-950/40">
                         🛠️ Build →
                       </Link>
                     </td>

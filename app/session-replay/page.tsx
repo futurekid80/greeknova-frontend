@@ -6,6 +6,7 @@ import {
   ReferenceLine, ResponsiveContainer, Legend, Cell,
 } from 'recharts'
 import { chartColors } from '@/lib/chartColors'
+import Navbar from '@/components/Navbar'
 
 const API = 'https://api.greeknova.com'
 const SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
@@ -117,7 +118,9 @@ export default function SessionReplayPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-black text-white px-4 py-6 md:px-8">
+    <div className="min-h-screen bg-black text-white">
+      <Navbar active="/session-replay" />
+      <div className="px-4 py-6 md:px-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black flex items-center gap-2">
@@ -246,6 +249,7 @@ export default function SessionReplayPage() {
           </p>
         </>
       )}
+      </div>
     </div>
   )
 }

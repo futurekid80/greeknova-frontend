@@ -87,6 +87,7 @@ const NAV_GROUPS = [
       { href: '/seller-screen', label: '🧭 Premium Screen' },
       { href: '/straddle-chart', label: '🍲 Straddle Chart' },
       { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' },
+      { href: '/session-replay', label: '⏮️ Session Replay' },
       { href: '/theta', label: 'Θ Theta Decay' },
       { href: '/vega', label: 'ν Vega Exposure' },
       { href: '/iv',          label: 'IV Analysis' },

@@ -74,22 +74,33 @@ export default function SessionReplayPage() {
   const [date, setDate] = useState(todayISO())
   const [data, setData] = useState<ReplayData | null>(null)
   const [loading, setLoading] = useState(true)
+  const isToday = date === todayISO()
 
-  const load = useCallback(async (sym: string, d: string) => {
-    setLoading(true)
+  // Oct 13 2026 (Manish): "can it work in live market?" -- yes, the
+  // underlying gex_regime_log is already written every ~1-3min during
+  // market hours (same source Gamma Squeeze reads), this page just wasn't
+  // polling it. When viewing today, refresh every 60s so the replay fills
+  // in live as the session happens, same as gex-chart/gamma-squeeze do.
+  // Viewing a past date never polls -- that data is final, no point
+  // re-fetching it every minute.
+  const load = useCallback(async (sym: string, d: string, isPoll = false) => {
+    if (!isPoll) setLoading(true)
     try {
       const res = await fetch(`${API}/session-replay/${sym}?date=${d}&t=${Date.now()}`, { cache: 'no-store' })
       const json = await res.json()
       setData(json)
     } catch (e) {
-      setData(null)
+      if (!isPoll) setData(null)
     } finally {
-      setLoading(false)
+      if (!isPoll) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     load(symbol, date)
+    if (date !== todayISO()) return
+    const id = setInterval(() => load(symbol, date, true), 60000)
+    return () => clearInterval(id)
   }, [symbol, date, load])
 
   const points = data?.points ?? []
@@ -109,9 +120,16 @@ export default function SessionReplayPage() {
     <div className="min-h-screen bg-black text-white px-4 py-6 md:px-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black flex items-center gap-2">⏮️ Session Replay</h1>
+          <h1 className="text-2xl font-black flex items-center gap-2">
+            ⏮️ Session Replay
+            {isToday && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2.5 py-1 ml-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE — updates every 60s
+              </span>
+            )}
+          </h1>
           <p className="text-sm text-gray-400 mt-1">
-            How the session actually unfolded — spot price against Net GEX/DEX over the day, with hourly alert conviction. A post-mortem view, not a live snapshot.
+            How the session is unfolding — spot price against Net GEX/DEX over the day, with hourly alert conviction. Today fills in live as the market moves; pick a past date for a post-mortem.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -149,14 +167,14 @@ export default function SessionReplayPage() {
       {!loading && data && summary && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-            <StatCard label="OPEN → CLOSE" value={`${summary.open.toLocaleString()} → ${summary.close.toLocaleString()}`} />
+            <StatCard label={isToday ? 'OPEN → LAST' : 'OPEN → CLOSE'} value={`${summary.open.toLocaleString()} → ${summary.close.toLocaleString()}`} />
             <StatCard
-              label="DAY MOVE"
+              label={isToday ? 'MOVE SO FAR' : 'DAY MOVE'}
               value={`${summary.day_move >= 0 ? '+' : ''}${summary.day_move.toLocaleString()} (${summary.day_move_pct! >= 0 ? '+' : ''}${summary.day_move_pct}%)`}
               accent={summary.day_move >= 0 ? 'text-emerald-400' : 'text-red-400'}
             />
             <StatCard
-              label="REGIME (CLOSE)"
+              label={isToday ? 'REGIME (NOW)' : 'REGIME (CLOSE)'}
               value={summary.regime_close === 'SHORT_GAMMA' ? 'SHORT GAMMA' : summary.regime_close === 'LONG_GAMMA' ? 'LONG GAMMA' : '—'}
               accent={summary.regime_close === 'SHORT_GAMMA' ? 'text-red-400' : 'text-emerald-400'}
             />

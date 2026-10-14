@@ -166,6 +166,27 @@ export default function ConnectKitePage() {
             Kite logins expire every morning, so repeat the login once each trading day. GreekNova is not affiliated with Zerodha.
           </p>
         </div>
+
+        <div className={box}>
+          <h2 className="text-white font-semibold mb-3">Seeing an error on Zerodha&apos;s page?</h2>
+          <div className="text-gray-300 text-sm space-y-3">
+            <div>
+              <p className="font-medium text-gray-200">&quot;The user is not enabled for the app&quot;</p>
+              <p className="text-gray-400 mt-1">
+                A Kite Connect app only works with the <b>same Zerodha account</b> that created it — this
+                is a Zerodha rule, not a GreekNova one. This almost always means you&apos;re logged into
+                Zerodha (in this browser) with a different account than the one you used on{' '}
+                <span className="text-blue-400">developers.kite.trade</span> to create the app. Log out of
+                Zerodha completely, log back in with that same account, then try the Kite login again.
+              </p>
+              <p className="text-gray-400 mt-1">
+                If you&apos;re sure it&apos;s the right account, also check that your Kite Connect
+                subscription (₹500/month, paid separately to Zerodha) is still active — an expired
+                subscription shows the same error.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     </div>

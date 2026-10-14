@@ -1,7 +1,8 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useState, useCallback } from 'react'
-import { RefreshCw, Plus, X } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { RefreshCw, Plus, X, Save, Trash2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 const API = 'https://api.greeknova.com'
 
@@ -82,25 +83,110 @@ function toIST(ts: string | null) {
   } catch { return '—' }
 }
 
+interface SavedScan {
+  id: string
+  name: string
+  conditions: Condition[]
+  last_run_at: string | null
+}
+
 export default function CustomScanner() {
   const [conditions, setConditions] = useState<Condition[]>([defaultCondition(), defaultCondition()])
   const [result, setResult] = useState<ScanResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [hasRun, setHasRun] = useState(false)
 
+  const [savedScans, setSavedScans] = useState<SavedScan[]>([])
+  const [selectedScanId, setSelectedScanId] = useState<string>('')
+  const [savingName, setSavingName] = useState<string | null>(null)
+  const [saveBusy, setSaveBusy] = useState(false)
+
+  const loadSavedScans = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('saved_scans')
+      .select('id, name, conditions, last_run_at')
+      .order('created_at', { ascending: false })
+    if (!error && data) setSavedScans(data as SavedScan[])
+  }, [])
+
+  useEffect(() => { loadSavedScans() }, [loadSavedScans])
+
+  const applyScan = (scan: SavedScan) => {
+    setConditions(scan.conditions)
+    setSelectedScanId(scan.id)
+  }
+
+  const handleSelectScan = (id: string) => {
+    setSelectedScanId(id)
+    if (!id) return
+    const scan = savedScans.find(s => s.id === id)
+    if (scan) applyScan(scan)
+  }
+
+  const saveCurrentScan = async () => {
+    const name = (savingName || '').trim()
+    if (!name) return
+    setSaveBusy(true)
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData?.user?.id
+    if (!userId) { setSaveBusy(false); return }
+    const { data, error } = await supabase
+      .from('saved_scans')
+      .insert({ user_id: userId, name, conditions })
+      .select('id, name, conditions, last_run_at')
+      .single()
+    if (!error && data) {
+      setSavedScans(cs => [data as SavedScan, ...cs])
+      setSelectedScanId((data as SavedScan).id)
+    }
+    setSavingName(null)
+    setSaveBusy(false)
+  }
+
+  const deleteSelectedScan = async () => {
+    if (!selectedScanId) return
+    const { error } = await supabase.from('saved_scans').delete().eq('id', selectedScanId)
+    if (!error) {
+      setSavedScans(cs => cs.filter(s => s.id !== selectedScanId))
+      setSelectedScanId('')
+    }
+  }
+
   const updateCondition = (i: number, patch: Partial<Condition>) => {
     setConditions(cs => cs.map((c, idx) => idx === i ? { ...c, ...patch } : c))
+    setSelectedScanId('')
   }
 
   const addCondition = () => {
     if (conditions.length >= 3) return
     setConditions(cs => [...cs, defaultCondition('AND')])
+    setSelectedScanId('')
   }
 
   const removeCondition = (i: number) => {
     if (conditions.length <= 1) return
     setConditions(cs => cs.filter((_, idx) => idx !== i))
+    setSelectedScanId('')
   }
+
+  // Oct 14 2026: remembers the last condition set in this browser so reopening
+  // the scanner later the same day (or any day) doesn't start back at the
+  // ATM/Unwinding default -- separate from named saved scans below, which are
+  // explicit combinations the user wants to recall by name across devices.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('gn_scanner_last_conditions')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) setConditions(parsed)
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    try { localStorage.setItem('gn_scanner_last_conditions', JSON.stringify(conditions)) } catch {}
+  }, [conditions])
 
   const runScan = useCallback(async () => {
     setLoading(true)
@@ -113,12 +199,15 @@ export default function CustomScanner() {
       })
       const json = await res.json()
       setResult(json)
+      if (selectedScanId) {
+        supabase.from('saved_scans').update({ last_run_at: new Date().toISOString() }).eq('id', selectedScanId).then(() => {})
+      }
     } catch (e) {
       console.error(e)
       setResult({ date: null, ts_new: null, total: 0, matches: [], error: 'Request failed' })
     }
     setLoading(false)
-  }, [conditions])
+  }, [conditions, selectedScanId])
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -131,6 +220,52 @@ export default function CustomScanner() {
           <p className="text-gray-500 text-sm">
             Build your own OI condition and scan the whole F&amp;O universe for symbols matching it right now · 5-min snapshot comparison
           </p>
+        </div>
+
+        {/* Saved scans */}
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <select
+            value={selectedScanId}
+            onChange={e => handleSelectScan(e.target.value)}
+            className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500 min-w-[220px]"
+          >
+            <option value="">Saved scans…</option>
+            {savedScans.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+
+          {selectedScanId && (
+            <button onClick={deleteSelectedScan}
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-red-400 border border-gray-700 rounded-lg px-3 py-2 transition-all">
+              <Trash2 size={13} /> Delete
+            </button>
+          )}
+
+          {savingName === null ? (
+            <button onClick={() => setSavingName('')}
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-2 transition-all">
+              <Save size={13} /> Save this combination
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={savingName}
+                onChange={e => setSavingName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveCurrentScan()}
+                placeholder="Name this scan…"
+                className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500 w-44"
+              />
+              <button onClick={saveCurrentScan} disabled={saveBusy || !savingName.trim()}
+                className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-40 px-2">
+                {saveBusy ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setSavingName(null)} className="text-xs text-gray-600 hover:text-gray-400 px-1">
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Condition builder */}

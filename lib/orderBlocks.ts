@@ -175,7 +175,11 @@ class OrderBlockPaneRenderer {
   }
 
   draw(target: any) {
-    target.useMediaCoordinateSpace(({ context: ctx }: any) => {
+    window.__obDrawCalls = (window.__obDrawCalls || 0) + 1
+    target.useMediaCoordinateSpace(({ context: ctx, mediaSize, bitmapSize }: any) => {
+      window.__obDrawMediaCalls = (window.__obDrawMediaCalls || 0) + 1
+      window.__obLastMediaSize = mediaSize
+      window.__obLastBitmapSize = bitmapSize
       // TEMP sanity check: an unconditional, impossible-to-miss shape to
       // confirm this primitive's canvas layer is actually visible at all,
       // independent of any coordinate math.

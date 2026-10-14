@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [prefs, setPrefs] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [customizing, setCustomizing] = useState(false)
+  const [showAll, setShowAll] = useState(false)
   const [saveError, setSaveError] = useState('')
 
   const loadPrefs = useCallback(async () => {
@@ -79,7 +80,13 @@ export default function DashboardPage() {
   }
 
   const destWidgets = widgetsByDestination(activeDest)
-  const visibleWidgets = customizing ? destWidgets : destWidgets.filter(w => isEnabled(w.key))
+  const enabledWidgets = destWidgets.filter(w => isEnabled(w.key))
+  // Oct 14 2026: "See All" is a read-only browse of every page in this
+  // destination, on by default or not -- not an editing mode, so (unlike
+  // Customize) it's available on mobile too. Lets someone reach a page
+  // that isn't in their curated set without going into settings they may
+  // not even have the controls for on a small screen.
+  const visibleWidgets = customizing ? destWidgets : (showAll ? destWidgets : enabledWidgets)
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -90,13 +97,23 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-black text-white tracking-tight">Dashboard</h1>
             <p className="text-gray-500 text-sm mt-1">Everything GreekNova has, organized into four places. Pick what you want to see.</p>
           </div>
-          <button
-            onClick={() => setCustomizing(c => !c)}
-            className="hidden md:flex items-center gap-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition"
-          >
-            {customizing ? <Check size={16} /> : <Settings size={16} />}
-            {customizing ? 'Done' : 'Customize'}
-          </button>
+          <div className="flex items-center gap-2">
+            {!customizing && enabledWidgets.length < destWidgets.length && (
+              <button
+                onClick={() => setShowAll(s => !s)}
+                className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition"
+              >
+                {showAll ? 'Show less' : `See all (${destWidgets.length})`}
+              </button>
+            )}
+            <button
+              onClick={() => { setCustomizing(c => !c); setShowAll(false) }}
+              className="hidden md:flex items-center gap-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              {customizing ? <Check size={16} /> : <Settings size={16} />}
+              {customizing ? 'Done' : 'Customize'}
+            </button>
+          </div>
         </div>
 
         {saveError && <p className="text-red-400 text-sm mb-4">{saveError}</p>}
@@ -105,7 +122,7 @@ export default function DashboardPage() {
           {DESTINATIONS.map(d => (
             <button
               key={d.id}
-              onClick={() => setActiveDest(d.id)}
+              onClick={() => { setActiveDest(d.id); setShowAll(false) }}
               className={`shrink-0 px-4 py-2 rounded-lg text-sm font-semibold transition border ${
                 activeDest === d.id
                   ? 'bg-blue-600 border-blue-500 text-white'
@@ -125,7 +142,7 @@ export default function DashboardPage() {
 
         {visibleWidgets.length === 0 && !customizing && (
           <div className="text-center py-16 text-gray-500 text-sm">
-            Nothing enabled here yet. Tap <span className="text-gray-300">Customize</span> above to add some.
+            Nothing enabled here yet. Tap <span className="text-gray-300">See all</span> to browse everything, or <span className="text-gray-300">Customize</span> to pick what shows by default.
           </div>
         )}
 
@@ -157,7 +174,9 @@ export default function DashboardPage() {
               <Link
                 key={w.key}
                 href={w.href}
-                className="block p-4 rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 transition"
+                className={`block p-4 rounded-xl bg-gray-900 border transition ${
+                  enabled ? 'border-gray-800 hover:border-gray-700' : 'border-gray-800/50 opacity-50 hover:opacity-80'
+                }`}
               >
                 <div className="text-white text-sm font-semibold">{w.label}</div>
                 <div className="text-gray-500 text-xs mt-1">{w.description}</div>

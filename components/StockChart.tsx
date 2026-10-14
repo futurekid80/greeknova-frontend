@@ -430,9 +430,18 @@ export default function StockChart({ symbol }: { symbol: string }) {
     }
 
     obBlocksRef.current = detectOrderBlocks(candlesRef.current)
+    ;(window as any).__obDebug = { blocks: obBlocksRef.current, chart: !!chart, series: !!series }
 
     const recompute = () => {
       const w = chart.timeScale().width()
+      const rawPoints = obBlocksRef.current.map((b) => ({
+        startTime: b.startTime,
+        x1: chart.timeScale().timeToCoordinate(chartTime(b.startTime)),
+        y1: series.priceToCoordinate(b.top),
+        y2: series.priceToCoordinate(b.bottom),
+        w,
+      }))
+      ;(window as any).__obDebug.rawPoints = rawPoints
       const rects = obBlocksRef.current
         .map((b) => {
           const x1 = chart.timeScale().timeToCoordinate(chartTime(b.startTime))
@@ -451,6 +460,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
           }
         })
         .filter((r): r is NonNullable<typeof r> => r != null)
+      ;(window as any).__obDebug.rects = rects
       setObRects(rects)
     }
 

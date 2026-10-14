@@ -7,7 +7,16 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, Cell, Legend
 } from "recharts";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://greeknova-backend-production.up.railway.app";
+// BUG FIX (Oct 14 2026): this was pointed at the old raw Railway domain,
+// not api.greeknova.com. lib/authFetch.ts attaches the signed-in user's
+// bearer token only to requests whose hostname is api.greeknova.com (see
+// its API_HOSTS list) -- hitting the raw Railway domain instead meant this
+// page NEVER sent a token, for any user. That was silently fine while
+// GATE_MODE was off/log, but the moment GATE_MODE=enforce went live today,
+// every /participant-flow request started coming back as
+// {"error":"Sign in required"} instead of real data -- which the crash fix
+// below also now handles gracefully instead of letting the page throw.
+const API_BASE = "https://api.greeknova.com";
 
 function fmt(n) {
   if (n === null || n === undefined) return "—";
@@ -87,7 +96,21 @@ export default function ParticipantFlow() {
   useEffect(() => {
     fetch(`${API_BASE}/participant-flow`)
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
+      .then(d => {
+        // BUG FIX (Oct 14 2026): a gate/auth error (or any other backend
+        // error response) is still valid JSON -- {"error": "..."} -- so it
+        // used to sail past this .then() as if it were real data, then
+        // crash the whole page below when summary/latest turned out to be
+        // undefined. Route it to the error state instead.
+        if (d && d.error) { setError(d.error); setLoading(false); return; }
+        if (!d || !Array.isArray(d.summary) || !d.latest) {
+          setError("Unexpected response shape from /participant-flow");
+          setLoading(false);
+          return;
+        }
+        setData(d);
+        setLoading(false);
+      })
       .catch(e => { setError(e.message); setLoading(false); });
   }, []);
 

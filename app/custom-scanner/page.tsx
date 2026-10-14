@@ -100,6 +100,7 @@ export default function CustomScanner() {
   const [selectedScanId, setSelectedScanId] = useState<string>('')
   const [savingName, setSavingName] = useState<string | null>(null)
   const [saveBusy, setSaveBusy] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const loadSavedScans = useCallback(async () => {
     const { data, error } = await supabase
@@ -134,22 +135,35 @@ export default function CustomScanner() {
     if (scan) applyScan(scan)
   }
 
+  // Oct 14 2026: this used to fail silently -- the name box just closed with
+  // no feedback whether the save actually went through, whether because the
+  // login session wasn't ready yet or the insert itself was rejected. Now it
+  // shows the actual reason and leaves the box open on failure so the name
+  // isn't lost and the user can retry without redoing it.
   const saveCurrentScan = async () => {
     const name = (savingName || '').trim()
     if (!name) return
     setSaveBusy(true)
-    const { data: userData } = await supabase.auth.getUser()
+    setSaveError('')
+    const { data: userData, error: userErr } = await supabase.auth.getUser()
     const userId = userData?.user?.id
-    if (!userId) { setSaveBusy(false); return }
+    if (userErr || !userId) {
+      setSaveError('Not signed in — please refresh the page and log in again, then retry.')
+      setSaveBusy(false)
+      return
+    }
     const { data, error } = await supabase
       .from('saved_scans')
       .insert({ user_id: userId, name, conditions })
       .select('id, name, conditions, last_run_at')
       .single()
-    if (!error && data) {
-      setSavedScans(cs => [data as SavedScan, ...cs])
-      setSelectedScanId((data as SavedScan).id)
+    if (error || !data) {
+      setSaveError(error?.message || 'Could not save this scan. Please try again.')
+      setSaveBusy(false)
+      return
     }
+    setSavedScans(cs => [data as SavedScan, ...cs])
+    setSelectedScanId((data as SavedScan).id)
     setSavingName(null)
     setSaveBusy(false)
   }
@@ -160,6 +174,8 @@ export default function CustomScanner() {
     if (!error) {
       setSavedScans(cs => cs.filter(s => s.id !== selectedScanId))
       setSelectedScanId('')
+    } else {
+      setSaveError(error.message || 'Could not delete this scan. Please try again.')
     }
   }
 
@@ -234,13 +250,15 @@ export default function CustomScanner() {
         </div>
 
         {/* Saved scans */}
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="flex items-center gap-3 mb-2 flex-wrap">
           <select
             value={selectedScanId}
             onChange={e => handleSelectScan(e.target.value)}
             className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500 min-w-[220px]"
           >
-            <option value="">Saved scans…</option>
+            <option value="">
+              {savedScans.length === 0 ? 'Saved scans…' : `Saved scans… (${savedScans.length})`}
+            </option>
             {savedScans.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
@@ -272,12 +290,16 @@ export default function CustomScanner() {
                 className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-40 px-2">
                 {saveBusy ? 'Saving…' : 'Save'}
               </button>
-              <button onClick={() => setSavingName(null)} className="text-xs text-gray-600 hover:text-gray-400 px-1">
+              <button onClick={() => { setSavingName(null); setSaveError('') }} className="text-xs text-gray-600 hover:text-gray-400 px-1">
                 Cancel
               </button>
             </div>
           )}
         </div>
+
+        {saveError && (
+          <p className="text-red-400 text-xs mb-4">{saveError}</p>
+        )}
 
         {/* Condition builder */}
         <div className="bg-gray-900/30 border border-gray-800 rounded-2xl p-5 mb-6">

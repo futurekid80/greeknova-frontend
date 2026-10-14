@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { detectOrderBlocks, OrderBlockPrimitive } from '@/lib/orderBlocks'
+import { detectOrderBlocks, type OrderBlock } from '@/lib/orderBlocks'
 
 const API = 'https://api.greeknova.com'
 
@@ -86,10 +86,17 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const gexLinesRef = useRef<any[]>([])
   const emaSeriesRef = useRef<any[]>([])
   const rsiSeriesRef = useRef<any>(null)
-  const obPrimitiveRef = useRef<any>(null)
+  const obBlocksRef = useRef<OrderBlock[]>([])
+  const obUnsubRef = useRef<(() => void) | null>(null)
   const [range, setRange] = useState<RangeKey>('6m')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Pixel rects for the Order Block overlay (DOM divs, not a canvas series --
+  // see the showOB effect below for why), recomputed whenever the chart's
+  // visible range changes (pan/zoom) or new data loads.
+  const [obRects, setObRects] = useState<
+    { left: number; top: number; width: number; height: number; type: 'bullish' | 'bearish'; mitigated: boolean }[]
+  >([])
   // OI Profile / GEX levels are daily reference levels (not tied to the
   // intraday/day candle split like VWAP+CPR), so they're opt-in toggles
   // that overlay on top of whatever range is already showing, drawn as
@@ -168,7 +175,11 @@ export default function StockChart({ symbol }: { symbol: string }) {
         gexLinesRef.current = []
         emaSeriesRef.current = []
         rsiSeriesRef.current = null
-        obPrimitiveRef.current = null
+        if (obUnsubRef.current) {
+          obUnsubRef.current()
+          obUnsubRef.current = null
+        }
+        setObRects([])
 
         const volumeSeries = chart.addSeries(HistogramSeries, {
           color: '#374151',
@@ -391,23 +402,63 @@ export default function StockChart({ symbol }: { symbol: string }) {
   }, [showEMA, chartVersion])
 
   // Order Blocks (Smart Money Concepts) -- computed client-side from the
-  // already-loaded candles, same pattern as EMA/RSI. Drawn as shaded
-  // rectangles via a lightweight-charts v5 Series Primitive since there's
-  // no built-in series type for boxes (price lines, used for CPR/OI/GEX
-  // above, only draw full-width horizontal lines).
+  // already-loaded candles, same pattern as EMA/RSI/VWAP. Drawn as
+  // absolutely-positioned DOM rectangles over the chart (see the render
+  // below), not a canvas series: lightweight-charts has no built-in series
+  // type for boxes, and the v5 Series Primitives (canvas) API -- the
+  // "proper" way to draw shapes in sync with the chart -- turned out to
+  // silently produce zero pixels in this build despite its draw() callback
+  // firing with correct coordinates every time (instrumented and confirmed
+  // live: draw() ran, media size matched the chart, fillRect calls
+  // happened, yet getImageData showed the target canvas completely
+  // untouched). Rather than fight an opaque rendering-pipeline mismatch,
+  // this uses the same technique several public lightweight-charts box/
+  // zone plugins fall back to: position plain divs using the chart's own
+  // timeToCoordinate/priceToCoordinate, recomputed on every pan/zoom via
+  // subscribeVisibleTimeRangeChange. Reliable, inspectable in devtools,
+  // and needs no canvas-layer debugging ever again.
   useEffect(() => {
+    const chart = chartRef.current
     const series = candleSeriesRef.current
-    if (!series) return
-    if (obPrimitiveRef.current) {
-      try { series.detachPrimitive(obPrimitiveRef.current) } catch {}
-      obPrimitiveRef.current = null
+    if (obUnsubRef.current) {
+      obUnsubRef.current()
+      obUnsubRef.current = null
     }
-    if (!showOB) return
+    if (!chart || !series || !showOB) {
+      setObRects([])
+      return
+    }
 
-    const primitive = new OrderBlockPrimitive(chartTime)
-    series.attachPrimitive(primitive)
-    primitive.setBlocks(detectOrderBlocks(candlesRef.current))
-    obPrimitiveRef.current = primitive
+    obBlocksRef.current = detectOrderBlocks(candlesRef.current)
+
+    const recompute = () => {
+      const w = chart.timeScale().width()
+      const rects = obBlocksRef.current
+        .map((b) => {
+          const x1 = chart.timeScale().timeToCoordinate(chartTime(b.startTime))
+          const y1 = series.priceToCoordinate(b.top)
+          const y2 = series.priceToCoordinate(b.bottom)
+          if (x1 == null || y1 == null || y2 == null) return null
+          const x2End = b.endTime != null ? chart.timeScale().timeToCoordinate(chartTime(b.endTime)) : null
+          const x2 = x2End != null ? x2End : w
+          return {
+            left: x1,
+            top: Math.min(y1, y2),
+            width: Math.max(1, x2 - x1),
+            height: Math.max(1, Math.abs(y2 - y1)),
+            type: b.type,
+            mitigated: b.mitigated,
+          }
+        })
+        .filter((r): r is NonNullable<typeof r> => r != null)
+      setObRects(rects)
+    }
+
+    recompute()
+    chart.timeScale().subscribeVisibleTimeRangeChange(recompute)
+    obUnsubRef.current = () => {
+      try { chart.timeScale().unsubscribeVisibleTimeRangeChange(recompute) } catch {}
+    }
   }, [showOB, chartVersion])
 
   // RSI(14) -- own pane below the main chart (lightweight-charts v5 native
@@ -550,6 +601,31 @@ export default function StockChart({ symbol }: { symbol: string }) {
       </div>
       <div className="relative w-full" style={{ height: CHART_HEIGHT + (showRSI ? RSI_PANE_HEIGHT : 0) }}>
         <div ref={containerRef} className="w-full h-full" />
+        {showOB && obRects.length > 0 && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {obRects.map((r, i) => (
+              <div
+                key={i}
+                className="absolute border"
+                style={{
+                  left: r.left,
+                  top: r.top,
+                  width: r.width,
+                  height: r.height,
+                  backgroundColor:
+                    r.type === 'bullish'
+                      ? r.mitigated
+                        ? 'rgba(22,163,74,0.08)'
+                        : 'rgba(22,163,74,0.22)'
+                      : r.mitigated
+                      ? 'rgba(220,38,38,0.08)'
+                      : 'rgba(220,38,38,0.22)',
+                  borderColor: r.type === 'bullish' ? 'rgba(22,163,74,0.6)' : 'rgba(220,38,38,0.6)',
+                }}
+              />
+            ))}
+          </div>
+        )}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-600 bg-gray-950/40">
             Loading chart...

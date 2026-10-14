@@ -9,7 +9,29 @@ const API = 'https://api.greeknova.com'
 // (seconds) for intraday candles -- lightweight-charts requires the latter
 // numeric form for anything with a time-of-day component.
 type Candle = { time: string | number; open: number; high: number; low: number; close: number; volume: number }
-type RangeKey = '1d' | '1m' | '3m' | '6m' | '1y'
+// Real candle-interval timeframes, like any normal charting platform --
+// replaced the old date-RANGE buttons (1D/1M/3M/6M/1Y), which actually
+// conflated two different things: "1D" picked a different candle size
+// (1-minute) while the rest only changed how far back the SAME daily
+// candles went. Each of these maps to its own backend interval (see
+// TIMEFRAME_TO_INTERVAL below) with its own sensible default lookback
+// window, chosen server-side in chart_data.py.
+type Timeframe = '1d' | '5m' | '15m' | '30m' | '60m' | 'D' | 'W' | 'M'
+const TIMEFRAME_TO_INTERVAL: Record<Timeframe, string> = {
+  '1d': 'minute',
+  '5m': '5minute',
+  '15m': '15minute',
+  '30m': '30minute',
+  '60m': '60minute',
+  D: 'day',
+  W: 'week',
+  M: 'month',
+}
+// "1d" is the one intraday timeframe that auto-focuses on just the latest
+// session (see the sessionStartCandle logic below) -- the others show
+// their whole fetched window so a trader can scroll/zoom back through it,
+// same as any normal multi-day intraday chart.
+const DAILY_LIKE: Timeframe[] = ['D', 'W', 'M']
 
 const CPR_LINE_STYLE = 2 // LineStyle.Dashed
 const LEVEL_LINE_STYLE = 2 // LineStyle.Dashed
@@ -92,7 +114,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const fvgBlocksRef = useRef<FVG[]>([])
   const fvgUnsubRef = useRef<(() => void) | null>(null)
   const smcMarkersPluginRef = useRef<any>(null)
-  const [range, setRange] = useState<RangeKey>('6m')
+  const [timeframe, setTimeframe] = useState<Timeframe>('D')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Pixel rects for the Order Block / FVG overlays (DOM divs, not a canvas
@@ -126,15 +148,15 @@ export default function StockChart({ symbol }: { symbol: string }) {
       setLoading(true)
       setError(null)
       try {
-        const interval = range === '1d' ? 'minute' : 'day'
+        const interval = TIMEFRAME_TO_INTERVAL[timeframe]
         const fetches: Promise<any>[] = [
-          fetch(`${API}/chart-data/${symbol}?interval=${interval}&range=${range}&t=${Date.now()}`, {
+          fetch(`${API}/chart-data/${symbol}?interval=${interval}&t=${Date.now()}`, {
             cache: 'no-store',
           }).then((r) => r.json()),
         ]
         // CPR (pivot/TC/BC) is a daily reference level -- only meaningful
         // overlaid on the intraday view, not stretched across months of candles
-        if (range === '1d') {
+        if (timeframe === '1d') {
           fetches.push(
             fetch(`${API}/cpr-levels/${symbol}?t=${Date.now()}`, { cache: 'no-store' })
               .then((r) => r.json())
@@ -164,7 +186,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
           grid: { vertLines: { color: '#1f2937' }, horzLines: { color: '#1f2937' } },
           width: containerRef.current.clientWidth,
           height: CHART_HEIGHT + (showRSI ? RSI_PANE_HEIGHT : 0),
-          timeScale: { borderColor: '#374151', timeVisible: range === '1d', secondsVisible: false },
+          timeScale: { borderColor: '#374151', timeVisible: !DAILY_LIKE.includes(timeframe), secondsVisible: false },
           rightPriceScale: { borderColor: '#374151' },
         })
         chartRef.current = chart
@@ -217,7 +239,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
 
         // VWAP -- only meaningful intraday (resets each session); computed
         // client-side from the same minute candles, no extra backend call
-        if (range === '1d') {
+        if (timeframe === '1d') {
           let cumPV = 0
           let cumVol = 0
           const vwapData = json.candles.map((c: Candle) => {
@@ -265,12 +287,14 @@ export default function StockChart({ symbol }: { symbol: string }) {
           }
         }
 
-        if (range === '1d') {
+        if (timeframe === '1d') {
           // Focus on just the most recent trading session instead of the
           // full multi-day fetch window (widened to 5 days so the 1D view
           // always reaches the last real session across weekends/holidays)
           // -- fitContent() alone would zoom out to show all of it, leaving
-          // today's handful of candles squeezed flat at one edge.
+          // today's handful of candles squeezed flat at one edge. Every
+          // other intraday timeframe (5m/15m/30m/60m) shows its whole
+          // fetched window instead, like a normal multi-day chart.
           const toIstDate = (epochSec: number) =>
             new Date(epochSec * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
           const lastTime = json.candles[json.candles.length - 1].time as number
@@ -305,7 +329,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
         candleSeriesRef.current = null
       }
     }
-  }, [symbol, range])
+  }, [symbol, timeframe])
 
   // OI Profile overlay: CE Wall (resistance), PE Wall (support), POC
   useEffect(() => {
@@ -638,7 +662,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <p className="text-xs text-gray-400 font-bold">📈 Price Chart</p>
-          {range === '1d' && (
+          {timeframe === '1d' && (
             <span className="text-[10px] text-gray-600">VWAP (blue) · CPR Pivot/TC/BC (dashed)</span>
           )}
         </div>
@@ -720,22 +744,23 @@ export default function StockChart({ symbol }: { symbol: string }) {
             </button>
           </div>
           <div className="flex gap-1">
-            {(['1d', '1m', '3m', '6m', '1y'] as RangeKey[]).map((r) => (
+            {(['1d', '5m', '15m', '30m', '60m', 'D', 'W', 'M'] as Timeframe[]).map((tf) => (
               <button
-                key={r}
-                onClick={() => setRange(r)}
+                key={tf}
+                onClick={() => setTimeframe(tf)}
                 className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
-                  range === r ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                  timeframe === tf ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
                 }`}
+                title={tf === '1d' ? "Today's session, 1-minute candles" : undefined}
               >
-                {r.toUpperCase()}
+                {tf.toUpperCase()}
               </button>
             ))}
           </div>
           <button
             onClick={() => {
               if (!chartRef.current) return
-              if (range === '1d' && candlesRef.current.length) {
+              if (timeframe === '1d' && candlesRef.current.length) {
                 const toIstDate = (epochSec: number) =>
                   new Date(epochSec * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
                 const lastTime = candlesRef.current[candlesRef.current.length - 1].time as number
@@ -749,7 +774,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
               chartRef.current.timeScale().fitContent()
             }}
             className="text-[10px] px-2 py-0.5 rounded font-medium text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
-            title={range === '1d' ? "Reset to today's session" : 'Reset zoom — fit full range'}
+            title={timeframe === '1d' ? "Reset to today's session" : 'Reset zoom — fit full range'}
           >
             ⟲ Reset
           </button>

@@ -133,6 +133,17 @@ export default function SessionReplayPage() {
   const pctToPutWall = lastSpot && putWall ? ((lastSpot - putWall) / lastSpot) * 100 : null
   const WALL_PROXIMITY_WARN = 0.3 // % — inside this band, spot is "near" a wall
 
+  // Oct 14 2026 (Manish): "can we add flip zone?" -- flip_point is a
+  // different axis from the walls: it's the price level where CUMULATIVE
+  // dealer gamma itself changes sign (long-gamma above it = dampening,
+  // good for writers; short-gamma below it = accelerating, bad for
+  // writers), not just an OI concentration level. Already fetched per-point
+  // from gex_regime_log, just wasn't drawn. Same latest-non-null approach
+  // as the walls since it can shift intraday as the chain's OI shifts.
+  const latestWithFlip = [...points].reverse().find(p => p.flip_point != null)
+  const flipPoint = latestWithFlip?.flip_point ?? null
+  const aboveFlip = lastSpot !== null && flipPoint !== null ? lastSpot >= flipPoint : null
+
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar active="/session-replay" />
@@ -202,7 +213,7 @@ export default function SessionReplayPage() {
             <StatCard label="SYMBOL / DATE" value={`${data.symbol}`} sub={data.date} />
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <StatCard
               label="DIST TO CALL WALL"
               value={pctToCallWall !== null ? `${pctToCallWall >= 0 ? '+' : ''}${pctToCallWall.toFixed(2)}%` : '—'}
@@ -222,16 +233,24 @@ export default function SessionReplayPage() {
               sub={summary.regime_close === 'SHORT_GAMMA' ? 'moves can accelerate' : 'dealers dampen moves'}
             />
             <StatCard
+              label="FLIP ZONE"
+              value={flipPoint !== null ? flipPoint.toLocaleString() : '—'}
+              accent={aboveFlip === true ? 'text-emerald-400' : aboveFlip === false ? 'text-red-400' : 'text-gray-300'}
+              sub={aboveFlip === true ? 'Spot above — dealers long-gamma' : aboveFlip === false ? 'Spot below — dealers short-gamma' : undefined}
+            />
+            <StatCard
               label="WRITER READ"
               value={
                 (pctToCallWall !== null && Math.abs(pctToCallWall) <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && Math.abs(pctToPutWall) <= WALL_PROXIMITY_WARN)
                   ? 'NEAR A WALL'
+                  : aboveFlip === false
+                  ? 'BELOW FLIP'
                   : summary.regime_close === 'SHORT_GAMMA'
                   ? 'CAUTION'
                   : 'RANGE-BOUND'
               }
               accent={
-                (pctToCallWall !== null && Math.abs(pctToCallWall) <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && Math.abs(pctToPutWall) <= WALL_PROXIMITY_WARN) || summary.regime_close === 'SHORT_GAMMA'
+                (pctToCallWall !== null && Math.abs(pctToCallWall) <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && Math.abs(pctToPutWall) <= WALL_PROXIMITY_WARN) || aboveFlip === false || summary.regime_close === 'SHORT_GAMMA'
                   ? 'text-amber-400'
                   : 'text-emerald-400'
               }
@@ -273,6 +292,16 @@ export default function SessionReplayPage() {
                     strokeDasharray="4 4"
                     strokeWidth={1.5}
                     label={{ value: `Put Wall ${putWall.toLocaleString()}`, position: 'insideBottomRight', fill: chartColors.call, fontSize: 10 }}
+                  />
+                )}
+                {flipPoint && (
+                  <ReferenceLine
+                    yAxisId="price"
+                    y={flipPoint}
+                    stroke="#fbbf24"
+                    strokeDasharray="2 2"
+                    strokeWidth={1.5}
+                    label={{ value: `Flip ${flipPoint.toLocaleString()}`, position: 'insideTopLeft', fill: '#fbbf24', fontSize: 10 }}
                   />
                 )}
               </ComposedChart>

@@ -2,8 +2,9 @@
 import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, MessageSquare, X, Bell, LogOut, User } from 'lucide-react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { clearCachedMarketData } from '@/lib/authFetch'
 import VixGauge from '@/components/VixGauge'
 
 // Oct 2 2026: regrouped by trader persona (Positional / Intraday / Option
@@ -286,7 +287,6 @@ function UserMenu() {
   const [open, setOpen]     = useState(false)
   const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const router = useRouter()
   const loggedActivityRef = useRef(false)
 
   useEffect(() => {
@@ -321,11 +321,18 @@ function UserMenu() {
 
   async function handleLogout() {
     setLoading(true)
+    // Oct 14 2026: clear cached market data (CPR/breadth) before signing out
+    // and send straight to /login with a full reload, not a client-side
+    // route change to '/' -- a route change remounts the homepage while the
+    // signOut() is still settling, which could flash leftover cached data
+    // for a moment before its own auth check catches up. A full navigation
+    // to /login never mounts a data page at all.
+    clearCachedMarketData()
     await supabase.auth.signOut()
     setEmail('')
     setOpen(false)
     setLoading(false)
-    router.push('/')
+    window.location.href = '/login'
   }
 
   if (!email) return null

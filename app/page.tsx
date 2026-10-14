@@ -961,7 +961,14 @@ export default function MarketPulse() {
   const [pulseStocks, setPulseStocks] = useState<PulseStock[]>([])
   const [breadth, setBreadth] = useState({ bullish:0, bearish:0, neutral:0, total:0 })
 
-  useEffect(() => {
+  // Oct 14 2026: this used to run unconditionally on mount, so the cached
+  // breadth numbers from an earlier, genuinely-logged-in visit would paint
+  // on screen before the separate checkAuth() effect below had a chance to
+  // notice the session is gone and redirect away -- a real, if brief,
+  // "data visible without a current login" gap. Folded into the auth check
+  // itself so cached data only ever applies once a live session is
+  // confirmed; no session means this never runs at all.
+  function applyBreadthCache() {
     try {
       const cached = sessionStorage.getItem('gn_breadth_stocks')
       const dateCached = sessionStorage.getItem('gn_breadth_cache')
@@ -983,7 +990,7 @@ export default function MarketPulse() {
         }
       }
     } catch {}
-  }, [])
+  }
   const [loading, setLoading]         = useState(true)
   const [lastUpdate, setLastUpdate]   = useState('')
   const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)
@@ -1004,7 +1011,9 @@ export default function MarketPulse() {
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) window.location.href = '/login'
+      if (!session) { window.location.href = '/login'; return }
+      // Only once a live session is confirmed does cached data get applied.
+      applyBreadthCache()
     }
     checkAuth()
   }, [])
@@ -1033,6 +1042,13 @@ export default function MarketPulse() {
   // regardless of whether the other four succeeded.
   async function fetchData() {
     setLoading(true)
+    // Oct 14 2026: same reasoning as applyBreadthCache() above -- don't let
+    // a cached, possibly-real CPR snapshot paint before we know there's a
+    // live session to show it to. checkAuth() redirects away the moment it
+    // finds none, but it runs in its own effect, so this guard is what
+    // actually stops the cache read here from racing ahead of it.
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setLoading(false); return }
     try {
       const cached = sessionStorage.getItem('gn_cpr_cache')
       const cacheTime = sessionStorage.getItem('gn_cpr_time')

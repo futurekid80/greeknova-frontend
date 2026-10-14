@@ -39,12 +39,32 @@ function showAccessBanner(code: string) {
   }
 }
 
+// Oct 14 2026: pages cache real market data (CPR, breadth, etc.) in
+// sessionStorage for a few minutes so the homepage doesn't look empty while
+// a fresh fetch is in flight. That cache has its own clock -- it doesn't
+// care whether the person is still signed in -- so on its own it's a hole
+// Zerodha could fault us for: sign out, don't close the tab, and the last
+// few minutes of real data are still sitting there to be shown again. Any
+// place that signs someone out (forced or voluntary) must also wipe this,
+// so "signed out" and "no cached data visible" are the same moment. Keep
+// this list in sync with the sessionStorage keys pages write real data to.
+const CACHED_MARKET_DATA_KEYS = [
+  'gn_cpr_cache', 'gn_cpr_time',
+  'gn_breadth_cache', 'gn_breadth_stocks',
+]
+export function clearCachedMarketData() {
+  try {
+    for (const k of CACHED_MARKET_DATA_KEYS) sessionStorage.removeItem(k)
+  } catch {}
+}
+
 // Oct 14 2026: kite_session_stale means the GreekNova (Supabase) session is
 // still technically valid but the Zerodha login behind it isn't current for
 // today -- Zerodha requires data to stop the moment that's true, not just
 // show a dismissible banner the person can ignore. Sign out of Supabase
-// (so every other tab/request stops being treated as authenticated too) and
-// send them back to /login to reconnect Zerodha.
+// (so every other tab/request stops being treated as authenticated too),
+// wipe any cached market data sitting in this tab, and send them back to
+// /login to reconnect Zerodha.
 let signingOutForStaleKite = false
 function forceReLoginForStaleKite() {
   if (signingOutForStaleKite) return
@@ -52,6 +72,7 @@ function forceReLoginForStaleKite() {
   try {
     sessionStorage.setItem('gn_login_return_to', window.location.pathname + window.location.search)
   } catch {}
+  clearCachedMarketData()
   supabase.auth.signOut().finally(() => {
     window.location.href = '/login?error=kite_session_stale'
   })

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { detectOrderBlocks, OrderBlockPrimitive } from '@/lib/orderBlocks'
 
 const API = 'https://api.greeknova.com'
 
@@ -85,6 +86,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const gexLinesRef = useRef<any[]>([])
   const emaSeriesRef = useRef<any[]>([])
   const rsiSeriesRef = useRef<any>(null)
+  const obPrimitiveRef = useRef<any>(null)
   const [range, setRange] = useState<RangeKey>('6m')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -97,6 +99,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const [showGEX, setShowGEX] = useState(false)
   const [showEMA, setShowEMA] = useState(false)
   const [showRSI, setShowRSI] = useState(false)
+  const [showOB, setShowOB] = useState(false)
   const [chartVersion, setChartVersion] = useState(0)
 
   useEffect(() => {
@@ -165,6 +168,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
         gexLinesRef.current = []
         emaSeriesRef.current = []
         rsiSeriesRef.current = null
+        obPrimitiveRef.current = null
 
         const volumeSeries = chart.addSeries(HistogramSeries, {
           color: '#374151',
@@ -386,6 +390,26 @@ export default function StockChart({ symbol }: { symbol: string }) {
     })
   }, [showEMA, chartVersion])
 
+  // Order Blocks (Smart Money Concepts) -- computed client-side from the
+  // already-loaded candles, same pattern as EMA/RSI. Drawn as shaded
+  // rectangles via a lightweight-charts v5 Series Primitive since there's
+  // no built-in series type for boxes (price lines, used for CPR/OI/GEX
+  // above, only draw full-width horizontal lines).
+  useEffect(() => {
+    const series = candleSeriesRef.current
+    if (!series) return
+    if (obPrimitiveRef.current) {
+      try { series.detachPrimitive(obPrimitiveRef.current) } catch {}
+      obPrimitiveRef.current = null
+    }
+    if (!showOB) return
+
+    const primitive = new OrderBlockPrimitive(chartTime)
+    series.attachPrimitive(primitive)
+    primitive.setBlocks(detectOrderBlocks(candlesRef.current))
+    obPrimitiveRef.current = primitive
+  }, [showOB, chartVersion])
+
   // RSI(14) -- own pane below the main chart (lightweight-charts v5 native
   // multi-pane support), since it's an oscillator on a 0-100 scale and
   // doesn't make sense overlaid on price
@@ -457,6 +481,15 @@ export default function StockChart({ symbol }: { symbol: string }) {
               title="RSI (14) in its own pane below, with 60/40 reference lines"
             >
               RSI
+            </button>
+            <button
+              onClick={() => setShowOB((v) => !v)}
+              className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
+                showOB ? 'bg-teal-900/60 text-teal-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+              }`}
+              title="Order Blocks (SMC): bullish (green) · bearish (red) · faded = mitigated"
+            >
+              Order Blocks
             </button>
           </div>
           <div className="flex gap-1">

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Settings, Check } from 'lucide-react'
+import Navbar from '@/components/Navbar'
 import { supabase } from '@/lib/supabase'
 import { DESTINATIONS, WIDGETS, widgetsByDestination, Destination } from '@/lib/widgetRegistry'
 
@@ -68,8 +69,11 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-gray-400 text-sm">Loading your dashboard...</div>
+      <div className="min-h-screen bg-gray-950">
+        <Navbar active="/dashboard" />
+        <div className="flex items-center justify-center py-24">
+          <div className="text-gray-400 text-sm">Loading your dashboard...</div>
+        </div>
       </div>
     )
   }
@@ -78,8 +82,9 @@ export default function DashboardPage() {
   const visibleWidgets = customizing ? destWidgets : destWidgets.filter(w => isEnabled(w.key))
 
   return (
-    <div className="min-h-screen bg-gray-950 px-4 py-8">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-gray-950">
+      <Navbar active="/dashboard" />
+      <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-black text-white tracking-tight">Dashboard</h1>

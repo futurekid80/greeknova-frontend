@@ -176,12 +176,10 @@ class OrderBlockPaneRenderer {
 
   draw(target: any) {
     target.useMediaCoordinateSpace(({ context: ctx }: any) => {
-      console.log('[OB draw]', this._blocks.length, 'blocks')
       for (const b of this._blocks) {
         const x1 = this._toX(b.startTime)
         const y1 = this._toY(b.top)
         const y2 = this._toY(b.bottom)
-        console.log('[OB draw block]', b.type, b.startTime, { x1, y1, y2 })
         if (x1 == null || y1 == null || y2 == null) continue
         const x2 = b.endTime != null ? this._toX(b.endTime) ?? this._rightEdge() : this._rightEdge()
 
@@ -208,9 +206,15 @@ class OrderBlockPaneView {
   constructor(source: OrderBlockPrimitive) {
     this._source = source
   }
+  // Draw above the candle series -- default z-order sits behind/level with
+  // the series, which was silently hiding every box under the candles
+  // (confirmed via logged draw coordinates matching the visible chart area
+  // exactly, yet nothing rendered -- a z-order issue, not a coordinate bug).
+  zOrder(): 'top' {
+    return 'top'
+  }
   renderer() {
     const s = this._source
-    console.log('[OB renderer()]', { hasSeries: !!s.series, hasChart: !!s.chart, blocks: s.blocks.length })
     if (!s.series || !s.chart) return null
     return new OrderBlockPaneRenderer(
       s.blocks,
@@ -235,7 +239,6 @@ export class OrderBlockPrimitive {
   }
 
   attached(param: { chart: any; series: any; requestUpdate: () => void }) {
-    console.log('[OB attached()]', !!param?.chart, !!param?.series)
     this.chart = param.chart
     this.series = param.series
     this._requestUpdate = param.requestUpdate
@@ -249,7 +252,6 @@ export class OrderBlockPrimitive {
   updateAllViews() {}
 
   paneViews() {
-    console.log('[OB paneViews()] called')
     return this._paneViews
   }
 

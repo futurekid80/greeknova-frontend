@@ -406,9 +406,7 @@ export default function StockChart({ symbol }: { symbol: string }) {
 
     const primitive = new OrderBlockPrimitive(chartTime)
     series.attachPrimitive(primitive)
-    const blocks = detectOrderBlocks(candlesRef.current)
-    console.log('[OB debug]', blocks.length, blocks[0])
-    primitive.setBlocks(blocks)
+    primitive.setBlocks(detectOrderBlocks(candlesRef.current))
     obPrimitiveRef.current = primitive
   }, [showOB, chartVersion])
 

@@ -117,6 +117,22 @@ export default function SessionReplayPage() {
     time: fmtTime(p.t),
   }))
 
+  // Oct 14 2026 (Manish): "does it give option writer any clue how to write
+  // intra and take advantage?" -- the missing piece was the call/put wall:
+  // GEX/DEX in isolation are diagnostic, but a writer decides off
+  // spot-vs-wall proximity (how close is price to the strike where dealer
+  // hedging flips the regime). Walls move intraday as OI shifts, so take
+  // the latest non-null reading rather than day-open, and surface both as
+  // reference lines on the price chart and as %-distance stat cards so the
+  // "am I writing into a wall" check is one glance, not a mental overlay.
+  const latestWithWalls = [...points].reverse().find(p => p.call_wall_strike != null || p.put_wall_strike != null)
+  const callWall = latestWithWalls?.call_wall_strike ?? null
+  const putWall = latestWithWalls?.put_wall_strike ?? null
+  const lastSpot = [...points].reverse().find(p => p.cmp != null)?.cmp ?? null
+  const pctToCallWall = lastSpot && callWall ? ((callWall - lastSpot) / lastSpot) * 100 : null
+  const pctToPutWall = lastSpot && putWall ? ((lastSpot - putWall) / lastSpot) * 100 : null
+  const WALL_PROXIMITY_WARN = 0.3 // % — inside this band, spot is "near" a wall
+
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar active="/session-replay" />
@@ -186,6 +202,43 @@ export default function SessionReplayPage() {
             <StatCard label="SYMBOL / DATE" value={`${data.symbol}`} sub={data.date} />
           </div>
 
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <StatCard
+              label="DIST TO CALL WALL"
+              value={pctToCallWall !== null ? `+${pctToCallWall.toFixed(2)}%` : '—'}
+              accent={pctToCallWall !== null && pctToCallWall <= WALL_PROXIMITY_WARN ? 'text-amber-400' : 'text-gray-300'}
+              sub={callWall ? `Wall @ ${callWall.toLocaleString()}` : undefined}
+            />
+            <StatCard
+              label="DIST TO PUT WALL"
+              value={pctToPutWall !== null ? `-${pctToPutWall.toFixed(2)}%` : '—'}
+              accent={pctToPutWall !== null && pctToPutWall <= WALL_PROXIMITY_WARN ? 'text-amber-400' : 'text-gray-300'}
+              sub={putWall ? `Wall @ ${putWall.toLocaleString()}` : undefined}
+            />
+            <StatCard
+              label="GEX REGIME"
+              value={summary.regime_close === 'SHORT_GAMMA' ? 'NEGATIVE' : summary.regime_close === 'LONG_GAMMA' ? 'POSITIVE' : '—'}
+              accent={summary.regime_close === 'SHORT_GAMMA' ? 'text-red-400' : 'text-emerald-400'}
+              sub={summary.regime_close === 'SHORT_GAMMA' ? 'moves can accelerate' : 'dealers dampen moves'}
+            />
+            <StatCard
+              label="WRITER READ"
+              value={
+                (pctToCallWall !== null && pctToCallWall <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && pctToPutWall <= WALL_PROXIMITY_WARN)
+                  ? 'NEAR A WALL'
+                  : summary.regime_close === 'SHORT_GAMMA'
+                  ? 'CAUTION'
+                  : 'RANGE-BOUND'
+              }
+              accent={
+                (pctToCallWall !== null && pctToCallWall <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && pctToPutWall <= WALL_PROXIMITY_WARN) || summary.regime_close === 'SHORT_GAMMA'
+                  ? 'text-amber-400'
+                  : 'text-emerald-400'
+              }
+              sub="educational read, not advice"
+            />
+          </div>
+
           <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 mb-5">
             <h2 className="text-sm font-bold text-gray-300 mb-2">Spot price vs Net GEX (near spot)</h2>
             <ResponsiveContainer width="100%" height={260}>
@@ -202,6 +255,26 @@ export default function SessionReplayPage() {
                 <Line yAxisId="price" type="monotone" dataKey="cmp" name="Spot" stroke="#67e8f9" strokeWidth={2} dot={false} isAnimationActive={false} />
                 <Line yAxisId="gex" type="monotone" dataKey="net_gex_near_spot" name="Net GEX" stroke={chartColors.put} strokeWidth={2} dot={false} isAnimationActive={false} />
                 <ReferenceLine yAxisId="gex" y={0} stroke="#ffffff33" />
+                {callWall && (
+                  <ReferenceLine
+                    yAxisId="price"
+                    y={callWall}
+                    stroke={chartColors.put}
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{ value: `Call Wall ${callWall.toLocaleString()}`, position: 'insideTopRight', fill: chartColors.put, fontSize: 10 }}
+                  />
+                )}
+                {putWall && (
+                  <ReferenceLine
+                    yAxisId="price"
+                    y={putWall}
+                    stroke={chartColors.call}
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{ value: `Put Wall ${putWall.toLocaleString()}`, position: 'insideBottomRight', fill: chartColors.call, fontSize: 10 }}
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>

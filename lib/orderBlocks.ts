@@ -176,10 +176,12 @@ class OrderBlockPaneRenderer {
 
   draw(target: any) {
     target.useMediaCoordinateSpace(({ context: ctx }: any) => {
+      console.log('[OB draw]', this._blocks.length, 'blocks')
       for (const b of this._blocks) {
         const x1 = this._toX(b.startTime)
         const y1 = this._toY(b.top)
         const y2 = this._toY(b.bottom)
+        console.log('[OB draw block]', b.type, b.startTime, { x1, y1, y2 })
         if (x1 == null || y1 == null || y2 == null) continue
         const x2 = b.endTime != null ? this._toX(b.endTime) ?? this._rightEdge() : this._rightEdge()
 
@@ -208,6 +210,7 @@ class OrderBlockPaneView {
   }
   renderer() {
     const s = this._source
+    console.log('[OB renderer()]', { hasSeries: !!s.series, hasChart: !!s.chart, blocks: s.blocks.length })
     if (!s.series || !s.chart) return null
     return new OrderBlockPaneRenderer(
       s.blocks,

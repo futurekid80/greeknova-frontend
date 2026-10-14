@@ -235,6 +235,7 @@ export class OrderBlockPrimitive {
   }
 
   attached(param: { chart: any; series: any; requestUpdate: () => void }) {
+    console.log('[OB attached()]', !!param?.chart, !!param?.series)
     this.chart = param.chart
     this.series = param.series
     this._requestUpdate = param.requestUpdate
@@ -248,6 +249,7 @@ export class OrderBlockPrimitive {
   updateAllViews() {}
 
   paneViews() {
+    console.log('[OB paneViews()] called')
     return this._paneViews
   }
 

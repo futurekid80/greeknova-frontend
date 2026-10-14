@@ -109,7 +109,18 @@ export default function CustomScanner() {
     if (!error && data) setSavedScans(data as SavedScan[])
   }, [])
 
-  useEffect(() => { loadSavedScans() }, [loadSavedScans])
+  // Oct 14 2026: on a fresh page load the Supabase client hasn't finished
+  // restoring the login session from storage yet, so firing the saved_scans
+  // query immediately ran as an anonymous request and silently came back
+  // empty (RLS correctly hid every row) -- the dropdown looked broken even
+  // though the save itself worked. Waiting for getSession() first, and
+  // re-loading on any later auth state change, fixes that race.
+  useEffect(() => {
+    let cancelled = false
+    supabase.auth.getSession().then(() => { if (!cancelled) loadSavedScans() })
+    const { data: sub } = supabase.auth.onAuthStateChange(() => { loadSavedScans() })
+    return () => { cancelled = true; sub.subscription.unsubscribe() }
+  }, [loadSavedScans])
 
   const applyScan = (scan: SavedScan) => {
     setConditions(scan.conditions)

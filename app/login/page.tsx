@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const DEMO_API = 'https://api.greeknova.com'
@@ -21,6 +21,16 @@ export default function LoginPage() {
   const [demoCode, setDemoCode] = useState('')
   const [kiteDisclaimerChecked, setKiteDisclaimerChecked] = useState(false)
   const [kiteError, setKiteError] = useState('')
+  const [returnNotice, setReturnNotice] = useState('')
+
+  useEffect(() => {
+    try {
+      const err = new URLSearchParams(window.location.search).get('error')
+      if (err === 'kite_session_stale') {
+        setReturnNotice('Your Zerodha session has expired for today — please log in again to continue.')
+      }
+    } catch {}
+  }, [])
 
   function handleZerodhaLogin() {
     if (!kiteDisclaimerChecked) {
@@ -92,6 +102,12 @@ export default function LoginPage() {
               <p className="text-gray-400 text-sm mb-6">
                 Log in with your Zerodha Kite account to access GreekNova.
               </p>
+
+              {returnNotice && (
+                <p className="text-amber-400 text-xs mb-4 bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2">
+                  {returnNotice}
+                </p>
+              )}
 
               <label className="flex items-start gap-2 mb-4 cursor-pointer select-none">
                 <input

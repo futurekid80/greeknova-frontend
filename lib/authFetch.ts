@@ -39,12 +39,32 @@ function showAccessBanner(code: string) {
   }
 }
 
+// Oct 14 2026: kite_session_stale means the GreekNova (Supabase) session is
+// still technically valid but the Zerodha login behind it isn't current for
+// today -- Zerodha requires data to stop the moment that's true, not just
+// show a dismissible banner the person can ignore. Sign out of Supabase
+// (so every other tab/request stops being treated as authenticated too) and
+// send them back to /login to reconnect Zerodha.
+let signingOutForStaleKite = false
+function forceReLoginForStaleKite() {
+  if (signingOutForStaleKite) return
+  signingOutForStaleKite = true
+  try {
+    sessionStorage.setItem('gn_login_return_to', window.location.pathname + window.location.search)
+  } catch {}
+  supabase.auth.signOut().finally(() => {
+    window.location.href = '/login?error=kite_session_stale'
+  })
+}
+
 async function watchAccess(p: Promise<Response>, gated: boolean): Promise<Response> {
   const res = await p
   if (gated && (res.status === 401 || res.status === 403)) {
     try {
       const j = await res.clone().json()
-      if (j && (j.code === 'user_no_token' || j.code === 'user_bad_token' || j.code === 'user_not_member')) {
+      if (j && j.code === 'kite_session_stale') {
+        forceReLoginForStaleKite()
+      } else if (j && (j.code === 'user_no_token' || j.code === 'user_bad_token' || j.code === 'user_not_member')) {
         showAccessBanner(j.code)
       }
     } catch (e) {

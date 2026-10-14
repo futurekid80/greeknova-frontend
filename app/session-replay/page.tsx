@@ -205,15 +205,15 @@ export default function SessionReplayPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <StatCard
               label="DIST TO CALL WALL"
-              value={pctToCallWall !== null ? `+${pctToCallWall.toFixed(2)}%` : '—'}
-              accent={pctToCallWall !== null && pctToCallWall <= WALL_PROXIMITY_WARN ? 'text-amber-400' : 'text-gray-300'}
-              sub={callWall ? `Wall @ ${callWall.toLocaleString()}` : undefined}
+              value={pctToCallWall !== null ? `${pctToCallWall >= 0 ? '+' : ''}${pctToCallWall.toFixed(2)}%` : '—'}
+              accent={pctToCallWall !== null && Math.abs(pctToCallWall) <= WALL_PROXIMITY_WARN ? 'text-amber-400' : pctToCallWall !== null && pctToCallWall < 0 ? 'text-red-400' : 'text-gray-300'}
+              sub={callWall ? (pctToCallWall !== null && pctToCallWall < 0 ? `Breached — wall @ ${callWall.toLocaleString()}` : `Wall @ ${callWall.toLocaleString()}`) : undefined}
             />
             <StatCard
               label="DIST TO PUT WALL"
-              value={pctToPutWall !== null ? `-${pctToPutWall.toFixed(2)}%` : '—'}
-              accent={pctToPutWall !== null && pctToPutWall <= WALL_PROXIMITY_WARN ? 'text-amber-400' : 'text-gray-300'}
-              sub={putWall ? `Wall @ ${putWall.toLocaleString()}` : undefined}
+              value={pctToPutWall !== null ? `${pctToPutWall >= 0 ? '+' : ''}${pctToPutWall.toFixed(2)}%` : '—'}
+              accent={pctToPutWall !== null && Math.abs(pctToPutWall) <= WALL_PROXIMITY_WARN ? 'text-amber-400' : pctToPutWall !== null && pctToPutWall < 0 ? 'text-red-400' : 'text-gray-300'}
+              sub={putWall ? (pctToPutWall !== null && pctToPutWall < 0 ? `Breached — wall @ ${putWall.toLocaleString()}` : `Wall @ ${putWall.toLocaleString()}`) : undefined}
             />
             <StatCard
               label="GEX REGIME"
@@ -224,14 +224,14 @@ export default function SessionReplayPage() {
             <StatCard
               label="WRITER READ"
               value={
-                (pctToCallWall !== null && pctToCallWall <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && pctToPutWall <= WALL_PROXIMITY_WARN)
+                (pctToCallWall !== null && Math.abs(pctToCallWall) <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && Math.abs(pctToPutWall) <= WALL_PROXIMITY_WARN)
                   ? 'NEAR A WALL'
                   : summary.regime_close === 'SHORT_GAMMA'
                   ? 'CAUTION'
                   : 'RANGE-BOUND'
               }
               accent={
-                (pctToCallWall !== null && pctToCallWall <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && pctToPutWall <= WALL_PROXIMITY_WARN) || summary.regime_close === 'SHORT_GAMMA'
+                (pctToCallWall !== null && Math.abs(pctToCallWall) <= WALL_PROXIMITY_WARN) || (pctToPutWall !== null && Math.abs(pctToPutWall) <= WALL_PROXIMITY_WARN) || summary.regime_close === 'SHORT_GAMMA'
                   ? 'text-amber-400'
                   : 'text-emerald-400'
               }

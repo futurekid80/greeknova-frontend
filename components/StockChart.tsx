@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { detectOrderBlocks, type OrderBlock } from '@/lib/orderBlocks'
+import { detectFVG, detectStructureBreaks, detectLiquiditySweeps, type FVG } from '@/lib/smc'
 
 const API = 'https://api.greeknova.com'
 
@@ -88,13 +89,19 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const rsiSeriesRef = useRef<any>(null)
   const obBlocksRef = useRef<OrderBlock[]>([])
   const obUnsubRef = useRef<(() => void) | null>(null)
+  const fvgBlocksRef = useRef<FVG[]>([])
+  const fvgUnsubRef = useRef<(() => void) | null>(null)
+  const smcMarkersPluginRef = useRef<any>(null)
   const [range, setRange] = useState<RangeKey>('6m')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // Pixel rects for the Order Block overlay (DOM divs, not a canvas series --
-  // see the showOB effect below for why), recomputed whenever the chart's
-  // visible range changes (pan/zoom) or new data loads.
+  // Pixel rects for the Order Block / FVG overlays (DOM divs, not a canvas
+  // series -- see the showOB effect below for why), recomputed whenever the
+  // chart's visible range changes (pan/zoom) or new data loads.
   const [obRects, setObRects] = useState<
+    { left: number; top: number; width: number; height: number; type: 'bullish' | 'bearish'; mitigated: boolean }[]
+  >([])
+  const [fvgRects, setFvgRects] = useState<
     { left: number; top: number; width: number; height: number; type: 'bullish' | 'bearish'; mitigated: boolean }[]
   >([])
   // OI Profile / GEX levels are daily reference levels (not tied to the
@@ -107,6 +114,9 @@ export default function StockChart({ symbol }: { symbol: string }) {
   const [showEMA, setShowEMA] = useState(false)
   const [showRSI, setShowRSI] = useState(false)
   const [showOB, setShowOB] = useState(false)
+  const [showFVG, setShowFVG] = useState(false)
+  const [showStructure, setShowStructure] = useState(false)
+  const [showLiquidity, setShowLiquidity] = useState(false)
   const [chartVersion, setChartVersion] = useState(0)
 
   useEffect(() => {
@@ -180,6 +190,16 @@ export default function StockChart({ symbol }: { symbol: string }) {
           obUnsubRef.current = null
         }
         setObRects([])
+        if (fvgUnsubRef.current) {
+          fvgUnsubRef.current()
+          fvgUnsubRef.current = null
+        }
+        setFvgRects([])
+        // The old chart instance (and everything attached to it, including
+        // this plugin) was just .remove()'d above -- drop the stale
+        // reference so the structure/liquidity effect creates a fresh one
+        // on the new chart instead of calling setMarkers on a dead plugin.
+        smcMarkersPluginRef.current = null
 
         const volumeSeries = chart.addSeries(HistogramSeries, {
           color: '#374151',
@@ -461,6 +481,115 @@ export default function StockChart({ symbol }: { symbol: string }) {
     }
   }, [showOB, chartVersion])
 
+  // Fair Value Gaps -- same DOM-overlay technique as Order Blocks above
+  // (same reasoning: the canvas Primitives API doesn't render in this
+  // build). Kept as its own effect/state/ref set rather than merged with
+  // Order Blocks so the two can be toggled independently.
+  useEffect(() => {
+    const chart = chartRef.current
+    const series = candleSeriesRef.current
+    if (fvgUnsubRef.current) {
+      fvgUnsubRef.current()
+      fvgUnsubRef.current = null
+    }
+    if (!chart || !series || !showFVG) {
+      setFvgRects([])
+      return
+    }
+
+    fvgBlocksRef.current = detectFVG(candlesRef.current)
+
+    const recompute = () => {
+      const w = chart.timeScale().width()
+      const rects = fvgBlocksRef.current
+        .map((b) => {
+          const x1 = chart.timeScale().timeToCoordinate(chartTime(b.startTime))
+          const y1 = series.priceToCoordinate(b.top)
+          const y2 = series.priceToCoordinate(b.bottom)
+          if (x1 == null || y1 == null || y2 == null) return null
+          const x2End = b.endTime != null ? chart.timeScale().timeToCoordinate(chartTime(b.endTime)) : null
+          const x2 = x2End != null ? x2End : w
+          return {
+            left: x1,
+            top: Math.min(y1, y2),
+            width: Math.max(1, x2 - x1),
+            height: Math.max(1, Math.abs(y2 - y1)),
+            type: b.type,
+            mitigated: b.mitigated,
+          }
+        })
+        .filter((r): r is NonNullable<typeof r> => r != null)
+      setFvgRects(rects)
+    }
+
+    recompute()
+    chart.timeScale().subscribeVisibleTimeRangeChange(recompute)
+    fvgUnsubRef.current = () => {
+      try { chart.timeScale().unsubscribeVisibleTimeRangeChange(recompute) } catch {}
+    }
+  }, [showFVG, chartVersion])
+
+  // Structure breaks (BOS/CHoCH) + liquidity sweeps -- unlike Order Blocks
+  // and FVG these are point events, not zones, so they use lightweight-
+  // charts' own built-in series-markers plugin instead of DOM overlay divs.
+  // This is a core (non-Primitive) API that renders natively and correctly
+  // tracks pan/zoom/data updates on its own -- no manual coordinate math
+  // needed, unlike the box overlays above.
+  useEffect(() => {
+    const chart = chartRef.current
+    const series = candleSeriesRef.current
+    if (!chart || !series) return
+
+    if (!showStructure && !showLiquidity) {
+      if (smcMarkersPluginRef.current) smcMarkersPluginRef.current.setMarkers([])
+      return
+    }
+
+    let cancelled = false
+    import('lightweight-charts').then(({ createSeriesMarkers }) => {
+      if (cancelled || chartRef.current !== chart || candleSeriesRef.current !== series) return
+
+      const markers: any[] = []
+      if (showStructure) {
+        for (const b of detectStructureBreaks(candlesRef.current)) {
+          const bullish = b.direction === 'bullish'
+          markers.push({
+            time: chartTime(b.time),
+            position: bullish ? 'belowBar' : 'aboveBar',
+            color: b.kind === 'CHoCH' ? '#f59e0b' : bullish ? '#16a34a' : '#dc2626',
+            shape: bullish ? 'arrowUp' : 'arrowDown',
+            text: b.kind,
+          })
+        }
+      }
+      if (showLiquidity) {
+        for (const s of detectLiquiditySweeps(candlesRef.current)) {
+          const buySide = s.side === 'buy-side'
+          markers.push({
+            time: chartTime(s.time),
+            position: buySide ? 'belowBar' : 'aboveBar',
+            color: '#a855f7',
+            shape: 'circle',
+            text: buySide ? 'BSL' : 'SSL',
+          })
+        }
+      }
+      // The markers plugin requires ascending time order; string (daily)
+      // times sort correctly as plain strings, numeric (intraday) as numbers.
+      markers.sort((a, c) => (a.time > c.time ? 1 : a.time < c.time ? -1 : 0))
+
+      if (!smcMarkersPluginRef.current) {
+        smcMarkersPluginRef.current = createSeriesMarkers(series, markers)
+      } else {
+        smcMarkersPluginRef.current.setMarkers(markers)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [showStructure, showLiquidity, chartVersion])
+
   // RSI(14) -- own pane below the main chart (lightweight-charts v5 native
   // multi-pane support), since it's an oscillator on a 0-100 scale and
   // doesn't make sense overlaid on price
@@ -542,6 +671,33 @@ export default function StockChart({ symbol }: { symbol: string }) {
             >
               Order Blocks
             </button>
+            <button
+              onClick={() => setShowFVG((v) => !v)}
+              className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
+                showFVG ? 'bg-sky-900/60 text-sky-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+              }`}
+              title="Fair Value Gaps (SMC): bullish (sky blue) · bearish (pink) · faded = filled"
+            >
+              FVG
+            </button>
+            <button
+              onClick={() => setShowStructure((v) => !v)}
+              className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
+                showStructure ? 'bg-amber-900/60 text-amber-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+              }`}
+              title="Structure (SMC): BOS = trend-continuation break (green/red) · CHoCH = trend reversal (amber)"
+            >
+              BOS/CHoCH
+            </button>
+            <button
+              onClick={() => setShowLiquidity((v) => !v)}
+              className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
+                showLiquidity ? 'bg-purple-900/60 text-purple-300' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+              }`}
+              title="Liquidity Sweeps (SMC): wick through a swing high/low that closes back inside -- a stop hunt"
+            >
+              Liquidity
+            </button>
           </div>
           <div className="flex gap-1">
             <button
@@ -621,6 +777,31 @@ export default function StockChart({ symbol }: { symbol: string }) {
                       ? 'rgba(220,38,38,0.08)'
                       : 'rgba(220,38,38,0.22)',
                   borderColor: r.type === 'bullish' ? 'rgba(22,163,74,0.6)' : 'rgba(220,38,38,0.6)',
+                }}
+              />
+            ))}
+          </div>
+        )}
+        {showFVG && fvgRects.length > 0 && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {fvgRects.map((r, i) => (
+              <div
+                key={i}
+                className="absolute border"
+                style={{
+                  left: r.left,
+                  top: r.top,
+                  width: r.width,
+                  height: r.height,
+                  backgroundColor:
+                    r.type === 'bullish'
+                      ? r.mitigated
+                        ? 'rgba(14,165,233,0.08)'
+                        : 'rgba(14,165,233,0.22)'
+                      : r.mitigated
+                      ? 'rgba(236,72,153,0.08)'
+                      : 'rgba(236,72,153,0.22)',
+                  borderColor: r.type === 'bullish' ? 'rgba(14,165,233,0.6)' : 'rgba(236,72,153,0.6)',
                 }}
               />
             ))}

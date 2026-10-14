@@ -39,7 +39,7 @@ export type OrderBlock = {
  * confirmed until `pivotLen` candles have printed after it, which is why
  * detection naturally lags the live edge of the chart by that many candles.
  */
-function findSwings(candles: Candle[], pivotLen = 5) {
+export function findSwings(candles: Candle[], pivotLen = 5) {
   const swingHighs: { index: number; price: number }[] = []
   const swingLows: { index: number; price: number }[] = []
   for (let i = pivotLen; i < candles.length - pivotLen; i++) {

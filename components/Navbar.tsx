@@ -391,6 +391,18 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
           </Link>
 
           <div className="flex items-center gap-6">
+            {/* Oct 14 2026: new consolidated entry point (see lib/widgetRegistry.ts
+                and app/dashboard/page.tsx) -- deliberately placed first/most
+                prominent. Every link below still works exactly as before;
+                this doesn't replace or remove any of them, it's a second,
+                customizable front door. */}
+            <Link href="/dashboard"
+              className={`text-sm font-semibold transition-colors relative ${
+                active === '/dashboard' ? 'text-white' : 'text-emerald-400 hover:text-emerald-300'
+              }`}>
+              🏠 Dashboard
+              {active === '/dashboard' && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
+            </Link>
             {NAV_GROUPS.map(group => (
               <DropdownMenu key={group.label} group={group} active={active} />
             ))}

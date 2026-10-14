@@ -757,6 +757,44 @@ export default function StockChart({ symbol }: { symbol: string }) {
               </button>
             ))}
           </div>
+          <div className="flex gap-1">
+            <button
+              onClick={() => {
+                const ts = chartRef.current?.timeScale()
+                const range = ts?.getVisibleLogicalRange()
+                if (!ts || !range) return
+                // Shrink the visible window around its center -- zooming in.
+                const center = (range.from + range.to) / 2
+                const factor = 0.7
+                ts.setVisibleLogicalRange({
+                  from: center - (center - range.from) * factor,
+                  to: center + (range.to - center) * factor,
+                })
+              }}
+              className="text-[10px] w-5 h-5 flex items-center justify-center rounded font-bold text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+              title="Zoom in"
+            >
+              +
+            </button>
+            <button
+              onClick={() => {
+                const ts = chartRef.current?.timeScale()
+                const range = ts?.getVisibleLogicalRange()
+                if (!ts || !range) return
+                // Expand the visible window around its center -- zooming out.
+                const center = (range.from + range.to) / 2
+                const factor = 1.4
+                ts.setVisibleLogicalRange({
+                  from: center - (center - range.from) * factor,
+                  to: center + (range.to - center) * factor,
+                })
+              }}
+              className="text-[10px] w-5 h-5 flex items-center justify-center rounded font-bold text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+              title="Zoom out"
+            >
+              −
+            </button>
+          </div>
           <button
             onClick={() => {
               if (!chartRef.current) return

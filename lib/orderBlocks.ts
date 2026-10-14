@@ -176,6 +176,11 @@ class OrderBlockPaneRenderer {
 
   draw(target: any) {
     target.useMediaCoordinateSpace(({ context: ctx }: any) => {
+      // TEMP sanity check: an unconditional, impossible-to-miss shape to
+      // confirm this primitive's canvas layer is actually visible at all,
+      // independent of any coordinate math.
+      ctx.fillStyle = 'rgba(255,0,255,0.9)'
+      ctx.fillRect(50, 50, 300, 200)
       for (const b of this._blocks) {
         const x1 = this._toX(b.startTime)
         const y1 = this._toY(b.top)

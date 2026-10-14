@@ -5,6 +5,15 @@ import { supabase } from '@/lib/supabase'
 
 const DEMO_API = 'https://api.greeknova.com'
 
+// Oct 14 2026: the Zerodha login block below is the same flow Zerodha
+// reviewed and approved at the standalone /zerodha-login-review page (Oct 9
+// demo) -- same KITE_API_KEY, same /auth/kite-login backend, same
+// /auth/callback redirect target. Moved onto the real /login page because
+// Zerodha has now asked for a production demo (Oct 15 noon). The
+// review-only page is left in place, unlinked, not removed.
+const KITE_API_KEY = process.env.NEXT_PUBLIC_KITE_API_KEY || ''
+const KITE_LOGIN_URL = KITE_API_KEY ? `https://kite.zerodha.com/connect/login?v=3&api_key=${KITE_API_KEY}` : ''
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
@@ -12,6 +21,22 @@ export default function LoginPage() {
   const [step, setStep] = useState<'email' | 'otp' | 'demo'>('email')
   const [error, setError] = useState('')
   const [demoCode, setDemoCode] = useState('')
+  const [kiteDisclaimerChecked, setKiteDisclaimerChecked] = useState(false)
+  const [kiteError, setKiteError] = useState('')
+
+  function handleZerodhaLogin() {
+    if (!kiteDisclaimerChecked) {
+      setKiteError('Please tick the disclaimer checkbox first.')
+      return
+    }
+    if (!KITE_LOGIN_URL) {
+      setKiteError('Zerodha login is not configured yet.')
+      return
+    }
+    const returnTo = new URLSearchParams(window.location.search).get('returnTo') || '/'
+    sessionStorage.setItem('gn_login_return_to', returnTo)
+    window.location.href = KITE_LOGIN_URL
+  }
 
   async function handleEmailSubmit() {
     if (!email || !email.includes('@')) {
@@ -114,10 +139,44 @@ export default function LoginPage() {
           {step === 'email' && (
             <div>
               <h2 className="text-white text-lg font-semibold mb-1">
-                Welcome to GreekNova Beta
+                Welcome to GreekNova
               </h2>
               <p className="text-gray-400 text-sm mb-6">
-                Enter your email to receive a one-time login code.
+                Log in with your Zerodha Kite account to access GreekNova.
+              </p>
+
+              <label className="flex items-start gap-2 mb-4 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={kiteDisclaimerChecked}
+                  onChange={(e) => { setKiteDisclaimerChecked(e.target.checked); setKiteError('') }}
+                  className="mt-0.5 h-4 w-4 accent-blue-500"
+                />
+                <span className="text-gray-400 text-xs leading-snug">
+                  I understand GreekNova is an analytics tool for educational and
+                  informational purposes only, is not a SEBI-registered investment
+                  adviser, and nothing on this platform is investment advice.
+                </span>
+              </label>
+
+              {kiteError && <p className="text-red-400 text-sm mb-4">{kiteError}</p>}
+
+              <button
+                onClick={handleZerodhaLogin}
+                disabled={!kiteDisclaimerChecked}
+                className="w-full bg-[#387ed1] hover:bg-[#2f6bb5] text-white font-semibold py-3 rounded-lg text-sm transition disabled:opacity-40 disabled:cursor-not-allowed mb-6"
+              >
+                Continue with Zerodha →
+              </button>
+
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-px bg-gray-800 flex-1" />
+                <span className="text-gray-600 text-xs uppercase tracking-wider">or</span>
+                <div className="h-px bg-gray-800 flex-1" />
+              </div>
+
+              <p className="text-gray-400 text-sm mb-2">
+                Log in by email instead:
               </p>
               <label className="text-gray-400 text-xs uppercase tracking-wider mb-1 block">
                 Email Address

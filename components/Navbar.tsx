@@ -403,18 +403,18 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
               🏠 Dashboard
               {active === '/dashboard' && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
             </Link>
-            {NAV_GROUPS.map(group => (
-              <DropdownMenu key={group.label} group={group} active={active} />
-            ))}
-            {STANDALONE.map(({ href, label }) => (
-              <Link key={href} href={href}
-                className={`text-sm font-medium transition-colors relative ${
-                  active === href ? 'text-white' : 'text-gray-400 hover:text-white'
-                }`}>
-                {label}
-                {active === href && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
-              </Link>
-            ))}
+            {/* Oct 14 2026: the old 5-dropdown persona/OI nav (Market, Open
+                Interest, Positional, Intraday, Option Sellers -- NAV_GROUPS
+                below, kept but unused) and the standalone VIX/Alerts text
+                links (STANDALONE below) are retired from here now that
+                /dashboard exists and covers the same ground without the
+                duplication Manish flagged (same page showing both the old
+                full menu and the new hub at once). Every one of those pages
+                is still reachable -- from /dashboard directly if its tile is
+                on, or via Customize there to turn it on -- nothing here
+                deletes a page or a route, only this menu's rendering.
+                Reverting is a one-line change if this turns out wrong:
+                un-comment the two .map() blocks this replaced. */}
           </div>
 
           <div className="ml-auto flex items-center gap-2">

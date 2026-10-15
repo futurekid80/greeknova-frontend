@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSessionCached } from "@/lib/supabase";
 
 export default function HowToReadPage() {
   useEffect(() => {
     async function checkAuth() {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSessionCached();
       if (!session) {
         window.location.href = "/login?returnTo=" + window.location.pathname;
       } else {

@@ -1,6 +1,6 @@
 "use client";
 
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 import { useEffect, useState, useRef } from "react";
 
 const MCX_ENABLED = process.env.NEXT_PUBLIC_MCX_ENABLED === "true";
@@ -481,7 +481,7 @@ export default function OIMapPage() {
   // Auth gate — redirect to login if no session
   useEffect(() => {
     async function checkAuth() {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await getSessionCached()
       if (!session) {
         window.location.href = '/login?returnTo=' + window.location.pathname
       } else {

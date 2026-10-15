@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 import { Suspense } from 'react'
 
 function ConfirmHandler() {
@@ -48,7 +48,7 @@ function ConfirmHandler() {
 
         setStatus('No code or token found — checking session...')
         await new Promise(r => setTimeout(r, 3000))
-        const { data: { session } } = await supabase.auth.getSession()
+        const { data: { session } } = await getSessionCached()
         setStatus(`Session: ${session ? 'FOUND user=' + session.user.email : 'NOT FOUND'}`)
         await new Promise(r => setTimeout(r, 3000))
 

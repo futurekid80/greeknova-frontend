@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Settings, Check } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 import { DESTINATIONS, WIDGETS, widgetsByDestination, Destination } from '@/lib/widgetRegistry'
 
 // Oct 14 2026: first pass at screen consolidation -- see lib/widgetRegistry.ts
@@ -28,7 +28,7 @@ export default function DashboardPage() {
   const [saveError, setSaveError] = useState('')
 
   const loadPrefs = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await getSessionCached()
     if (!session) { window.location.href = '/login'; return }
     const { data, error } = await supabase
       .from('dashboard_prefs')
@@ -57,7 +57,7 @@ export default function DashboardPage() {
     const next = !isEnabled(key)
     setPrefs(p => ({ ...p, [key]: next }))
     setSaveError('')
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await getSessionCached()
     if (!session) return
     const { error } = await supabase
       .from('dashboard_prefs')

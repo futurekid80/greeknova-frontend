@@ -1,7 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 import { Plus, X, TrendingUp, TrendingDown, BookOpen, Brain, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
 import { ALL_SYMBOLS as _CANON_SYMBOLS, getLotSize } from '@/lib/symbols'
@@ -96,7 +96,7 @@ export default function TradingJournal() {
 
   // Load session
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSessionCached().then(({ data: { session } }) => {
       if (session?.user) {
         setUserEmail(session.user.email || '')
         setUserId(session.user.id)

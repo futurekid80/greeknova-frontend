@@ -2,7 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useState, useCallback, useEffect } from 'react'
 import { RefreshCw, Plus, X, Save, Trash2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 
 const API = 'https://api.greeknova.com'
 
@@ -118,7 +118,7 @@ export default function CustomScanner() {
   // re-loading on any later auth state change, fixes that race.
   useEffect(() => {
     let cancelled = false
-    supabase.auth.getSession().then(() => { if (!cancelled) loadSavedScans() })
+    getSessionCached().then(() => { if (!cancelled) loadSavedScans() })
     const { data: sub } = supabase.auth.onAuthStateChange(() => { loadSavedScans() })
     return () => { cancelled = true; sub.subscription.unsubscribe() }
   }, [loadSavedScans])

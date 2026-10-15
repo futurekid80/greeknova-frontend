@@ -119,8 +119,24 @@ export default function OIHeatmap() {
       params.set('_t', Date.now().toString())
       const res  = await fetch(`${API}/oi-heatmap/${symbol}?${params}`, { cache: 'no-store' })
       const json = await res.json()
-      setData(json)
-      if (!expiry && json.expiry) setExpiry(json.expiry)
+      // Oct 15 2026: "error keeps popping" -- confirmed live, this crashed
+      // the whole page with a generic Next.js error boundary. Root cause:
+      // this never checked res.ok or the response's shape before trusting
+      // it as HeatmapData. A gated endpoint auth hiccup (the same
+      // session-race family fixed elsewhere) returns an error payload like
+      // {"code":"user_no_token"} instead of {ce_data, pe_data, strikes,
+      // ...} -- that got set as `data` anyway, and the OI-wall math below
+      // runs unconditionally on render and calls .forEach/.length on
+      // fields that don't exist on an error payload, throwing synchronously
+      // outside any try/catch. Only trust a response that actually has the
+      // shape this page needs; otherwise keep showing the last good data
+      // (or the empty state) instead of a payload that crashes rendering.
+      if (res.ok && Array.isArray(json?.strikes) && Array.isArray(json?.ce_data) && Array.isArray(json?.pe_data) && Array.isArray(json?.timestamps)) {
+        setData(json)
+        if (!expiry && json.expiry) setExpiry(json.expiry)
+      } else {
+        console.error('oi-heatmap: unexpected response, not updating', res.status, json)
+      }
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [symbol, expiry])
@@ -146,21 +162,33 @@ export default function OIHeatmap() {
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
 
+  // Oct 15 2026: defense-in-depth alongside the fetchData shape check above
+  // -- everything below assumed `data`'s array fields were always real
+  // arrays the moment `data` itself was truthy. They weren't guaranteed to
+  // be (an error payload is still a truthy object), and that's exactly
+  // what crashed the page. Derive one validated reference and use it for
+  // every computation below instead of the raw `data` state, so a future
+  // change that sets `data` to something unexpected can't crash rendering
+  // again the same way.
+  const safeData = (data && Array.isArray(data.timestamps) && Array.isArray(data.ce_data) &&
+    Array.isArray(data.pe_data) && Array.isArray(data.strikes) && Array.isArray(data.cmp_series))
+    ? data : null
+
   // Safe wall detection
-  const ceWalls = data?.timestamps.map((_, tIdx) => {
-    if (!data.ce_data.length) return 0
+  const ceWalls = safeData?.timestamps.map((_, tIdx) => {
+    if (!safeData.ce_data.length) return 0
     let maxOI = 0, wallStrike = 0
-    data.ce_data.forEach(row => {
+    safeData.ce_data.forEach(row => {
       const oi = row.values[tIdx]?.oi || 0
       if (oi > maxOI) { maxOI = oi; wallStrike = row.strike }
     })
     return wallStrike
   }) || []
 
-  const peWalls = data?.timestamps.map((_, tIdx) => {
-    if (!data.pe_data.length) return 0
+  const peWalls = safeData?.timestamps.map((_, tIdx) => {
+    if (!safeData.pe_data.length) return 0
     let maxOI = 0, wallStrike = 0
-    data.pe_data.forEach(row => {
+    safeData.pe_data.forEach(row => {
       const oi = row.values[tIdx]?.oi || 0
       if (oi > maxOI) { maxOI = oi; wallStrike = row.strike }
     })
@@ -168,18 +196,18 @@ export default function OIHeatmap() {
   }) || []
 
   // Safe ATM per timestamp
-  const atmPerTime = data?.timestamps.map((_, tIdx) => {
-    const cmp = data.cmp_series[tIdx]?.cmp
-    if (!cmp || !data.strikes.length) return null
-    return closestStrike(data.strikes, cmp)
+  const atmPerTime = safeData?.timestamps.map((_, tIdx) => {
+    const cmp = safeData.cmp_series[tIdx]?.cmp
+    if (!cmp || !safeData.strikes.length) return null
+    return closestStrike(safeData.strikes, cmp)
   }) || []
 
   // Safe ATM strike for display filtering
-  const atmStrike = (data?.latest_cmp && data?.strikes.length)
-    ? closestStrike(data.strikes, data.latest_cmp)
+  const atmStrike = (safeData?.latest_cmp && safeData?.strikes.length)
+    ? closestStrike(safeData.strikes, safeData.latest_cmp)
     : null
 
-  const displayStrikes = data ? [...data.strikes].reverse().filter(strike => {
+  const displayStrikes = safeData ? [...safeData.strikes].reverse().filter(strike => {
     if (!atmStrike) return true
     const strikeInterval = symbol === 'BANKNIFTY' ? 100 : symbol === 'SENSEX' ? 100 : symbol === 'MIDCPNIFTY' ? 25 : 50
     const range = 15 * strikeInterval
@@ -295,7 +323,7 @@ export default function OIHeatmap() {
               <div key={i} className="h-7 bg-gray-900/30 rounded animate-pulse"/>
             ))}
           </div>
-        ) : !data || data.strikes.length === 0 ? (
+        ) : !safeData || safeData.strikes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/50 rounded-2xl">
             <div className="text-4xl mb-4">🌡️</div>
             <p className="text-gray-500">No heatmap data available — market may be closed or no data for this symbol</p>
@@ -310,7 +338,7 @@ export default function OIHeatmap() {
                 <div className="flex-1 border-r border-gray-800">
                   <div className="text-center py-1 text-[10px] text-red-400 font-bold border-b border-gray-800">CE OI →</div>
                   <div className="flex">
-                    {data.time_labels.map((t, i) => (
+                    {safeData.time_labels.map((t, i) => (
                       <div key={i} className="flex-1 text-center text-[9px] text-gray-600 py-1 border-r border-gray-800/30 last:border-0">
                         {i % 2 === 0 ? t : ''}
                       </div>
@@ -322,7 +350,7 @@ export default function OIHeatmap() {
                 <div className="flex-1">
                   <div className="text-center py-1 text-[10px] text-emerald-400 font-bold border-b border-gray-800">PE OI →</div>
                   <div className="flex">
-                    {data.time_labels.map((t, i) => (
+                    {safeData.time_labels.map((t, i) => (
                       <div key={i} className="flex-1 text-center text-[9px] text-gray-600 py-1 border-r border-gray-800/30 last:border-0">
                         {i % 2 === 0 ? t : ''}
                       </div>
@@ -335,8 +363,8 @@ export default function OIHeatmap() {
             {/* Strike rows */}
             <div className="overflow-y-auto max-h-[70vh]">
               {displayStrikes.map(strike => {
-                const ceRow = data.ce_data.find(r => r.strike === strike)
-                const peRow = data.pe_data.find(r => r.strike === strike)
+                const ceRow = safeData.ce_data.find(r => r.strike === strike)
+                const peRow = safeData.pe_data.find(r => r.strike === strike)
                 return (
                   <div key={strike} className="flex border-b border-gray-800/40 hover:bg-gray-800/10 transition-colors">
                     <div className="w-24 shrink-0 flex items-center px-3 border-r border-gray-800">
@@ -409,15 +437,15 @@ export default function OIHeatmap() {
         )}
 
         {/* Auto Interpretation Panel — fully guarded against empty arrays */}
-        {data && data.strikes.length > 0 && data.timestamps.length > 0 && (() => {
+        {safeData && safeData.strikes.length > 0 && safeData.timestamps.length > 0 && (() => {
           const insights: { icon: string; text: string; color: string }[] = []
-          const lastIdx  = data.timestamps.length - 1
+          const lastIdx  = safeData.timestamps.length - 1
           const firstIdx = 0
 
           // 1. CE wall conviction
           const cePeakStrike = (() => {
             let maxDuration = 0, bestStrike = 0
-            data.ce_data.forEach(row => {
+            safeData.ce_data.forEach(row => {
               if (!row.values.length) return
               const duration = row.values.filter(v => v.intensity > 60).length
               if (duration > maxDuration) { maxDuration = duration; bestStrike = row.strike }
@@ -425,10 +453,10 @@ export default function OIHeatmap() {
             return { strike: bestStrike, duration: maxDuration }
           })()
 
-          if (cePeakStrike.duration > data.timestamps.length * 0.6) {
+          if (cePeakStrike.duration > safeData.timestamps.length * 0.6) {
             insights.push({
               icon: '🔴',
-              text: `${cePeakStrike.strike.toLocaleString()} CE wall holding for ${cePeakStrike.duration} of ${data.timestamps.length} snapshots — strong institutional resistance`,
+              text: `${cePeakStrike.strike.toLocaleString()} CE wall holding for ${cePeakStrike.duration} of ${safeData.timestamps.length} snapshots — strong institutional resistance`,
               color: 'text-red-400'
             })
           }
@@ -436,7 +464,7 @@ export default function OIHeatmap() {
           // 2. PE wall conviction
           const pePeakStrike = (() => {
             let maxDuration = 0, bestStrike = 0
-            data.pe_data.forEach(row => {
+            safeData.pe_data.forEach(row => {
               if (!row.values.length) return
               const duration = row.values.filter(v => v.intensity > 60).length
               if (duration > maxDuration) { maxDuration = duration; bestStrike = row.strike }
@@ -444,17 +472,17 @@ export default function OIHeatmap() {
             return { strike: bestStrike, duration: maxDuration }
           })()
 
-          if (pePeakStrike.duration > data.timestamps.length * 0.6) {
+          if (pePeakStrike.duration > safeData.timestamps.length * 0.6) {
             insights.push({
               icon: '🟢',
-              text: `${pePeakStrike.strike.toLocaleString()} PE wall holding for ${pePeakStrike.duration} of ${data.timestamps.length} snapshots — strong institutional support`,
+              text: `${pePeakStrike.strike.toLocaleString()} PE wall holding for ${pePeakStrike.duration} of ${safeData.timestamps.length} snapshots — strong institutional support`,
               color: 'text-emerald-400'
             })
           }
 
           // 3. CE wall fading — guarded
           if (cePeakStrike.strike > 0) {
-            const wallRow = data.ce_data.find(r => r.strike === cePeakStrike.strike)
+            const wallRow = safeData.ce_data.find(r => r.strike === cePeakStrike.strike)
             if (wallRow && wallRow.values.length > 0) {
               const oiValues = wallRow.values.map(v => v.oi)
               const peakOI   = safeMax(oiValues)
@@ -472,7 +500,7 @@ export default function OIHeatmap() {
 
           // 4. PE wall fading — guarded
           if (pePeakStrike.strike > 0) {
-            const wallRow = data.pe_data.find(r => r.strike === pePeakStrike.strike)
+            const wallRow = safeData.pe_data.find(r => r.strike === pePeakStrike.strike)
             if (wallRow && wallRow.values.length > 0) {
               const oiValues = wallRow.values.map(v => v.oi)
               const peakOI   = safeMax(oiValues)
@@ -491,11 +519,11 @@ export default function OIHeatmap() {
           // 5. Vacuum zones — guarded
           const lastAtm = atmPerTime[lastIdx]
           if (lastAtm) {
-            const vacuumAbove = data.strikes
+            const vacuumAbove = safeData.strikes
               .filter(s => s > lastAtm)
               .find(s => {
-                const ce = data.ce_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
-                const pe = data.pe_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
+                const ce = safeData.ce_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
+                const pe = safeData.pe_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
                 return ce < 5 && pe < 5
               })
             if (vacuumAbove) {
@@ -507,12 +535,12 @@ export default function OIHeatmap() {
               })
             }
 
-            const vacuumBelow = [...data.strikes]
+            const vacuumBelow = [...safeData.strikes]
               .filter(s => s < lastAtm)
               .reverse()
               .find(s => {
-                const ce = data.ce_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
-                const pe = data.pe_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
+                const ce = safeData.ce_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
+                const pe = safeData.pe_data.find(r => r.strike === s)?.values[lastIdx]?.intensity || 0
                 return ce < 5 && pe < 5
               })
             if (vacuumBelow) {

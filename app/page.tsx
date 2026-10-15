@@ -12,6 +12,21 @@ const API = 'https://api.greeknova.com'
 
 const ALL_SYMBOLS = _CANON_SYMBOLS
 
+// Oct 15 2026: fix for the homepage getting stuck on its loading skeleton
+// indefinitely -- traced to /oi-pulse occasionally never responding at all
+// during market hours (confirmed live: showed "pending" in the network
+// panel, no response, no error) rather than failing fast. The Sep 12 2026
+// fix below (Promise.allSettled) only protects against a fetch REJECTING;
+// it still waits forever for one that never settles either way. A plain
+// fetch() has no built-in timeout, so one hung request blocked
+// setLoading(false) for the whole page. Every fetch that feeds that
+// Promise.allSettled now races against this timeout instead.
+function fetchWithTimeout(url: string, ms = 15000): Promise<Response> {
+  const controller = new AbortController()
+  const t = setTimeout(() => controller.abort(), ms)
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(t))
+}
+
 // Oct 10 2026: Pulse homepage's card row is deliberately the 3 most-liquid
 // indices only, not every tracked index -- FINNIFTY and MIDCPNIFTY are
 // thinner and stay off this glance view by Manish's call (they're still
@@ -783,8 +798,8 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
       setLoading(true)
       try {
         const [intelRes, oiRes] = await Promise.all([
-          fetch(`${API}/stock-intel/${symbol}`),
-          fetch(`${API}/oi-history/${symbol}`)
+          fetchWithTimeout(`${API}/stock-intel/${symbol}`),
+          fetchWithTimeout(`${API}/oi-history/${symbol}`)
         ])
         const [intel, oi] = await Promise.all([intelRes.json(), oiRes.json()])
         const mpItem = intel.max_pain || null
@@ -1057,10 +1072,10 @@ export default function MarketPulse() {
     } catch {}
     try {
       const results = await Promise.allSettled([
-        fetch(`${API}/cpr-scanner`).then(r => r.json()),
-        fetch(`${API}/oi-pulse`).then(r => r.json()),
-        fetch(`${API}/uoa`).then(r => r.json()),
-        fetch(`${API}/52-week-high`).then(r => r.json()),
+        fetchWithTimeout(`${API}/cpr-scanner`).then(r => r.json()),
+        fetchWithTimeout(`${API}/oi-pulse`).then(r => r.json()),
+        fetchWithTimeout(`${API}/uoa`).then(r => r.json()),
+        fetchWithTimeout(`${API}/52-week-high`).then(r => r.json()),
       ])
       const ok = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' ? r.value : null
       const [cprJson, pulseJson, uoaJson, week52Json] = results.map(ok)
@@ -1117,7 +1132,7 @@ export default function MarketPulse() {
     // of the other four endpoints can no longer prevent this from running
     // and clearing "Loading index data...".
     try {
-      const indexRes = await fetch(`${API}/index-data`)
+      const indexRes = await fetchWithTimeout(`${API}/index-data`)
       const indexJson = await indexRes.json()
       if (indexJson?.timestamp) {
         const ts = indexJson.timestamp

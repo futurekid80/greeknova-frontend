@@ -39,6 +39,23 @@ function showAccessBanner(code: string) {
   }
 }
 
+// Oct 15 2026: this banner was only ever added, never removed. A
+// token/dashboard_prefs race at page load (two tabs open, lock stolen)
+// could 401 the FIRST gated request on a page even with the retries above
+// -- one real failure, after which the session is perfectly fine again
+// (confirmed live: the very next call to the same endpoint succeeds) --
+// but the banner stayed on screen regardless, because nothing ever told
+// it the problem had passed. That's "this message keeps popping" even
+// though the account was never actually signed out. Clear it the moment
+// any gated call succeeds.
+function clearAccessBanner() {
+  try {
+    document.getElementById('gn-access-banner')?.remove()
+  } catch (e) {
+    // ignore
+  }
+}
+
 // Oct 14 2026: pages cache real market data (CPR, breadth, etc.) in
 // sessionStorage for a few minutes so the homepage doesn't look empty while
 // a fresh fetch is in flight. That cache has its own clock -- it doesn't
@@ -91,6 +108,11 @@ async function watchAccess(p: Promise<Response>, gated: boolean): Promise<Respon
     } catch (e) {
       // not a gate response
     }
+  } else if (gated && res.ok) {
+    // A gated call just succeeded -- whatever transient auth hiccup
+    // triggered the banner (if any) has passed, so stop telling the
+    // person their session expired.
+    clearAccessBanner()
   }
   return res
 }
@@ -119,6 +141,12 @@ if (typeof window !== 'undefined' && !window.__gnAuthFetchInstalled) {
         try {
           ;({ data } = await getSessionCached())
         } catch (e) {
+          // A short pause before retrying gives a same-tick burst of
+          // concurrent getSession() calls (several components mounting
+          // on the same page load, each racing for the same lock) a
+          // moment to settle, instead of the retry landing right back in
+          // the same storm it just lost to.
+          await new Promise((r) => setTimeout(r, 400))
           ;({ data } = await getSessionCached())
         }
         const token = data.session?.access_token

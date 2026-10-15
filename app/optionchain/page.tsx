@@ -197,10 +197,20 @@ export default function OptionChain() {
     return vals.reduce((a, b) => a + b, 0) / vals.length
   }
 
+  // Oct 15 2026: "no IV spike in nearby strikes, all deep ITM on both
+  // sides, strange" -- deep ITM strikes have almost no vega, so a tiny LTP
+  // tick forces the solved IV to swing wildly to explain it. That's a
+  // numerical artifact, not a real event, and matches the backend's same
+  // fix on /option-chain-spikes: don't trust IV for spike purposes past
+  // |delta| 0.85.
+  const MAX_ABS_DELTA_FOR_IV_SPIKE = 0.85
   function ivSpike(chain: ChainRow[], idx: number, side: 'ce' | 'pe'): boolean {
     const g = chain[idx][side]
     if (!isLiquid(g) || g.iv == null) return false
-    const avg = localAvg(chain, idx, side, (x) => (isLiquid(x) ? x.iv ?? null : null))
+    if (g.delta != null && Math.abs(g.delta) > MAX_ABS_DELTA_FOR_IV_SPIKE) return false
+    const avg = localAvg(chain, idx, side, (x) =>
+      isLiquid(x) && (x.delta == null || Math.abs(x.delta) <= MAX_ABS_DELTA_FOR_IV_SPIKE) ? x.iv ?? null : null
+    )
     return avg != null && avg > 0 && g.iv >= avg * IV_SPIKE_THRESHOLD
   }
 

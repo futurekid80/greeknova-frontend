@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Settings, Check } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { supabase, getSessionCached } from '@/lib/supabase'
+import { supabase, getSessionCached, withTimeout } from '@/lib/supabase'
 import { DESTINATIONS, WIDGETS, widgetsByDestination, Destination } from '@/lib/widgetRegistry'
 
 // Oct 14 2026: first pass at screen consolidation -- see lib/widgetRegistry.ts
@@ -49,10 +49,20 @@ export default function DashboardPage() {
     }
     if (!session) { window.location.href = '/login'; return }
     try {
-      const { data, error } = await supabase
-        .from('dashboard_prefs')
-        .select('widget_key, enabled')
-        .eq('user_id', session.user.id)
+      // Oct 15 2026: this query goes through the Supabase client directly,
+      // which pulls the auth header via its own internal getSession() call
+      // -- a SEPARATE lock acquisition from the one getSessionCached()
+      // above already resolved. Confirmed live that this, not the first
+      // await, was the actual hang: the dashboard_prefs REST request never
+      // even appeared in the network panel. Same timeout treatment so a
+      // second cross-tab lock deadlock here can't hang the page either.
+      const { data, error } = await withTimeout(
+        supabase
+          .from('dashboard_prefs')
+          .select('widget_key, enabled')
+          .eq('user_id', session.user.id),
+        4000
+      )
       if (!error && data) {
         const overrides: Record<string, boolean> = {}
         for (const row of data) overrides[row.widget_key] = row.enabled
@@ -87,12 +97,29 @@ export default function DashboardPage() {
     const next = !isEnabled(key)
     setPrefs(p => ({ ...p, [key]: next }))
     setSaveError('')
-    const { data: { session } } = await getSessionCached()
+    let session
+    try {
+      ({ data: { session } } = await getSessionCached())
+    } catch {
+      try {
+        ({ data: { session } } = await getSessionCached())
+      } catch {
+        return
+      }
+    }
     if (!session) return
-    const { error } = await supabase
-      .from('dashboard_prefs')
-      .upsert({ user_id: session.user.id, widget_key: key, enabled: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id,widget_key' })
-    if (error) {
+    try {
+      const { error } = await withTimeout(
+        supabase
+          .from('dashboard_prefs')
+          .upsert({ user_id: session.user.id, widget_key: key, enabled: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id,widget_key' }),
+        4000
+      )
+      if (error) {
+        setSaveError('Could not save that change. Please try again.')
+        setPrefs(p => ({ ...p, [key]: !next }))
+      }
+    } catch {
       setSaveError('Could not save that change. Please try again.')
       setPrefs(p => ({ ...p, [key]: !next }))
     }

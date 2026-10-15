@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, MessageSquare, X, Bell, LogOut, User } from 'lucide-react'
 import { usePathname } from 'next/navigation'
-import { supabase, getSessionCached } from '@/lib/supabase'
+import { supabase, getSessionCached, withTimeout } from '@/lib/supabase'
 import { clearCachedMarketData } from '@/lib/authFetch'
 import VixGauge from '@/components/VixGauge'
 
@@ -421,12 +421,20 @@ function useClassicNavPref() {
       }
       if (!session) { if (!cancelled) setLoaded(true); return }
       try {
-        const { data, error } = await supabase
-          .from('dashboard_prefs')
-          .select('enabled')
-          .eq('user_id', session.user.id)
-          .eq('widget_key', CLASSIC_NAV_PREF_KEY)
-          .maybeSingle()
+        // Oct 15 2026: this query makes its own, separate getSession() call
+        // inside the Supabase client (for the REST auth header) -- a second
+        // lock acquisition the retry above can't protect against. Confirmed
+        // live this is what was actually still hanging after the
+        // lib/supabase.ts fix: the dashboard_prefs request never even fired.
+        const { data, error } = await withTimeout(
+          supabase
+            .from('dashboard_prefs')
+            .select('enabled')
+            .eq('user_id', session.user.id)
+            .eq('widget_key', CLASSIC_NAV_PREF_KEY)
+            .maybeSingle(),
+          4000
+        )
         if (!cancelled && !error && data) setClassicNav(!!data.enabled)
       } catch {
         // fall through to default
@@ -452,12 +460,20 @@ function useClassicNavPref() {
       }
     }
     if (!session) return
-    await supabase
-      .from('dashboard_prefs')
-      .upsert(
-        { user_id: session.user.id, widget_key: CLASSIC_NAV_PREF_KEY, enabled: next, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id,widget_key' }
+    try {
+      await withTimeout(
+        supabase
+          .from('dashboard_prefs')
+          .upsert(
+            { user_id: session.user.id, widget_key: CLASSIC_NAV_PREF_KEY, enabled: next, updated_at: new Date().toISOString() },
+            { onConflict: 'user_id,widget_key' }
+          ),
+        4000
       )
+    } catch {
+      // local toggle already applied -- worst case this one save doesn't
+      // stick server-side and the next page load falls back to default
+    }
   }
 
   return { classicNav, loaded, toggle }

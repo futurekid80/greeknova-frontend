@@ -55,7 +55,12 @@ let _sessionInFlight: Promise<{ data: { session: Session | null } }> | null = nu
 // request -- that keeps running and will still populate the cache for
 // the next call if the lock ever does clear -- it just stops THIS caller
 // from waiting on it forever.
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+// Takes a PromiseLike rather than a Promise -- Supabase's own query
+// builders (e.g. supabase.from(...).select(...)) are thenables, not real
+// Promise instances, and are exactly what this needs to wrap at other
+// call sites (their own internal getSession() call is a second,
+// independent lock acquisition this helper also needs to guard).
+export function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(`getSessionCached timed out after ${ms}ms`)), ms)
     p.then((v) => { clearTimeout(t); resolve(v) }, (e) => { clearTimeout(t); reject(e) })

@@ -372,11 +372,62 @@ function UserMenu() {
   )
 }
 
+// Oct 15 2026: a user asked to get the old full menu back rather than
+// hunting through /dashboard -- rather than re-litigate Oct 14's call,
+// make it a per-user choice. Reuses the dashboard_prefs table (same one
+// /dashboard writes widget on/off to) with a reserved widget_key so no
+// migration is needed; synced via Supabase like every other dashboard
+// preference, so it follows the person across devices rather than being
+// stuck to one browser.
+const CLASSIC_NAV_PREF_KEY = '__classic_nav__'
+
+function useClassicNavPref() {
+  const [classicNav, setClassicNav] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { if (!cancelled) setLoaded(true); return }
+      const { data, error } = await supabase
+        .from('dashboard_prefs')
+        .select('enabled')
+        .eq('user_id', session.user.id)
+        .eq('widget_key', CLASSIC_NAV_PREF_KEY)
+        .maybeSingle()
+      if (!cancelled) {
+        if (!error && data) setClassicNav(!!data.enabled)
+        setLoaded(true)
+      }
+    }
+    load()
+    const { data: sub } = supabase.auth.onAuthStateChange(() => load())
+    return () => { cancelled = true; sub.subscription.unsubscribe() }
+  }, [])
+
+  async function toggle() {
+    const next = !classicNav
+    setClassicNav(next)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    await supabase
+      .from('dashboard_prefs')
+      .upsert(
+        { user_id: session.user.id, widget_key: CLASSIC_NAV_PREF_KEY, enabled: next, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,widget_key' }
+      )
+  }
+
+  return { classicNav, loaded, toggle }
+}
+
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 export default function Navbar({ active: activeProp }: { active?: string }) {
   const pathname = usePathname()
   const active = pathname || activeProp || '/'
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const { classicNav, toggle: toggleClassicNav } = useClassicNavPref()
 
   return (
     <>
@@ -405,16 +456,39 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
             </Link>
             {/* Oct 14 2026: the old 5-dropdown persona/OI nav (Market, Open
                 Interest, Positional, Intraday, Option Sellers -- NAV_GROUPS
-                below, kept but unused) and the standalone VIX/Alerts text
-                links (STANDALONE below) are retired from here now that
-                /dashboard exists and covers the same ground without the
-                duplication Manish flagged (same page showing both the old
-                full menu and the new hub at once). Every one of those pages
-                is still reachable -- from /dashboard directly if its tile is
-                on, or via Customize there to turn it on -- nothing here
-                deletes a page or a route, only this menu's rendering.
-                Reverting is a one-line change if this turns out wrong:
-                un-comment the two .map() blocks this replaced. */}
+                below) and the standalone VIX/Alerts text links (STANDALONE
+                below) were retired from here by default now that /dashboard
+                exists and covers the same ground without the duplication
+                Manish flagged (same page showing both the old full menu and
+                the new hub at once). Every one of those pages is still
+                reachable -- from /dashboard directly if its tile is on, or
+                via Customize there to turn it on.
+                Oct 15 2026: made this a per-user choice (see
+                useClassicNavPref above) instead of an all-or-nothing call --
+                someone who prefers hunting through a full menu can switch
+                back to it here, everyone else keeps the consolidated hub. */}
+            {classicNav && (
+              <>
+                {NAV_GROUPS.map((group) => (
+                  <DropdownMenu key={group.label} group={group} active={active} />
+                ))}
+                {STANDALONE.map(({ href, label }) => (
+                  <Link key={href} href={href}
+                    className={`text-sm font-medium transition-colors whitespace-nowrap relative ${
+                      active.startsWith(href) ? 'text-white' : 'text-gray-400 hover:text-white'
+                    }`}>
+                    {label}
+                    {active.startsWith(href) && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
+                  </Link>
+                ))}
+              </>
+            )}
+            <button
+              onClick={toggleClassicNav}
+              title={classicNav ? 'Switch to the consolidated Dashboard menu' : 'Switch to the old full dropdown menu'}
+              className="text-xs font-medium text-gray-600 hover:text-gray-300 transition-colors whitespace-nowrap">
+              {classicNav ? '✕ Classic menu' : '☰ Classic menu'}
+            </button>
           </div>
 
           <div className="ml-auto flex items-center gap-2">

@@ -83,6 +83,19 @@ export const WIDGETS: Widget[] = [
   { key: 'spotvolume',         label: 'Spot Volume Breakout',     description: 'Cash-market volume breakout scanner',                  href: '/spotvolume',           destination: 'alerts', defaultEnabled: false },
   { key: 'vacuum',             label: 'Vacuum Scanner',           description: 'OI vacuum / rapid-unwind scanner',                     href: '/vacuum',               destination: 'alerts', defaultEnabled: false },
   { key: 'trend-ignition',     label: 'Trend Ignition',           description: 'Early trend-ignition scanner',                         href: '/trend-ignition',       destination: 'alerts', defaultEnabled: false },
+  // Oct 15 2026: these two existed under the old "⚡ Intraday" nav group
+  // (Intraday Futures Scanner, CPR Scanner) but got missed when every page
+  // was given a widget entry here on Oct 14 -- with the old dropdown nav
+  // retired, that left them with literally no link anywhere in the app. A
+  // user flagged the intraday one missing entirely. defaultEnabled: true so
+  // they reappear immediately for everyone rather than needing to be found
+  // via Customize.
+  { key: 'intraday-scanner',   label: 'Intraday Futures Scanner', description: 'Live futures OI/price scan, intraday',                 href: '/signals/intraday',     destination: 'alerts', defaultEnabled: true },
+  { key: 'cpr-scanner',        label: 'CPR Scanner',              description: 'Central Pivot Range scan across the F&O universe',     href: '/signals/cpr',          destination: 'alerts', defaultEnabled: true },
+  // Also missed on Oct 14, lower-traffic so added but off by default --
+  // still reachable via Customize/See all now instead of being orphaned.
+  { key: 'oi-map',             label: 'OI Map',                   description: 'Visual OI map across strikes',                         href: '/oi-map',               destination: 'overview', defaultEnabled: false },
+  { key: 'oipulse',            label: 'OI Pulse',                 description: 'Live OI pulse view',                                   href: '/oipulse',              destination: 'overview', defaultEnabled: false },
 ]
 
 export function widgetsByDestination(destination: Destination): Widget[] {

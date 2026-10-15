@@ -14,6 +14,20 @@ interface Greeks { ltp: number; iv: number | null; oi: number; volume: number; d
 interface ChainRow { strike: number; is_atm: boolean; ce: Greeks; pe: Greeks }
 interface ChainData { symbol: string; spot: number; expiry: string; days_left: number; expiries: string[]; timestamp: string; chain: ChainRow[] }
 
+interface SpikeEpisode {
+  strike: number
+  side: 'CE' | 'PE'
+  metric: 'IV' | 'VOL'
+  start_time: string
+  end_time: string
+  peak_time: string
+  peak_value: number
+  baseline: number
+  magnitude_pct: number | null
+  ongoing: boolean
+}
+interface SpikeData { symbol: string; expiry: string; spikes: SpikeEpisode[]; snapshots_scanned: number; latest_timestamp?: string }
+
 function fmt(n: number | undefined | null, dec = 2) {
   if (n == null) return '—'
   return n.toFixed(dec)
@@ -36,6 +50,9 @@ export default function OptionChain() {
   const [expiry, setExpiry]   = useState<string>('')
   const [data, setData]       = useState<ChainData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [spikeData, setSpikeData] = useState<SpikeData | null>(null)
+  const [spikeLoading, setSpikeLoading] = useState(false)
+  const [showSpikeLog, setShowSpikeLog] = useState(true)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -50,6 +67,27 @@ export default function OptionChain() {
     } catch (e) { console.error(e) }
     setLoading(false)
   }, [symbol, expiry])
+
+  // Oct 15 2026: the live chain below highlights a strike spiking right NOW
+  // (vs its own neighboring strikes). This is the complement Manish asked
+  // for -- a strike that ran hot at 11:15 AM and has since gone quiet is
+  // still worth knowing about for planning BTST option-writing into the
+  // close, so this replays today's 5-min snapshots on the backend and
+  // returns a log of those episodes even after they've faded.
+  const fetchSpikes = useCallback(async () => {
+    setSpikeLoading(true)
+    try {
+      const url = expiry
+        ? `${API}/option-chain-spikes/${symbol}?expiry=${expiry}`
+        : `${API}/option-chain-spikes/${symbol}`
+      const res = await fetch(url)
+      const json = await res.json()
+      setSpikeData(json)
+    } catch (e) { console.error(e) }
+    setSpikeLoading(false)
+  }, [symbol, expiry])
+
+  useEffect(() => { fetchSpikes() }, [fetchSpikes])
 
   useEffect(() => { setExpiry('') }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
@@ -97,6 +135,69 @@ export default function OptionChain() {
       isAtm:  r.is_atm,
     }))
     .filter(r => r.callIV != null || r.putIV != null)
+
+  // Oct 15 2026: "can we see vol spikes in some color to know these strikes
+  // have a spike in IV and chances for writers to pounce" -- a strike whose
+  // IV or volume is well above its own NEIGHBORING strikes right now is the
+  // signal (not vs its own earlier value -- the smile naturally slopes by
+  // strike, so what matters is a strike decoupling from the strikes around
+  // it). Same window/threshold as the backend's /option-chain-spikes log so
+  // "spiking now" here and "spiked earlier today" below agree with each
+  // other.
+  const SPIKE_WINDOW = 3
+  const IV_SPIKE_THRESHOLD = 1.15
+  const VOL_SPIKE_THRESHOLD = 2.0
+
+  function localAvg(chain: ChainRow[], idx: number, side: 'ce' | 'pe', pick: (g: Greeks) => number | null) {
+    const vals: number[] = []
+    for (let off = -SPIKE_WINDOW; off <= SPIKE_WINDOW; off++) {
+      if (off === 0) continue
+      const r = chain[idx + off]
+      if (!r) continue
+      const v = pick(r[side])
+      if (v != null) vals.push(v)
+    }
+    if (vals.length < 2) return null
+    return vals.reduce((a, b) => a + b, 0) / vals.length
+  }
+
+  function ivSpike(chain: ChainRow[], idx: number, side: 'ce' | 'pe'): boolean {
+    const g = chain[idx][side]
+    if (!isLiquid(g) || g.iv == null) return false
+    const avg = localAvg(chain, idx, side, (x) => (isLiquid(x) ? x.iv ?? null : null))
+    return avg != null && avg > 0 && g.iv >= avg * IV_SPIKE_THRESHOLD
+  }
+
+  function volSpike(chain: ChainRow[], idx: number, side: 'ce' | 'pe'): boolean {
+    const g = chain[idx][side]
+    const avg = localAvg(chain, idx, side, (x) => x.volume ?? null)
+    return avg != null && avg > 0 && g.volume >= avg * VOL_SPIKE_THRESHOLD
+  }
+
+  // Magnitude-based color grading for the Greeks columns, instead of one
+  // flat color for the whole column regardless of whether a strike is deep
+  // OTM or near-ATM.
+  function deltaColor(d?: number): string {
+    if (d == null) return '#60a5fa'
+    const abs = Math.min(Math.abs(d), 1)
+    const lightness = 78 - abs * 38 // dim (far OTM, |delta| near 0) -> vivid (near 1)
+    return `hsl(217, 91%, ${lightness}%)`
+  }
+  function thetaColor(theta: number | undefined, maxAbsTheta: number): string {
+    if (theta == null || !maxAbsTheta) return '#fb7185'
+    const abs = Math.min(Math.abs(theta) / maxAbsTheta, 1)
+    const lightness = 78 - abs * 33
+    return `hsl(350, 85%, ${lightness}%)`
+  }
+  const maxAbsTheta = Math.max(
+    1,
+    ...((data?.chain ?? []).flatMap(r => [Math.abs(r.ce.theta ?? 0), Math.abs(r.pe.theta ?? 0)]))
+  )
+
+  function fmtIST(ts: string) {
+    try { return new Date(ts).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }) }
+    catch { return ts }
+  }
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -244,6 +345,70 @@ export default function OptionChain() {
           </div>
         )}
 
+        {/* Today's spike log -- for BTST writing planning: a strike that
+            spiked at 11:15 AM and has since gone quiet still shows up here
+            even though the live chain above won't highlight it anymore. */}
+        <div className="bg-gray-900/20 border border-gray-800 rounded-2xl p-4 mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setShowSpikeLog(s => !s)} className="flex items-center gap-2 text-sm font-bold text-white">
+              <span className={`transition-transform ${showSpikeLog ? 'rotate-90' : ''}`}>▶</span>
+              🔥 Today's IV/Volume Spikes
+              {spikeData && spikeData.spikes.length > 0 && (
+                <span className="text-[10px] font-semibold text-orange-400 bg-orange-950/50 border border-orange-800/50 rounded-full px-2 py-0.5">{spikeData.spikes.length}</span>
+              )}
+            </button>
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] text-gray-500">Strikes that spiked vs neighbors at any point today, even if they've since gone quiet — for BTST writing planning</p>
+              <button onClick={fetchSpikes} disabled={spikeLoading} className="text-gray-500 hover:text-white disabled:opacity-50">
+                <RefreshCw size={12} className={spikeLoading ? 'animate-spin' : ''}/>
+              </button>
+            </div>
+          </div>
+          {showSpikeLog && (
+            spikeLoading && !spikeData ? (
+              <div className="h-16 flex items-center justify-center text-gray-600 text-xs">Scanning today's snapshots…</div>
+            ) : !spikeData || spikeData.spikes.length === 0 ? (
+              <div className="h-16 flex items-center justify-center text-gray-600 text-xs">No IV or volume spikes detected yet today</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-gray-800">
+                      <th className="py-1.5 px-2 text-left">Strike</th>
+                      <th className="py-1.5 px-2 text-left">Side</th>
+                      <th className="py-1.5 px-2 text-left">Metric</th>
+                      <th className="py-1.5 px-2 text-left">Window</th>
+                      <th className="py-1.5 px-2 text-right">Peak</th>
+                      <th className="py-1.5 px-2 text-right">vs neighbors</th>
+                      <th className="py-1.5 px-2 text-right">Magnitude</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {spikeData.spikes.map((s, i) => (
+                      <tr key={i} className="border-b border-gray-800/40">
+                        <td className="py-1.5 px-2 font-bold text-gray-200">{s.strike.toLocaleString()}</td>
+                        <td className={`py-1.5 px-2 font-semibold ${s.side === 'CE' ? 'text-red-400' : 'text-emerald-400'}`}>{s.side}</td>
+                        <td className="py-1.5 px-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${s.metric === 'IV' ? 'bg-fuchsia-500/15 text-fuchsia-300' : 'bg-cyan-500/15 text-cyan-300'}`}>
+                            {s.metric === 'IV' ? '⚡ IV' : '📈 VOL'}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-2 text-gray-400">
+                          {fmtIST(s.start_time)}–{fmtIST(s.end_time)}
+                          {s.ongoing && <span className="ml-1.5 text-[9px] text-emerald-400 font-bold">● LIVE</span>}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-gray-200">{s.metric === 'IV' ? `${s.peak_value}%` : fmtOI(s.peak_value)}</td>
+                        <td className="py-1.5 px-2 text-right text-gray-500">{s.metric === 'IV' ? `${s.baseline}%` : fmtOI(s.baseline)}</td>
+                        <td className="py-1.5 px-2 text-right font-bold text-orange-400">{s.magnitude_pct != null ? `+${s.magnitude_pct}%` : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+        </div>
+
         {/* Chain table */}
         {loading ? (
           <div className="h-64 flex items-center justify-center">
@@ -281,15 +446,25 @@ export default function OptionChain() {
                 </tr>
               </thead>
               <tbody>
-                {data.chain.map((row) => (
+                {data.chain.map((row, idx) => {
+                  const ceIvSpike = ivSpike(data.chain, idx, 'ce')
+                  const peIvSpike = ivSpike(data.chain, idx, 'pe')
+                  const ceVolSpike = volSpike(data.chain, idx, 'ce')
+                  const peVolSpike = volSpike(data.chain, idx, 'pe')
+                  const writerWatch = (ceIvSpike && ceVolSpike) || (peIvSpike && peVolSpike)
+                  return (
                   <tr key={row.strike}
                     className={`border-b border-gray-800/50 transition-colors hover:bg-gray-800/20 ${row.is_atm ? 'bg-amber-950/20' : ''}`}>
                     {/* CE side */}
                     <td className="py-2 px-2 text-right text-gray-300">{fmtOI(row.ce.oi)}</td>
-                    <td className="py-2 px-2 text-right text-gray-500">{fmtOI(row.ce.volume)}</td>
-                    <td className="py-2 px-2 text-right text-orange-400">{row.ce.iv != null ? `${row.ce.iv}` : '—'}</td>
-                    <td className="py-2 px-2 text-right text-blue-400">{fmt(row.ce.delta, 3)}</td>
-                    <td className="py-2 px-2 text-right text-rose-400">{fmt(row.ce.theta)}</td>
+                    <td className={`py-2 px-2 text-right ${ceVolSpike ? 'bg-cyan-500/15 text-cyan-300 font-bold rounded-l' : 'text-gray-500'}`} title={ceVolSpike ? 'Volume spike vs neighboring strikes' : undefined}>
+                      {fmtOI(row.ce.volume)}{ceVolSpike && ' 📈'}
+                    </td>
+                    <td className={`py-2 px-2 text-right ${ceIvSpike ? 'bg-fuchsia-500/15 text-fuchsia-300 font-bold rounded-r' : 'text-orange-400'}`} title={ceIvSpike ? 'IV spike vs neighboring strikes — possible premium opportunity for writers' : undefined}>
+                      {row.ce.iv != null ? `${row.ce.iv}` : '—'}{ceIvSpike && ' ⚡'}
+                    </td>
+                    <td className="py-2 px-2 text-right font-medium" style={{ color: deltaColor(row.ce.delta) }}>{fmt(row.ce.delta, 3)}</td>
+                    <td className="py-2 px-2 text-right font-medium" style={{ color: thetaColor(row.ce.theta, maxAbsTheta) }}>{fmt(row.ce.theta)}</td>
                     <td className={`py-2 px-3 text-right font-bold border-r border-gray-800 ${row.is_atm ? 'text-amber-300' : 'text-red-400'}`}>
                       {row.ce.ltp.toFixed(2)}
                     </td>
@@ -297,18 +472,26 @@ export default function OptionChain() {
                     <td className={`py-2 px-4 text-center font-black ${row.is_atm ? 'text-amber-400 text-sm' : 'text-gray-300'}`}>
                       {row.strike.toLocaleString()}
                       {row.is_atm && <span className="ml-1 text-[9px] text-amber-600">ATM</span>}
+                      {writerWatch && (
+                        <span className="block text-[9px] text-orange-400 font-bold" title="IV and volume both spiking on this strike — the clearest writer signal">🔥 Writer Watch</span>
+                      )}
                     </td>
                     {/* PE side */}
                     <td className={`py-2 px-3 text-left font-bold border-l border-gray-800 ${row.is_atm ? 'text-amber-300' : 'text-emerald-400'}`}>
                       {row.pe.ltp.toFixed(2)}
                     </td>
-                    <td className="py-2 px-2 text-left text-rose-400">{fmt(row.pe.theta)}</td>
-                    <td className="py-2 px-2 text-left text-blue-400">{fmt(row.pe.delta, 3)}</td>
-                    <td className="py-2 px-2 text-left text-orange-400">{row.pe.iv != null ? `${row.pe.iv}` : '—'}</td>
-                    <td className="py-2 px-2 text-left text-gray-500">{fmtOI(row.pe.volume)}</td>
+                    <td className="py-2 px-2 text-left font-medium" style={{ color: thetaColor(row.pe.theta, maxAbsTheta) }}>{fmt(row.pe.theta)}</td>
+                    <td className="py-2 px-2 text-left font-medium" style={{ color: deltaColor(row.pe.delta) }}>{fmt(row.pe.delta, 3)}</td>
+                    <td className={`py-2 px-2 text-left ${peIvSpike ? 'bg-fuchsia-500/15 text-fuchsia-300 font-bold rounded-l' : 'text-orange-400'}`} title={peIvSpike ? 'IV spike vs neighboring strikes — possible premium opportunity for writers' : undefined}>
+                      {peIvSpike && '⚡ '}{row.pe.iv != null ? `${row.pe.iv}` : '—'}
+                    </td>
+                    <td className={`py-2 px-2 text-left ${peVolSpike ? 'bg-cyan-500/15 text-cyan-300 font-bold rounded-r' : 'text-gray-500'}`} title={peVolSpike ? 'Volume spike vs neighboring strikes' : undefined}>
+                      {peVolSpike && '📈 '}{fmtOI(row.pe.volume)}
+                    </td>
                     <td className="py-2 px-2 text-left text-gray-300">{fmtOI(row.pe.oi)}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             </div>
@@ -316,10 +499,13 @@ export default function OptionChain() {
         )}
 
         {/* Legend */}
-        <div className="flex items-center gap-6 mt-4 text-xs text-gray-600">
-          <span><span className="text-blue-400">Δ Delta</span> — directional exposure</span>
-          <span><span className="text-rose-400">Θ Theta</span> — daily time decay (₹)</span>
+        <div className="flex items-center gap-6 mt-4 text-xs text-gray-600 flex-wrap">
+          <span><span className="text-blue-400">Δ Delta</span> — directional exposure (brighter = closer to 1, deeper ITM)</span>
+          <span><span className="text-rose-400">Θ Theta</span> — daily time decay, ₹ (brighter = faster decay)</span>
           <span><span className="text-orange-400">IV%</span> — implied volatility</span>
+          <span><span className="text-fuchsia-400">⚡ IV spike</span> — well above neighboring strikes right now</span>
+          <span><span className="text-cyan-400">📈 Vol spike</span> — well above neighboring strikes right now</span>
+          <span><span className="text-orange-400">🔥 Writer Watch</span> — IV + volume both spiking, same strike</span>
           <span><span className="text-amber-400">ATM</span> — at-the-money strike</span>
         </div>
       </div>

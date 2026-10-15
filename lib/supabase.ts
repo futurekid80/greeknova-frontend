@@ -42,6 +42,26 @@ let _cachedSession: Session | null = null
 let _sessionLoaded = false
 let _sessionInFlight: Promise<{ data: { session: Session | null } }> | null = null
 
+// Oct 15 2026 (second pass): the catch below handles a lock getting
+// *stolen* (gotrue rejects and we recover). Live testing with two tabs
+// open turned up a worse case the catch can't touch: the lock sometimes
+// never resolves OR rejects at all -- confirmed by watching the network
+// panel during a stuck "Loading your dashboard..." and seeing ZERO
+// requests fire, not even the dashboard_prefs query, meaning the code was
+// still parked on `await getSessionCached()` itself. No exception, so no
+// catch block runs, so nothing recovers on its own. A hard timeout is the
+// only thing that can save a caller from an underlying promise that
+// simply never settles. It does NOT cancel or reset the real in-flight
+// request -- that keeps running and will still populate the cache for
+// the next call if the lock ever does clear -- it just stops THIS caller
+// from waiting on it forever.
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`getSessionCached timed out after ${ms}ms`)), ms)
+    p.then((v) => { clearTimeout(t); resolve(v) }, (e) => { clearTimeout(t); reject(e) })
+  })
+}
+
 export async function getSessionCached(): Promise<{ data: { session: Session | null } }> {
   if (_sessionLoaded) return { data: { session: _cachedSession } }
   if (!_sessionInFlight) {
@@ -73,7 +93,7 @@ export async function getSessionCached(): Promise<{ data: { session: Session | n
       throw e
     })
   }
-  return _sessionInFlight
+  return withTimeout(_sessionInFlight, 4000)
 }
 
 supabase.auth.onAuthStateChange((_event, session) => {

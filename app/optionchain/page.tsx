@@ -59,6 +59,30 @@ export default function OptionChain() {
   const [spikeData, setSpikeData] = useState<SpikeData | null>(null)
   const [spikeLoading, setSpikeLoading] = useState(false)
   const [showSpikeLog, setShowSpikeLog] = useState(true)
+  // Oct 15 2026: "sortable or filters, to avoid doomsday scrolling" -- the
+  // spike log can easily hold 200+ rows across a session, so a flat
+  // chronological list is unusable past the first screen. Side/metric
+  // filters narrow it to what's actually relevant right now (e.g. only PE
+  // vol spikes), and clicking a column header sorts by it.
+  type SpikeSortKey = 'strike' | 'start_time' | 'peak_value' | 'magnitude_pct' | 'ltp' | 'delta' | 'theta'
+  const [spikeSideFilter, setSpikeSideFilter] = useState<'ALL' | 'CE' | 'PE'>('ALL')
+  const [spikeMetricFilter, setSpikeMetricFilter] = useState<'ALL' | 'IV' | 'VOL'>('ALL')
+  const [spikeOngoingOnly, setSpikeOngoingOnly] = useState(false)
+  const [spikeSortKey, setSpikeSortKey] = useState<SpikeSortKey>('start_time')
+  const [spikeSortDir, setSpikeSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleSpikeSort(key: SpikeSortKey) {
+    if (spikeSortKey === key) {
+      setSpikeSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSpikeSortKey(key)
+      setSpikeSortDir('desc')
+    }
+  }
+  function sortArrow(key: SpikeSortKey) {
+    if (spikeSortKey !== key) return ''
+    return spikeSortDir === 'asc' ? ' ▲' : ' ▼'
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -237,6 +261,27 @@ export default function OptionChain() {
     else wallZone = 'inside'
   }
 
+  const visibleSpikes = (spikeData?.spikes ?? [])
+    .filter(s => spikeSideFilter === 'ALL' || s.side === spikeSideFilter)
+    .filter(s => spikeMetricFilter === 'ALL' || s.metric === spikeMetricFilter)
+    .filter(s => !spikeOngoingOnly || s.ongoing)
+    .slice()
+    .sort((a, b) => {
+      let av: number | string
+      let bv: number | string
+      switch (spikeSortKey) {
+        case 'strike': av = a.strike; bv = b.strike; break
+        case 'start_time': av = a.start_time; bv = b.start_time; break
+        case 'peak_value': av = a.peak_value; bv = b.peak_value; break
+        case 'magnitude_pct': av = a.magnitude_pct ?? -Infinity; bv = b.magnitude_pct ?? -Infinity; break
+        case 'ltp': av = a.ltp ?? -Infinity; bv = b.ltp ?? -Infinity; break
+        case 'delta': av = a.delta ?? -Infinity; bv = b.delta ?? -Infinity; break
+        case 'theta': av = a.theta ?? -Infinity; bv = b.theta ?? -Infinity; break
+      }
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0
+      return spikeSortDir === 'asc' ? cmp : -cmp
+    })
+
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       {/* Nav */}
@@ -408,24 +453,52 @@ export default function OptionChain() {
             ) : !spikeData || spikeData.spikes.length === 0 ? (
               <div className="h-16 flex items-center justify-center text-gray-600 text-xs">No IV or volume spikes detected yet today</div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                {/* Filters -- 200+ episodes in a session makes a flat list
+                    unscannable, so narrow to what's relevant before sorting. */}
+                <div className="flex items-center gap-4 mb-2 flex-wrap text-[11px]">
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-600 mr-0.5">Side:</span>
+                    {(['ALL', 'CE', 'PE'] as const).map(v => (
+                      <button key={v} onClick={() => setSpikeSideFilter(v)}
+                        className={`px-2 py-1 rounded-md font-semibold border transition-all ${spikeSideFilter === v ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
+                        {v === 'ALL' ? 'All' : v}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-600 mr-0.5">Metric:</span>
+                    {(['ALL', 'IV', 'VOL'] as const).map(v => (
+                      <button key={v} onClick={() => setSpikeMetricFilter(v)}
+                        className={`px-2 py-1 rounded-md font-semibold border transition-all ${spikeMetricFilter === v ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
+                        {v === 'ALL' ? 'All' : v}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setSpikeOngoingOnly(o => !o)}
+                    className={`px-2 py-1 rounded-md font-semibold border transition-all ${spikeOngoingOnly ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
+                    ● Live only
+                  </button>
+                  <span className="text-gray-600">{visibleSpikes.length} of {spikeData.spikes.length} shown · click a column header to sort</span>
+                </div>
+                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
                 <table className="w-full text-xs">
-                  <thead>
+                  <thead className="sticky top-0 z-10 bg-[#0c0c16]">
                     <tr className="text-gray-500 border-b border-gray-800">
-                      <th className="py-1.5 px-2 text-left">Strike</th>
+                      <th className="py-1.5 px-2 text-left cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('strike')}>Strike{sortArrow('strike')}</th>
                       <th className="py-1.5 px-2 text-left">Side</th>
                       <th className="py-1.5 px-2 text-left">Metric</th>
-                      <th className="py-1.5 px-2 text-left">Window</th>
-                      <th className="py-1.5 px-2 text-right">Peak</th>
+                      <th className="py-1.5 px-2 text-left cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('start_time')}>Window{sortArrow('start_time')}</th>
+                      <th className="py-1.5 px-2 text-right cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('peak_value')}>Peak{sortArrow('peak_value')}</th>
                       <th className="py-1.5 px-2 text-right">vs neighbors</th>
-                      <th className="py-1.5 px-2 text-right">Magnitude</th>
-                      <th className="py-1.5 px-2 text-right">LTP at peak</th>
-                      <th className="py-1.5 px-2 text-right">Δ</th>
-                      <th className="py-1.5 px-2 text-right">Θ</th>
+                      <th className="py-1.5 px-2 text-right cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('magnitude_pct')}>Magnitude{sortArrow('magnitude_pct')}</th>
+                      <th className="py-1.5 px-2 text-right cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('ltp')}>LTP at peak{sortArrow('ltp')}</th>
+                      <th className="py-1.5 px-2 text-right cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('delta')}>Δ{sortArrow('delta')}</th>
+                      <th className="py-1.5 px-2 text-right cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('theta')}>Θ{sortArrow('theta')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {spikeData.spikes.map((s, i) => (
+                    {visibleSpikes.map((s, i) => (
                       <tr key={i} className="border-b border-gray-800/40">
                         <td className="py-1.5 px-2 font-bold text-gray-200">{s.strike.toLocaleString()}</td>
                         <td className={`py-1.5 px-2 font-semibold ${s.side === 'CE' ? 'text-red-400' : 'text-emerald-400'}`}>{s.side}</td>
@@ -448,7 +521,8 @@ export default function OptionChain() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )
           )}
         </div>

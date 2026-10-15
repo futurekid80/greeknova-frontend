@@ -109,7 +109,18 @@ if (typeof window !== 'undefined' && !window.__gnAuthFetchInstalled) {
       const isOwnProxy = u.origin === window.location.origin && u.pathname.startsWith('/api/')
       if ((isApi || isOwnProxy) && !u.pathname.startsWith('/public/')) {
         gatedCall = true
-        const { data } = await getSessionCached()
+        // Oct 15 2026: a cross-tab lock-steal can reject this call even
+        // after getSessionCached() clears its own cache on failure (see
+        // lib/supabase.ts) -- the first call after a steal still throws,
+        // it just no longer poisons later calls. One retry here is what
+        // keeps THIS request from going out unauthenticated and tripping
+        // the "session expired" banner for no real reason.
+        let data
+        try {
+          ;({ data } = await getSessionCached())
+        } catch (e) {
+          ;({ data } = await getSessionCached())
+        }
         const token = data.session?.access_token
         if (token) {
           const headers = new Headers(

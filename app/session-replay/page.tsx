@@ -259,7 +259,7 @@ export default function SessionReplayPage() {
               sub={
                 downsideFlipPoint !== null
                   ? 'Nearest crossing below spot'
-                  : flipPoint !== null && aboveFlip === false
+                  : flipPoint !== null && aboveFlip === true
                   ? 'Flip zone already below spot'
                   : 'No crossing within range below spot'
               }

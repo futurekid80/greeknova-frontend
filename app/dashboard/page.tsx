@@ -28,23 +28,32 @@ export default function DashboardPage() {
   const [saveError, setSaveError] = useState('')
 
   const loadPrefs = useCallback(async () => {
+    console.log('[GN-DEBUG] loadPrefs: start')
     const { data: { session } } = await getSessionCached()
+    console.log('[GN-DEBUG] loadPrefs: got session', !!session)
     if (!session) { window.location.href = '/login'; return }
+    console.log('[GN-DEBUG] loadPrefs: querying dashboard_prefs')
     const { data, error } = await supabase
       .from('dashboard_prefs')
       .select('widget_key, enabled')
       .eq('user_id', session.user.id)
+    console.log('[GN-DEBUG] loadPrefs: query done', { error, rows: data?.length })
     if (!error && data) {
       const overrides: Record<string, boolean> = {}
       for (const row of data) overrides[row.widget_key] = row.enabled
       setPrefs(overrides)
     }
     setLoading(false)
+    console.log('[GN-DEBUG] loadPrefs: done, loading=false')
   }, [])
 
   useEffect(() => {
+    console.log('[GN-DEBUG] effect: calling loadPrefs (mount)')
     loadPrefs()
-    const { data: sub } = supabase.auth.onAuthStateChange(() => { loadPrefs() })
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      console.log('[GN-DEBUG] onAuthStateChange fired:', event)
+      loadPrefs()
+    })
     return () => sub.subscription.unsubscribe()
   }, [loadPrefs])
 

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, MessageSquare, X, Bell, LogOut, User } from 'lucide-react'
 import { usePathname } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 import { clearCachedMarketData } from '@/lib/authFetch'
 import VixGauge from '@/components/VixGauge'
 
@@ -170,7 +170,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     async function getEmail() {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await getSessionCached()
       if (session?.user?.email) setEmail(session.user.email)
     }
     getEmail()
@@ -290,7 +290,7 @@ function UserMenu() {
   const loggedActivityRef = useRef(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSessionCached().then(({ data: { session } }) => {
       if (session?.user?.email) setEmail(session.user.email)
       if (session?.user && !loggedActivityRef.current) {
         loggedActivityRef.current = true
@@ -388,7 +388,7 @@ function useClassicNavPref() {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await getSessionCached()
       if (!session) { if (!cancelled) setLoaded(true); return }
       const { data, error } = await supabase
         .from('dashboard_prefs')
@@ -409,7 +409,7 @@ function useClassicNavPref() {
   async function toggle() {
     const next = !classicNav
     setClassicNav(next)
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await getSessionCached()
     if (!session) return
     await supabase
       .from('dashboard_prefs')

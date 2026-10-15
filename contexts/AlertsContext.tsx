@@ -1,6 +1,6 @@
 'use client'
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 import { usePushPreferences } from '@/hooks/usePushPreferences'
 
 export interface Alert {
@@ -123,7 +123,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let live = true
-    supabase.auth.getSession().then(({ data }) => { if (live) setSignedIn(!!data.session) })
+    getSessionCached().then(({ data }) => { if (live) setSignedIn(!!data.session) })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setSignedIn(!!session)
     })

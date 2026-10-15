@@ -1,7 +1,7 @@
 // Adds the signed-in user's GreekNova sign-in token to every request sent to
 // the GreekNova data API, so the API can tell members from strangers.
 // Runs once, at import time (before any page effect fires its first request).
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 
 const API_HOSTS = ['api.greeknova.com']
 
@@ -109,7 +109,7 @@ if (typeof window !== 'undefined' && !window.__gnAuthFetchInstalled) {
       const isOwnProxy = u.origin === window.location.origin && u.pathname.startsWith('/api/')
       if ((isApi || isOwnProxy) && !u.pathname.startsWith('/public/')) {
         gatedCall = true
-        const { data } = await supabase.auth.getSession()
+        const { data } = await getSessionCached()
         const token = data.session?.access_token
         if (token) {
           const headers = new Headers(
@@ -133,7 +133,7 @@ if (typeof window !== 'undefined' && !window.__gnAuthFetchInstalled) {
 async function pushTokenToWorker() {
   try {
     if (!('serviceWorker' in navigator)) return
-    const { data } = await supabase.auth.getSession()
+    const { data } = await getSessionCached()
     const token = data.session?.access_token
     if (!token) return
     const reg = await navigator.serviceWorker.ready

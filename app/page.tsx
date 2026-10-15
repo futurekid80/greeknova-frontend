@@ -3,7 +3,7 @@ import Navbar from '@/components/Navbar'
 import StockChart from '@/components/StockChart'
 export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSessionCached } from '@/lib/supabase'
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X, Zap, Eye, Moon, ChevronDown, ChevronUp, Flame, BarChart2, Volume2 } from 'lucide-react'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 
@@ -1025,7 +1025,7 @@ export default function MarketPulse() {
 
   useEffect(() => {
     async function checkAuth() {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await getSessionCached()
       if (!session) { window.location.href = '/login'; return }
       // Only once a live session is confirmed does cached data get applied.
       applyBreadthCache()
@@ -1062,7 +1062,7 @@ export default function MarketPulse() {
     // live session to show it to. checkAuth() redirects away the moment it
     // finds none, but it runs in its own effect, so this guard is what
     // actually stops the cache read here from racing ahead of it.
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await getSessionCached()
     if (!session) { setLoading(false); return }
     try {
       const cached = sessionStorage.getItem('gn_cpr_cache')

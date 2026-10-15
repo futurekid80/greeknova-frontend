@@ -25,6 +25,12 @@ interface SpikeEpisode {
   baseline: number
   magnitude_pct: number | null
   ongoing: boolean
+  ltp?: number
+  oi?: number
+  delta?: number
+  gamma?: number
+  theta?: number
+  vega?: number
 }
 interface SpikeData { symbol: string; expiry: string; spikes: SpikeEpisode[]; snapshots_scanned: number; latest_timestamp?: string }
 
@@ -204,6 +210,31 @@ export default function OptionChain() {
   function fmtIST(ts: string) {
     try { return new Date(ts).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }) }
     catch { return ts }
+  }
+
+  // Oct 15 2026: "highlight walls so we know whether writing opportunities
+  // resides below or outside walls" -- the Call Wall (strike with the
+  // single biggest CE OI) is where call writers have piled up the most
+  // defended short premium, so it behaves like a resistance ceiling; the
+  // Put Wall (biggest PE OI) behaves like a support floor the same way.
+  // Spot sitting BETWEEN the two walls is the textbook "range-bound,
+  // premium decays safely" zone every option writer wants; spot pushing
+  // OUTSIDE either wall means that wall is being tested/broken and
+  // writing against it is the riskier trade, not the safer one.
+  const callWallRow = (data?.chain ?? []).reduce<ChainRow | null>(
+    (best, r) => (!best || r.ce.oi > best.ce.oi ? r : best), null
+  )
+  const putWallRow = (data?.chain ?? []).reduce<ChainRow | null>(
+    (best, r) => (!best || r.pe.oi > best.pe.oi ? r : best), null
+  )
+  const callWallStrike = callWallRow?.strike
+  const putWallStrike = putWallRow?.strike
+  const spot = data?.spot
+  let wallZone: 'inside' | 'above_call_wall' | 'below_put_wall' | null = null
+  if (spot != null && callWallStrike != null && putWallStrike != null) {
+    if (spot > callWallStrike) wallZone = 'above_call_wall'
+    else if (spot < putWallStrike) wallZone = 'below_put_wall'
+    else wallZone = 'inside'
   }
 
   return (
@@ -388,6 +419,9 @@ export default function OptionChain() {
                       <th className="py-1.5 px-2 text-right">Peak</th>
                       <th className="py-1.5 px-2 text-right">vs neighbors</th>
                       <th className="py-1.5 px-2 text-right">Magnitude</th>
+                      <th className="py-1.5 px-2 text-right">LTP at peak</th>
+                      <th className="py-1.5 px-2 text-right">Δ</th>
+                      <th className="py-1.5 px-2 text-right">Θ</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -407,6 +441,9 @@ export default function OptionChain() {
                         <td className="py-1.5 px-2 text-right text-gray-200">{s.metric === 'IV' ? `${s.peak_value}%` : fmtOI(s.peak_value)}</td>
                         <td className="py-1.5 px-2 text-right text-gray-500">{s.metric === 'IV' ? `${s.baseline}%` : fmtOI(s.baseline)}</td>
                         <td className="py-1.5 px-2 text-right font-bold text-orange-400">{s.magnitude_pct != null ? `+${s.magnitude_pct}%` : '—'}</td>
+                        <td className="py-1.5 px-2 text-right font-semibold text-gray-100">{s.ltp != null ? `₹${s.ltp.toFixed(2)}` : '—'}</td>
+                        <td className="py-1.5 px-2 text-right" style={{ color: deltaColor(s.delta) }}>{fmt(s.delta, 3)}</td>
+                        <td className="py-1.5 px-2 text-right" style={{ color: thetaColor(s.theta, maxAbsTheta) }}>{fmt(s.theta)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -415,6 +452,33 @@ export default function OptionChain() {
             )
           )}
         </div>
+
+        {/* OI walls: where price is relative to the biggest-OI strike on each
+            side, and what that means for where writing is safe right now. */}
+        {callWallStrike != null && putWallStrike != null && spot != null && (
+          <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 mb-6 text-xs ${
+            wallZone === 'inside'
+              ? 'bg-emerald-950/20 border-emerald-800/50'
+              : 'bg-red-950/20 border-red-800/50'
+          }`}>
+            <span className="text-lg">🧱</span>
+            <div className="flex-1">
+              <span className="font-bold text-gray-100">
+                Put Wall {putWallStrike.toLocaleString()} (support) · Call Wall {callWallStrike.toLocaleString()} (resistance)
+              </span>
+              {' — '}
+              {wallZone === 'inside' && (
+                <span className="text-emerald-400 font-semibold">Spot {spot.toLocaleString()} is between the walls — range-bound, the safer zone to write premium on either side.</span>
+              )}
+              {wallZone === 'above_call_wall' && (
+                <span className="text-red-400 font-semibold">Spot {spot.toLocaleString()} is above the Call Wall — resistance is being broken. Writing calls there is the riskier side now; put writing below is comparatively safer.</span>
+              )}
+              {wallZone === 'below_put_wall' && (
+                <span className="text-red-400 font-semibold">Spot {spot.toLocaleString()} is below the Put Wall — support is being broken. Writing puts there is the riskier side now; call writing above is comparatively safer.</span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Chain table */}
         {loading ? (
@@ -459,11 +523,15 @@ export default function OptionChain() {
                   const ceVolSpike = volSpike(data.chain, idx, 'ce')
                   const peVolSpike = volSpike(data.chain, idx, 'pe')
                   const writerWatch = (ceIvSpike && ceVolSpike) || (peIvSpike && peVolSpike)
+                  const isCallWall = row.strike === callWallStrike
+                  const isPutWall = row.strike === putWallStrike
                   return (
                   <tr key={row.strike}
                     className={`border-b border-gray-800/50 transition-colors hover:bg-gray-800/20 ${row.is_atm ? 'bg-amber-950/20' : ''}`}>
                     {/* CE side */}
-                    <td className="py-2 px-2 text-right text-gray-300">{fmtOI(row.ce.oi)}</td>
+                    <td className={`py-2 px-2 text-right ${isCallWall ? 'bg-stone-500/20 text-stone-200 font-bold rounded-l' : 'text-gray-300'}`} title={isCallWall ? 'Call Wall — biggest CE OI, acts as resistance' : undefined}>
+                      {fmtOI(row.ce.oi)}{isCallWall && ' 🧱'}
+                    </td>
                     <td className={`py-2 px-2 text-right ${ceVolSpike ? 'bg-cyan-500/15 text-cyan-300 font-bold rounded-l' : 'text-gray-500'}`} title={ceVolSpike ? 'Volume spike vs neighboring strikes' : undefined}>
                       {fmtOI(row.ce.volume)}{ceVolSpike && ' 📈'}
                     </td>
@@ -476,12 +544,14 @@ export default function OptionChain() {
                       {row.ce.ltp.toFixed(2)}
                     </td>
                     {/* Strike */}
-                    <td className={`py-2 px-4 text-center font-black ${row.is_atm ? 'text-amber-400 text-sm' : 'text-gray-300'}`}>
+                    <td className={`py-2 px-4 text-center font-black ${row.is_atm ? 'text-amber-400 text-sm' : 'text-gray-300'} ${(isCallWall || isPutWall) ? 'bg-stone-500/10' : ''}`}>
                       {row.strike.toLocaleString()}
                       {row.is_atm && <span className="ml-1 text-[9px] text-amber-600">ATM</span>}
                       {writerWatch && (
                         <span className="block text-[9px] text-orange-400 font-bold" title="IV and volume both spiking on this strike — the clearest writer signal">🔥 Writer Watch</span>
                       )}
+                      {isCallWall && <span className="block text-[9px] text-stone-300 font-bold" title="Biggest CE OI on the chain — acts as resistance">🧱 Call Wall</span>}
+                      {isPutWall && <span className="block text-[9px] text-stone-300 font-bold" title="Biggest PE OI on the chain — acts as support">🧱 Put Wall</span>}
                     </td>
                     {/* PE side */}
                     <td className={`py-2 px-3 text-left font-bold border-l border-gray-800 ${row.is_atm ? 'text-amber-300' : 'text-emerald-400'}`}>
@@ -495,7 +565,9 @@ export default function OptionChain() {
                     <td className={`py-2 px-2 text-left ${peVolSpike ? 'bg-cyan-500/15 text-cyan-300 font-bold rounded-r' : 'text-gray-500'}`} title={peVolSpike ? 'Volume spike vs neighboring strikes' : undefined}>
                       {peVolSpike && '📈 '}{fmtOI(row.pe.volume)}
                     </td>
-                    <td className="py-2 px-2 text-left text-gray-300">{fmtOI(row.pe.oi)}</td>
+                    <td className={`py-2 px-2 text-left ${isPutWall ? 'bg-stone-500/20 text-stone-200 font-bold rounded-r' : 'text-gray-300'}`} title={isPutWall ? 'Put Wall — biggest PE OI, acts as support' : undefined}>
+                      {isPutWall && '🧱 '}{fmtOI(row.pe.oi)}
+                    </td>
                   </tr>
                   )
                 })}
@@ -513,6 +585,7 @@ export default function OptionChain() {
           <span><span className="text-fuchsia-400">⚡ IV spike</span> — well above neighboring strikes right now</span>
           <span><span className="text-cyan-400">📈 Vol spike</span> — well above neighboring strikes right now</span>
           <span><span className="text-orange-400">🔥 Writer Watch</span> — IV + volume both spiking, same strike</span>
+          <span><span className="text-stone-300">🧱 Call/Put Wall</span> — biggest OI on that side; spot between the walls is the safer zone to write</span>
           <span><span className="text-amber-400">ATM</span> — at-the-money strike</span>
         </div>
       </div>

@@ -40,6 +40,8 @@ type Point = {
   call_wall_strike: number | null
   put_wall_strike: number | null
   flip_point: number | null
+  upside_flip_point: number | null
+  downside_flip_point: number | null
 }
 
 type AlertHourly = { hour: number; bull: number; bear: number }
@@ -144,6 +146,18 @@ export default function SessionReplayPage() {
   const flipPoint = latestWithFlip?.flip_point ?? null
   const aboveFlip = lastSpot !== null && flipPoint !== null ? lastSpot >= flipPoint : null
 
+  // Oct 15 2026 (Manish): "flip point is far ... on downside what could be
+  // the flip zone?" -- flipPoint above collapses every cumulative-GEX sign
+  // crossing down to whichever ONE sits nearest spot, so if that nearest
+  // one happens to be above spot, a real crossing below spot (if any)
+  // never showed up anywhere on this page. Backend now reports both sides
+  // explicitly (upside_flip_point / downside_flip_point); surface the
+  // downside one here since that's what was missing.
+  const latestWithDownsideFlip = [...points].reverse().find(p => p.downside_flip_point != null)
+  const downsideFlipPoint = latestWithDownsideFlip?.downside_flip_point ?? null
+  const latestWithUpsideFlip = [...points].reverse().find(p => p.upside_flip_point != null)
+  const upsideFlipPoint = latestWithUpsideFlip?.upside_flip_point ?? null
+
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar active="/session-replay" />
@@ -213,7 +227,7 @@ export default function SessionReplayPage() {
             <StatCard label="SYMBOL / DATE" value={`${data.symbol}`} sub={data.date} />
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
             <StatCard
               label="DIST TO CALL WALL"
               value={pctToCallWall !== null ? `${pctToCallWall >= 0 ? '+' : ''}${pctToCallWall.toFixed(2)}%` : '—'}
@@ -237,6 +251,18 @@ export default function SessionReplayPage() {
               value={flipPoint !== null ? flipPoint.toLocaleString() : '—'}
               accent={aboveFlip === true ? 'text-emerald-400' : aboveFlip === false ? 'text-red-400' : 'text-gray-300'}
               sub={aboveFlip === true ? 'Spot above — dealers long-gamma' : aboveFlip === false ? 'Spot below — dealers short-gamma' : undefined}
+            />
+            <StatCard
+              label="DOWNSIDE FLIP"
+              value={downsideFlipPoint !== null ? downsideFlipPoint.toLocaleString() : '—'}
+              accent="text-amber-400"
+              sub={
+                downsideFlipPoint !== null
+                  ? 'Nearest crossing below spot'
+                  : flipPoint !== null && aboveFlip === false
+                  ? 'Flip zone already below spot'
+                  : 'No crossing within range below spot'
+              }
             />
             <StatCard
               label="WRITER READ"
@@ -302,6 +328,26 @@ export default function SessionReplayPage() {
                     strokeDasharray="2 2"
                     strokeWidth={1.5}
                     label={{ value: `Flip ${flipPoint.toLocaleString()}`, position: 'insideTopLeft', fill: '#fbbf24', fontSize: 10 }}
+                  />
+                )}
+                {downsideFlipPoint && downsideFlipPoint !== flipPoint && (
+                  <ReferenceLine
+                    yAxisId="price"
+                    y={downsideFlipPoint}
+                    stroke="#f97316"
+                    strokeDasharray="2 2"
+                    strokeWidth={1.5}
+                    label={{ value: `Downside flip ${downsideFlipPoint.toLocaleString()}`, position: 'insideBottomLeft', fill: '#f97316', fontSize: 10 }}
+                  />
+                )}
+                {upsideFlipPoint && upsideFlipPoint !== flipPoint && (
+                  <ReferenceLine
+                    yAxisId="price"
+                    y={upsideFlipPoint}
+                    stroke="#38bdf8"
+                    strokeDasharray="2 2"
+                    strokeWidth={1.5}
+                    label={{ value: `Upside flip ${upsideFlipPoint.toLocaleString()}`, position: 'insideTopRight', fill: '#38bdf8', fontSize: 10 }}
                   />
                 )}
               </ComposedChart>

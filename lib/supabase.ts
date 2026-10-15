@@ -50,6 +50,27 @@ export async function getSessionCached(): Promise<{ data: { session: Session | n
       _sessionLoaded = true
       _sessionInFlight = null
       return r
+    }).catch((e) => {
+      // Oct 15 2026: confirmed live with two app.greeknova.com tabs open in
+      // the same browser at once (completely normal -- Manish had
+      // /dashboard and /oiprofile open together) -- gotrue-js's
+      // navigator.locks-based lock gets "stolen" by the other tab's own
+      // concurrent getSession() call, which throws here: 'Lock
+      // "lock:sb-...-auth-token" was released because another request
+      // stole it'. Without this catch, that rejection was never cleared --
+      // _sessionInFlight stayed set to the now-rejected promise forever
+      // (never reset to null) and _sessionLoaded never became true, so
+      // EVERY subsequent getSessionCached() call across the whole app --
+      // every page's auth check, every outgoing API request's auth header
+      // in authFetch.ts -- kept re-throwing/returning this same stale
+      // failure until a full page reload reset the module. That's what hung
+      // /dashboard on "Loading your dashboard..." indefinitely and made the
+      // "Your session has expired" banner keep reappearing on every
+      // request, even though the session itself was perfectly valid the
+      // whole time. Reset so the very next call gets a clean, real retry
+      // instead of staying poisoned.
+      _sessionInFlight = null
+      throw e
     })
   }
   return _sessionInFlight

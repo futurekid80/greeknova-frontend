@@ -170,8 +170,12 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     async function getEmail() {
-      const { data: { session } } = await getSessionCached()
-      if (session?.user?.email) setEmail(session.user.email)
+      try {
+        const { data: { session } } = await getSessionCached()
+        if (session?.user?.email) setEmail(session.user.email)
+      } catch {
+        // falls back to 'anonymous' on submit below
+      }
     }
     getEmail()
   }, [])
@@ -290,7 +294,10 @@ function UserMenu() {
   const loggedActivityRef = useRef(false)
 
   useEffect(() => {
-    getSessionCached().then(({ data: { session } }) => {
+    // Oct 15 2026: getSessionCached() can reject on a one-off cross-tab
+    // lock race (see lib/supabase.ts) -- retry once so the email in this
+    // dropdown doesn't silently stay blank for this mount.
+    getSessionCached().catch(() => getSessionCached()).then(({ data: { session } }) => {
       if (session?.user?.email) setEmail(session.user.email)
       if (session?.user && !loggedActivityRef.current) {
         loggedActivityRef.current = true
@@ -298,7 +305,7 @@ function UserMenu() {
           if (error) console.warn('log_activity failed:', error.message)
         })
       }
-    })
+    }).catch(() => {})
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setEmail(session?.user?.email || '')
       if (session?.user && !loggedActivityRef.current) {
@@ -388,18 +395,43 @@ function useClassicNavPref() {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const { data: { session } } = await getSessionCached()
-      if (!session) { if (!cancelled) setLoaded(true); return }
-      const { data, error } = await supabase
-        .from('dashboard_prefs')
-        .select('enabled')
-        .eq('user_id', session.user.id)
-        .eq('widget_key', CLASSIC_NAV_PREF_KEY)
-        .maybeSingle()
-      if (!cancelled) {
-        if (!error && data) setClassicNav(!!data.enabled)
-        setLoaded(true)
+      // Oct 15 2026: Navbar remounts on every page navigation (it's
+      // rendered per-page, not in a shared layout), so this effect -- and
+      // this getSessionCached() call -- reruns on every single page
+      // change. Before the fix in lib/supabase.ts, one rejected
+      // getSessionCached() call anywhere (two app.greeknova.com tabs open
+      // at once is enough to trigger it) permanently poisoned the shared
+      // cache, which meant EVERY later page's load() here also threw and
+      // never reached setClassicNav/setLoaded -- classicNav silently fell
+      // back to its false default on every navigation, i.e. exactly "even
+      // when I click classic menu, it doesn't sustain unless I click it
+      // every time." The lib/supabase.ts fix stops the permanent
+      // poisoning; this retry handles the one-off rejection itself rather
+      // than leaving the preference stuck at its default for this page.
+      let session
+      try {
+        ({ data: { session } } = await getSessionCached())
+      } catch {
+        try {
+          ({ data: { session } } = await getSessionCached())
+        } catch {
+          if (!cancelled) setLoaded(true)
+          return
+        }
       }
+      if (!session) { if (!cancelled) setLoaded(true); return }
+      try {
+        const { data, error } = await supabase
+          .from('dashboard_prefs')
+          .select('enabled')
+          .eq('user_id', session.user.id)
+          .eq('widget_key', CLASSIC_NAV_PREF_KEY)
+          .maybeSingle()
+        if (!cancelled && !error && data) setClassicNav(!!data.enabled)
+      } catch {
+        // fall through to default
+      }
+      if (!cancelled) setLoaded(true)
     }
     load()
     const { data: sub } = supabase.auth.onAuthStateChange(() => load())
@@ -409,7 +441,16 @@ function useClassicNavPref() {
   async function toggle() {
     const next = !classicNav
     setClassicNav(next)
-    const { data: { session } } = await getSessionCached()
+    let session
+    try {
+      ({ data: { session } } = await getSessionCached())
+    } catch {
+      try {
+        ({ data: { session } } = await getSessionCached())
+      } catch {
+        return
+      }
+    }
     if (!session) return
     await supabase
       .from('dashboard_prefs')

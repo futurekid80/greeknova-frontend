@@ -123,7 +123,10 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let live = true
-    getSessionCached().then(({ data }) => { if (live) setSignedIn(!!data.session) })
+    // Oct 15 2026: getSessionCached() can reject on a one-off cross-tab
+    // lock race (see lib/supabase.ts) -- retry once so signedIn doesn't
+    // silently stay false (alerts never start polling) for this mount.
+    getSessionCached().catch(() => getSessionCached()).then(({ data }) => { if (live) setSignedIn(!!data.session) }).catch(() => {})
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setSignedIn(!!session)
     })

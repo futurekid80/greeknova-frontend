@@ -6,7 +6,19 @@ import { supabase, getSessionCached } from "@/lib/supabase";
 export default function HowToReadPage() {
   useEffect(() => {
     async function checkAuth() {
-      const { data: { session } } = await getSessionCached();
+      // Oct 15 2026: getSessionCached() can reject on a one-off cross-tab
+      // lock race (see lib/supabase.ts) -- retry once rather than leaving
+      // this page stuck on the access-check screen forever.
+      let session;
+      try {
+        ({ data: { session } } = await getSessionCached());
+      } catch {
+        try {
+          ({ data: { session } } = await getSessionCached());
+        } catch {
+          return;
+        }
+      }
       if (!session) {
         window.location.href = "/login?returnTo=" + window.location.pathname;
       } else {

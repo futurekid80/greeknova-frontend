@@ -96,12 +96,15 @@ export default function TradingJournal() {
 
   // Load session
   useEffect(() => {
-    getSessionCached().then(({ data: { session } }) => {
+    // Oct 15 2026: getSessionCached() can reject on a one-off cross-tab
+    // lock race (see lib/supabase.ts) -- retry once so userEmail/userId
+    // don't silently stay unset for the rest of this page's life.
+    getSessionCached().catch(() => getSessionCached()).then(({ data: { session } }) => {
       if (session?.user) {
         setUserEmail(session.user.email || '')
         setUserId(session.user.id)
       }
-    })
+    }).catch(() => {})
   }, [])
 
   // Load trades

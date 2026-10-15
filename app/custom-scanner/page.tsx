@@ -118,7 +118,10 @@ export default function CustomScanner() {
   // re-loading on any later auth state change, fixes that race.
   useEffect(() => {
     let cancelled = false
-    getSessionCached().then(() => { if (!cancelled) loadSavedScans() })
+    // Oct 15 2026: getSessionCached() can reject on a one-off cross-tab
+    // lock race (see lib/supabase.ts) -- retry once so saved scans don't
+    // silently stay empty for the rest of this page's life.
+    getSessionCached().catch(() => getSessionCached()).then(() => { if (!cancelled) loadSavedScans() }).catch(() => {})
     const { data: sub } = supabase.auth.onAuthStateChange(() => { loadSavedScans() })
     return () => { cancelled = true; sub.subscription.unsubscribe() }
   }, [loadSavedScans])

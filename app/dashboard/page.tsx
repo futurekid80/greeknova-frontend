@@ -28,16 +28,38 @@ export default function DashboardPage() {
   const [saveError, setSaveError] = useState('')
 
   const loadPrefs = useCallback(async () => {
-    const { data: { session } } = await getSessionCached()
+    // Oct 15 2026: getSessionCached() can reject (e.g. a concurrent
+    // app.greeknova.com tab stealing gotrue's cross-tab lock -- see the
+    // fix + explanation in lib/supabase.ts). That's now a one-off, not a
+    // permanently poisoned cache, so a single retry almost always succeeds.
+    // Either way, never leave this page stuck on "Loading your
+    // dashboard..." forever over what's ultimately a transient hiccup with
+    // a perfectly valid session -- fall through to defaults rather than
+    // hang, since dashboard prefs are just a display customization.
+    let session
+    try {
+      ({ data: { session } } = await getSessionCached())
+    } catch {
+      try {
+        ({ data: { session } } = await getSessionCached())
+      } catch {
+        setLoading(false)
+        return
+      }
+    }
     if (!session) { window.location.href = '/login'; return }
-    const { data, error } = await supabase
-      .from('dashboard_prefs')
-      .select('widget_key, enabled')
-      .eq('user_id', session.user.id)
-    if (!error && data) {
-      const overrides: Record<string, boolean> = {}
-      for (const row of data) overrides[row.widget_key] = row.enabled
-      setPrefs(overrides)
+    try {
+      const { data, error } = await supabase
+        .from('dashboard_prefs')
+        .select('widget_key, enabled')
+        .eq('user_id', session.user.id)
+      if (!error && data) {
+        const overrides: Record<string, boolean> = {}
+        for (const row of data) overrides[row.widget_key] = row.enabled
+        setPrefs(overrides)
+      }
+    } catch {
+      // fall through to defaults
     }
     setLoading(false)
   }, [])

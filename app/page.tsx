@@ -1025,7 +1025,19 @@ export default function MarketPulse() {
 
   useEffect(() => {
     async function checkAuth() {
-      const { data: { session } } = await getSessionCached()
+      // Oct 15 2026: getSessionCached() can reject on a one-off cross-tab
+      // lock race (see lib/supabase.ts) -- retry once rather than leaving
+      // this page stuck with no redirect and no cached data applied.
+      let session
+      try {
+        ({ data: { session } } = await getSessionCached())
+      } catch {
+        try {
+          ({ data: { session } } = await getSessionCached())
+        } catch {
+          return
+        }
+      }
       if (!session) { window.location.href = '/login'; return }
       // Only once a live session is confirmed does cached data get applied.
       applyBreadthCache()
@@ -1062,7 +1074,17 @@ export default function MarketPulse() {
     // live session to show it to. checkAuth() redirects away the moment it
     // finds none, but it runs in its own effect, so this guard is what
     // actually stops the cache read here from racing ahead of it.
-    const { data: { session } } = await getSessionCached()
+    let session
+    try {
+      ({ data: { session } } = await getSessionCached())
+    } catch {
+      try {
+        ({ data: { session } } = await getSessionCached())
+      } catch {
+        setLoading(false)
+        return
+      }
+    }
     if (!session) { setLoading(false); return }
     try {
       const cached = sessionStorage.getItem('gn_cpr_cache')

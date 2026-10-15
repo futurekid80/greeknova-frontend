@@ -31,6 +31,9 @@ interface SpikeEpisode {
   gamma?: number
   theta?: number
   vega?: number
+  oi_action?: 'Long Buildup' | 'Short Buildup' | 'Short Covering' | 'Long Unwinding' | 'Flat OI' | null
+  oi_action_detail?: string | null
+  oi_change_pct?: number | null
 }
 interface SpikeData { symbol: string; expiry: string; spikes: SpikeEpisode[]; snapshots_scanned: number; latest_timestamp?: string }
 
@@ -64,10 +67,15 @@ export default function OptionChain() {
   // chronological list is unusable past the first screen. Side/metric
   // filters narrow it to what's actually relevant right now (e.g. only PE
   // vol spikes), and clicking a column header sorts by it.
-  type SpikeSortKey = 'strike' | 'start_time' | 'peak_value' | 'magnitude_pct' | 'ltp' | 'delta' | 'theta'
+  type SpikeSortKey = 'strike' | 'start_time' | 'peak_value' | 'magnitude_pct' | 'ltp' | 'delta' | 'theta' | 'oi_change_pct'
   const [spikeSideFilter, setSpikeSideFilter] = useState<'ALL' | 'CE' | 'PE'>('ALL')
   const [spikeMetricFilter, setSpikeMetricFilter] = useState<'ALL' | 'IV' | 'VOL'>('ALL')
   const [spikeOngoingOnly, setSpikeOngoingOnly] = useState(false)
+  // Oct 15 2026: "hard to make a decision by looking at it" -- OI rising
+  // alongside the price move is fresh positioning (worth a look); OI flat
+  // or falling means existing positions just repricing or closing out, not
+  // new conviction. This toggle gets straight to the ones worth a look.
+  const [spikeBuildupOnly, setSpikeBuildupOnly] = useState(false)
   const [spikeSortKey, setSpikeSortKey] = useState<SpikeSortKey>('start_time')
   const [spikeSortDir, setSpikeSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -275,6 +283,7 @@ export default function OptionChain() {
     .filter(s => spikeSideFilter === 'ALL' || s.side === spikeSideFilter)
     .filter(s => spikeMetricFilter === 'ALL' || s.metric === spikeMetricFilter)
     .filter(s => !spikeOngoingOnly || s.ongoing)
+    .filter(s => !spikeBuildupOnly || s.oi_action === 'Long Buildup' || s.oi_action === 'Short Buildup')
     .slice()
     .sort((a, b) => {
       let av: number | string
@@ -287,10 +296,25 @@ export default function OptionChain() {
         case 'ltp': av = a.ltp ?? -Infinity; bv = b.ltp ?? -Infinity; break
         case 'delta': av = a.delta ?? -Infinity; bv = b.delta ?? -Infinity; break
         case 'theta': av = a.theta ?? -Infinity; bv = b.theta ?? -Infinity; break
+        case 'oi_change_pct': av = a.oi_change_pct ?? -Infinity; bv = b.oi_change_pct ?? -Infinity; break
       }
       const cmp = av < bv ? -1 : av > bv ? 1 : 0
       return spikeSortDir === 'asc' ? cmp : -cmp
     })
+
+  // Buildup = fresh positioning, worth a look. Covering/Unwinding/flat = the
+  // existing book just moving, not new conviction -- visually recede those
+  // instead of giving every row equal weight.
+  function oiActionStyle(action?: SpikeEpisode['oi_action'] | null) {
+    switch (action) {
+      case 'Long Buildup':   return 'bg-emerald-500/15 text-emerald-300'
+      case 'Short Buildup':  return 'bg-orange-500/15 text-orange-300'
+      case 'Short Covering': return 'bg-gray-700/40 text-gray-400'
+      case 'Long Unwinding': return 'bg-gray-700/40 text-gray-400'
+      case 'Flat OI':        return 'bg-gray-800/40 text-gray-600'
+      default:                return 'bg-gray-800/40 text-gray-600'
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -489,6 +513,11 @@ export default function OptionChain() {
                     className={`px-2 py-1 rounded-md font-semibold border transition-all ${spikeOngoingOnly ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
                     ● Live only
                   </button>
+                  <button onClick={() => setSpikeBuildupOnly(b => !b)}
+                    title="Hide spikes where OI is flat or falling -- existing positions repricing/closing out, not fresh money"
+                    className={`px-2 py-1 rounded-md font-semibold border transition-all ${spikeBuildupOnly ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
+                    🏗️ Buildup only
+                  </button>
                   <span className="text-gray-600">{visibleSpikes.length} of {spikeData.spikes.length} shown · click a column header to sort</span>
                 </div>
                 <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
@@ -505,6 +534,7 @@ export default function OptionChain() {
                       <th className="py-1.5 px-2 text-right cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('ltp')}>LTP at peak{sortArrow('ltp')}</th>
                       <th className="py-1.5 px-2 text-right cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('delta')}>Δ{sortArrow('delta')}</th>
                       <th className="py-1.5 px-2 text-right cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('theta')}>Θ{sortArrow('theta')}</th>
+                      <th className="py-1.5 px-2 text-left cursor-pointer select-none hover:text-white" onClick={() => toggleSpikeSort('oi_change_pct')}>OI Action{sortArrow('oi_change_pct')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -527,6 +557,16 @@ export default function OptionChain() {
                         <td className="py-1.5 px-2 text-right font-semibold text-gray-100">{s.ltp != null ? `₹${s.ltp.toFixed(2)}` : '—'}</td>
                         <td className="py-1.5 px-2 text-right" style={{ color: deltaColor(s.delta) }}>{fmt(s.delta, 3)}</td>
                         <td className="py-1.5 px-2 text-right" style={{ color: thetaColor(s.theta, maxAbsTheta) }}>{fmt(s.theta)}</td>
+                        <td className="py-1.5 px-2 text-left">
+                          {s.oi_action ? (
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${oiActionStyle(s.oi_action)}`}
+                              title={`${s.oi_action_detail ?? ''}${s.oi_change_pct != null ? ` (OI ${s.oi_change_pct > 0 ? '+' : ''}${s.oi_change_pct}%)` : ''}`}
+                            >
+                              {s.oi_action}
+                            </span>
+                          ) : <span className="text-gray-700">—</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -670,6 +710,8 @@ export default function OptionChain() {
           <span><span className="text-cyan-400">📈 Vol spike</span> — well above neighboring strikes right now</span>
           <span><span className="text-orange-400">🔥 Writer Watch</span> — IV + volume both spiking, same strike</span>
           <span><span className="text-stone-300">🧱 Call/Put Wall</span> — biggest OI on that side; spot between the walls is the safer zone to write</span>
+          <span><span className="text-emerald-300">Long/Short Buildup</span> — OI rose with the spike = fresh positioning, worth a look</span>
+          <span><span className="text-gray-400">Short Covering/Long Unwinding/Flat OI</span> — OI flat or fell = existing positions repricing or closing, not fresh money</span>
           <span><span className="text-amber-400">ATM</span> — at-the-money strike</span>
         </div>
       </div>

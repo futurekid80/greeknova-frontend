@@ -147,6 +147,12 @@ export default function OptionChain() {
   const SPIKE_WINDOW = 3
   const IV_SPIKE_THRESHOLD = 1.15
   const VOL_SPIKE_THRESHOLD = 2.0
+  // A ratio-only check breaks down near zero -- a far-OTM strike with
+  // neighbors averaging 10 contracts reads as a "250% spike" at 25
+  // contracts, which is noise. Matches the backend's /option-chain-spikes
+  // floors so "spiking now" and "spiked earlier today" agree.
+  const MIN_VOL_FOR_SPIKE = 5000
+  const MIN_VOL_BASELINE_FOR_SPIKE = 500
 
   function localAvg(chain: ChainRow[], idx: number, side: 'ce' | 'pe', pick: (g: Greeks) => number | null) {
     const vals: number[] = []
@@ -170,8 +176,9 @@ export default function OptionChain() {
 
   function volSpike(chain: ChainRow[], idx: number, side: 'ce' | 'pe'): boolean {
     const g = chain[idx][side]
+    if (g.volume < MIN_VOL_FOR_SPIKE) return false
     const avg = localAvg(chain, idx, side, (x) => x.volume ?? null)
-    return avg != null && avg > 0 && g.volume >= avg * VOL_SPIKE_THRESHOLD
+    return avg != null && avg >= MIN_VOL_BASELINE_FOR_SPIKE && g.volume >= avg * VOL_SPIKE_THRESHOLD
   }
 
   // Magnitude-based color grading for the Greeks columns, instead of one

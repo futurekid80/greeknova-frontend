@@ -74,12 +74,32 @@ export default function AdminMembersPage() {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const email = (data.user?.email || '').toLowerCase().trim()
+    // Oct 16 2026: getUser() alone races the Supabase client's own async
+    // restore of the persisted session from storage on a fresh page load --
+    // same bug class already hit (and fixed this way) in Custom Scanner's
+    // saved-scans dropdown. Await getSession() first so the session is
+    // actually loaded before checking who's signed in, and keep listening
+    // via onAuthStateChange in case it resolves slightly after mount.
+    let cancelled = false
+    async function checkAccess() {
+      const { data: { session } } = await supabase.auth.getSession()
+      const email = (session?.user?.email || '').toLowerCase().trim()
+      if (cancelled) return
+      setAuthorized(email === ADMIN_EMAIL)
+      setChecking(false)
+      if (email === ADMIN_EMAIL) loadMembers()
+    }
+    checkAccess()
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const email = (session?.user?.email || '').toLowerCase().trim()
       setAuthorized(email === ADMIN_EMAIL)
       setChecking(false)
       if (email === ADMIN_EMAIL) loadMembers()
     })
+    return () => {
+      cancelled = true
+      listener.subscription.unsubscribe()
+    }
   }, [loadMembers])
 
   async function handleSubmit(e: React.FormEvent) {

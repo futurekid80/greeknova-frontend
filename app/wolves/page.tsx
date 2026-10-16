@@ -47,6 +47,8 @@ interface FreshEventRow {
   signal_freshness: string | null
   bb_quality: string | null
   sector: string | null
+  mode: string | null
+  priority: number | null
 }
 
 interface FreshEventsData {
@@ -97,19 +99,22 @@ const TIER_ORDER: Record<string, number> = { 'Apex Wolf': 0, 'Alpha Wolf': 1, 'S
 const EVENT_STYLES: Record<string, string> = {
   'ADX Full Alignment':               'bg-rose-950/50 text-rose-300 border-rose-700/60',
   'ADX Cross 25':                     'bg-orange-950/50 text-orange-300 border-orange-700/60',
-  'RSI Cross 60':                     'bg-emerald-950/50 text-emerald-300 border-emerald-700/60',
-  'RSI Cross 40':                     'bg-emerald-950/50 text-emerald-300 border-emerald-700/60',
+  'RSI 60 Breakout':                  'bg-emerald-950/50 text-emerald-300 border-emerald-700/60',
+  'RSI 40 Breakdown':                 'bg-emerald-950/50 text-emerald-300 border-emerald-700/60',
   'BB Compression Breakout':          'bg-sky-950/50 text-sky-300 border-sky-700/60',
   'BB Compression Breakdown':         'bg-sky-950/30 text-sky-400 border-sky-800/40',
-  'BB Breakout':                      'bg-sky-950/40 text-sky-300 border-sky-700/40',
-  'BB Breakdown':                     'bg-sky-950/20 text-sky-500 border-sky-800/30',
+  'BB Upper Breakout':                'bg-sky-950/40 text-sky-300 border-sky-700/40',
+  'BB Lower Breakdown':               'bg-sky-950/20 text-sky-500 border-sky-800/30',
   'Grandfather-Father-Son Setup':     'bg-indigo-950/50 text-indigo-300 border-indigo-700/60',
   'Grandfather-Father-Son Exit':      'bg-indigo-950/30 text-indigo-400 border-indigo-800/40',
 }
 
+// Names match Manish's local tool's Event Type column exactly (confirmed
+// against his Oct 16 Fresh Events CSV export), so the two scanners' outputs
+// line up side by side for comparison.
 const EVENT_TYPES = [
-  'all', 'ADX Full Alignment', 'ADX Cross 25', 'RSI Cross 60', 'RSI Cross 40',
-  'BB Compression Breakout', 'BB Compression Breakdown', 'BB Breakout', 'BB Breakdown',
+  'all', 'ADX Full Alignment', 'ADX Cross 25', 'RSI 60 Breakout', 'RSI 40 Breakdown',
+  'BB Compression Breakout', 'BB Compression Breakdown', 'BB Upper Breakout', 'BB Lower Breakdown',
   'Grandfather-Father-Son Setup', 'Grandfather-Father-Son Exit',
 ] as const
 
@@ -193,12 +198,12 @@ export default function WolvesScanner() {
     scout: wolves.filter(w => w.wolf_tier === 'Scout Wolf').length,
   }
 
-  const events = eventsData?.events || []
+  const events = (eventsData?.events || []).slice().sort((a, b) => (a.priority ?? 9) - (b.priority ?? 9))
   const filteredEvents = events.filter(e => eventTypeFilter === 'all' || e.event_type === eventTypeFilter)
   const eventCounts = {
     alignment: events.filter(e => e.event_type === 'ADX Full Alignment').length,
     adx: events.filter(e => e.event_type === 'ADX Cross 25').length,
-    rsi: events.filter(e => e.event_type === 'RSI Cross 60' || e.event_type === 'RSI Cross 40').length,
+    rsi: events.filter(e => e.event_type === 'RSI 60 Breakout' || e.event_type === 'RSI 40 Breakdown').length,
     bb: events.filter(e => e.event_type.startsWith('BB')).length,
     gfs: events.filter(e => e.event_type.startsWith('Grandfather-Father-Son')).length,
   }
@@ -397,9 +402,11 @@ export default function WolvesScanner() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
+                    <th className="text-right px-4 py-3">Pri</th>
                     <th className="text-left px-4 py-3">Symbol</th>
                     <th className="text-left px-4 py-3">Direction</th>
                     <th className="text-left px-4 py-3">Event</th>
+                    <th className="text-left px-4 py-3">Mode</th>
                     <th className="text-left px-4 py-3">Timeframe</th>
                     <th className="text-right px-4 py-3">Close</th>
                     <th className="text-right px-4 py-3">ADX</th>
@@ -412,12 +419,13 @@ export default function WolvesScanner() {
                 </thead>
                 <tbody>
                   {!loading && filteredEvents.length === 0 && (
-                    <tr><td colSpan={11} className="text-center text-gray-500 py-10">
+                    <tr><td colSpan={13} className="text-center text-gray-500 py-10">
                       No Fresh Events yet today. {events.length === 0 ? 'Try "Run scan now" if the market is open.' : ''}
                     </td></tr>
                   )}
                   {filteredEvents.map(e => (
                     <tr key={e.event_key} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                      <td className="px-4 py-3 text-right text-gray-500">{e.priority ?? '—'}</td>
                       <td className="px-4 py-3 font-bold text-white">{e.symbol}</td>
                       <td className={`px-4 py-3 font-medium ${e.direction === 'Bullish' ? 'text-emerald-400' : 'text-red-400'}`}>{e.direction}</td>
                       <td className="px-4 py-3">
@@ -425,6 +433,7 @@ export default function WolvesScanner() {
                           {e.event_type}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{e.mode || '—'}</td>
                       <td className="px-4 py-3 text-gray-300">{e.timeframe}</td>
                       <td className="px-4 py-3 text-right text-gray-200">{e.close ?? '—'}</td>
                       <td className="px-4 py-3 text-right text-gray-200">{e.adx ?? '—'}</td>

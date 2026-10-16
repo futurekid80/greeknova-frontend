@@ -2,7 +2,7 @@
 import Navbar from '@/components/Navbar'
 import StockChart from '@/components/StockChart'
 export const dynamic = 'force-dynamic'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase, getSessionCached } from '@/lib/supabase'
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X, Zap, Eye, Moon, ChevronDown, ChevronUp, Flame, BarChart2, Volume2 } from 'lucide-react'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
@@ -974,6 +974,18 @@ export default function MarketPulse() {
   // real cached value inside a useEffect below (client-only, after mount),
   // so hydration always starts from a matching empty state.
   const [pulseStocks, setPulseStocks] = useState<PulseStock[]>([])
+  // Oct 16 2026: "sectors are 0" -- /oi-pulse occasionally comes back empty
+  // or slow (same root cause as the fetchWithTimeout fix above), and when
+  // that happens the page silently falls back to the CPR-only feed, which
+  // has no real price-change data, so Sector Performance reads "0%" for
+  // everything with no sign anything is wrong. The old fix was a single
+  // blind retry 4s after first load -- fine for a brief blip, but useless
+  // if the backend hiccup runs longer than that. retryAttemptsRef tracks
+  // how many times fetchData has had to retry because pulse data came back
+  // empty, so it can keep trying (with a growing delay) instead of giving
+  // up silently after one shot.
+  const retryAttemptsRef = useRef(0)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [breadth, setBreadth] = useState({ bullish:0, bearish:0, neutral:0, total:0 })
 
   // Oct 14 2026: this used to run unconditionally on mount, so the cached
@@ -1133,6 +1145,23 @@ export default function MarketPulse() {
       }))
       setPulseStocks(enrichedPulse)
       setLoading(false)
+      // Oct 16 2026: see retryAttemptsRef comment above. pulseItems.length
+      // === 0 means /oi-pulse gave us nothing usable this round (empty,
+      // timed out via fetchWithTimeout, or rejected) -- Sector Performance
+      // and the rest of the pulse feed will be showing the misleading
+      // CPR-only 0% fallback until a real pulse feed comes back. Keep
+      // quietly retrying with a growing delay (6s/12s/20s) instead of
+      // leaving it stuck after the one blind retry below gives up.
+      if (pulseItems.length === 0) {
+        if (retryAttemptsRef.current < 3) {
+          const delay = 6000 + retryAttemptsRef.current * 6000
+          retryAttemptsRef.current += 1
+          if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+          retryTimerRef.current = setTimeout(() => { fetchData() }, delay)
+        }
+      } else {
+        retryAttemptsRef.current = 0
+      }
       let bull=0, bear=0, neut=0
       pulseItems.forEach((s: any) => {
         if (s.price_chg_pct > 0) bull++
@@ -1202,7 +1231,7 @@ export default function MarketPulse() {
         })
         setIvData(result)
       })
-    return () => clearTimeout(retryTimer)
+    return () => { clearTimeout(retryTimer); if (retryTimerRef.current) clearTimeout(retryTimerRef.current) }
   }, [])
 
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))

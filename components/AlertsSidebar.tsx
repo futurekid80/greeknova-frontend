@@ -6,7 +6,7 @@ import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
 
 export default function AlertsSidebar() {
   const [open, setOpen] = useState(false)
-  const { alerts, unreadCount, marketOpen, enabled, markAllRead } = useAlerts()
+  const { visibleAlerts: alerts, unreadCount, marketOpen, enabled, markAllRead } = useAlerts()
 
   function toggle() {
     setOpen(o => {

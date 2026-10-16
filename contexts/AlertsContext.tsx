@@ -69,6 +69,7 @@ const PRIORITY_SIGNALS = ['NEAR_STRIKE_UNWIND']
 
 interface AlertsContextValue {
   alerts: Alert[]
+  visibleAlerts: Alert[]
   priorityAlerts: Alert[]
   enabled: boolean
   permission: string
@@ -402,11 +403,22 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     })
   }, [enabled, spikeThreshold, volThreshold, enabledSignals])
 
-  const unreadCount = alerts.filter(a => a.id > lastSeenId).length
+  // Oct 16 2026 ("shows everything, becomes noisy" report): enabledSignals
+  // (the "Alerts: OI Spikes / Fresh Builds / ..." mute toggles on Jungle/UOA)
+  // was only ever being sent to the service-worker push engine -- the bell
+  // sidebar (and its unread badge) rendered the raw `alerts` list straight
+  // from the server/SW relay with no regard for what's muted, so muting a
+  // signal there stopped the OS push notification but the in-app panel kept
+  // showing it anyway. visibleAlerts is what every in-app display should use
+  // instead; `alerts` itself is left untouched since it's still the raw
+  // merge source (and the full /alerts page has its own separate, explicit
+  // signal-type filter dropdown where showing everything is the point).
+  const visibleAlerts = enabledSignals ? alerts.filter(a => enabledSignals.includes(a.signal)) : alerts
+  const unreadCount = visibleAlerts.filter(a => a.id > lastSeenId).length
 
   return (
     <AlertsContext.Provider value={{
-      alerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck, unreadCount,
+      alerts, visibleAlerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck, unreadCount,
       spikeThreshold, volThreshold, enabledSignals, toggleSignal, saveThresholds,
       enableAlerts, disableAlerts, checkNow, clearAlerts, markAllRead, playSound,
     }}>

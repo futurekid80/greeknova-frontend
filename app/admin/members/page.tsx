@@ -10,7 +10,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const API = 'https://api.greeknova.com'
-const ADMIN_EMAIL = 'hardhittrader@gmail.com'
+const ADMIN_EMAIL = 'megha.jethmalani@gmail.com'
 
 const PLAN_OPTIONS = [
   { value: 'founding', label: 'Founding — ₹3,999 (lifetime-locked, 100 seats)' },

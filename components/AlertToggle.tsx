@@ -10,7 +10,18 @@ export default function AlertToggle({
 }) {
   if (enabledSignals === null) return null
 
-  const enabled = signals.every(s => enabledSignals.includes(s))
+  // Oct 16 2026 ("still i can see notification for PDL when i have kept it
+  // off"): a bundled button (e.g. ['PDH_CROSS','PDL_CROSS']) used to show
+  // "on" only when EVERY signal in the bundle was present -- so a stale or
+  // partially-saved subscription with just ONE half still in the list (a
+  // leftover from a since-fixed race in usePushPreferences' toggleSignal)
+  // rendered this whole button as OFF, hiding the fact that the orphaned
+  // half was still live and still firing real notifications. Showing "on"
+  // when ANY signal in the bundle is present means a half-on state is never
+  // silently invisible -- it displays as on, and clicking it (which always
+  // sets every signal in the bundle to the SAME new value) clears all of
+  // them at once, self-healing the stale state instead of hiding it.
+  const enabled = signals.some(s => enabledSignals.includes(s))
 
   return (
     <button

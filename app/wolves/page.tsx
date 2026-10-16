@@ -130,7 +130,7 @@ export default function WolvesScanner() {
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">Total Wolves Today</p>
             <p className="text-2xl font-black text-white">{wolves.length}</p>
-            <p className="text-xs text-gray-600">runs once daily at 15:55 IST, or on demand above</p>
+            <p className="text-xs text-gray-600">live every 5 min during market hours, or on demand above</p>
           </div>
           <div className="bg-violet-950/20 border border-violet-800/40 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">🏔️ Apex Wolf</p>

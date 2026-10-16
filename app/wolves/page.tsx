@@ -40,11 +40,50 @@ interface FreshEventRow {
   rsi: number | null
   adx: number | null
   meaning: string | null
+  first_seen: string | null
+  last_seen: string | null
+  times_seen: number | null
+  decision_score: number | null
+  signal_freshness: string | null
+  bb_quality: string | null
+  sector: string | null
 }
 
 interface FreshEventsData {
   date: string
   events: FreshEventRow[]
+}
+
+interface WatchlistRow {
+  event_key: string
+  scan_date: string
+  scan_time: string | null
+  symbol: string
+  sector: string | null
+  direction: string
+  rank: string
+  confidence: string
+  signal_type: string | null
+  primary_trigger: string | null
+  timeframes: string | null
+  adx_status: string | null
+  rsi_status: string | null
+  bb_status: string | null
+  adx_active: boolean
+  fresh_adx_trigger: boolean
+  fresh_signal: string | null
+  sector_tailwind: string | null
+  confluence_score: number | null
+  decision_score: number | null
+  close: number | null
+  adx: number | null
+  rsi: number | null
+  why: string | null
+}
+
+interface WatchlistData {
+  date: string
+  watchlist: WatchlistRow[]
 }
 
 const TIER_STYLES: Record<string, string> = {
@@ -60,20 +99,49 @@ const EVENT_STYLES: Record<string, string> = {
   'ADX Cross 25':                     'bg-orange-950/50 text-orange-300 border-orange-700/60',
   'RSI Cross 60':                     'bg-emerald-950/50 text-emerald-300 border-emerald-700/60',
   'RSI Cross 40':                     'bg-emerald-950/50 text-emerald-300 border-emerald-700/60',
+  'BB Compression Breakout':          'bg-sky-950/50 text-sky-300 border-sky-700/60',
+  'BB Compression Breakdown':         'bg-sky-950/30 text-sky-400 border-sky-800/40',
+  'BB Breakout':                      'bg-sky-950/40 text-sky-300 border-sky-700/40',
+  'BB Breakdown':                     'bg-sky-950/20 text-sky-500 border-sky-800/30',
   'Grandfather-Father-Son Setup':     'bg-indigo-950/50 text-indigo-300 border-indigo-700/60',
   'Grandfather-Father-Son Exit':      'bg-indigo-950/30 text-indigo-400 border-indigo-800/40',
 }
 
-const EVENT_TYPES = ['all', 'ADX Full Alignment', 'ADX Cross 25', 'RSI Cross 60', 'RSI Cross 40', 'Grandfather-Father-Son Setup', 'Grandfather-Father-Son Exit'] as const
+const EVENT_TYPES = [
+  'all', 'ADX Full Alignment', 'ADX Cross 25', 'RSI Cross 60', 'RSI Cross 40',
+  'BB Compression Breakout', 'BB Compression Breakdown', 'BB Breakout', 'BB Breakdown',
+  'Grandfather-Father-Son Setup', 'Grandfather-Father-Son Exit',
+] as const
+
+const FRESHNESS_STYLES: Record<string, string> = {
+  'Fresh Now':          'text-emerald-400',
+  'Still Active':       'text-amber-400',
+  'Seen Earlier Today': 'text-gray-500',
+}
+
+const RANK_STYLES: Record<string, string> = {
+  'A+': 'bg-emerald-950/50 text-emerald-300 border-emerald-700/60',
+  'A':  'bg-cyan-950/50 text-cyan-300 border-cyan-700/60',
+  'B':  'bg-amber-950/50 text-amber-300 border-amber-700/60',
+  'C':  'bg-gray-800 text-gray-400 border-gray-700',
+}
+
+const TAILWIND_STYLES: Record<string, string> = {
+  'Sector Tailwind': 'text-emerald-400',
+  'Against Sector':  'text-red-400',
+  'Solo / Mixed Sector': 'text-gray-500',
+}
 
 export default function WolvesScanner() {
-  const [tab, setTab] = useState<'wolves' | 'events'>('wolves')
+  const [tab, setTab] = useState<'wolves' | 'events' | 'watchlist'>('wolves')
   const [data, setData] = useState<WolvesData | null>(null)
   const [eventsData, setEventsData] = useState<FreshEventsData | null>(null)
+  const [watchlistData, setWatchlistData] = useState<WatchlistData | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [tierFilter, setTierFilter] = useState<'all' | 'Apex Wolf' | 'Alpha Wolf' | 'Scout Wolf'>('all')
   const [eventTypeFilter, setEventTypeFilter] = useState<typeof EVENT_TYPES[number]>('all')
+  const [rankFilter, setRankFilter] = useState<'all' | 'A+' | 'A' | 'B' | 'C'>('all')
   const [countdown, setCountdown] = useState(300)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
@@ -81,12 +149,14 @@ export default function WolvesScanner() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [wRes, eRes] = await Promise.all([
+      const [wRes, eRes, dRes] = await Promise.all([
         fetch(`${API}/wolves`),
         fetch(`${API}/wolves/fresh-events`),
+        fetch(`${API}/wolves/watchlist`),
       ])
       setData(await wRes.json())
       setEventsData(await eRes.json())
+      setWatchlistData(await dRes.json())
     } catch (e) { console.error(e) }
     setLoading(false)
   }, [])
@@ -129,7 +199,17 @@ export default function WolvesScanner() {
     alignment: events.filter(e => e.event_type === 'ADX Full Alignment').length,
     adx: events.filter(e => e.event_type === 'ADX Cross 25').length,
     rsi: events.filter(e => e.event_type === 'RSI Cross 60' || e.event_type === 'RSI Cross 40').length,
+    bb: events.filter(e => e.event_type.startsWith('BB')).length,
     gfs: events.filter(e => e.event_type.startsWith('Grandfather-Father-Son')).length,
+  }
+
+  const watchlist = (watchlistData?.watchlist || []).slice().sort((a, b) => (b.decision_score ?? 0) - (a.decision_score ?? 0))
+  const filteredWatchlist = watchlist.filter(w => rankFilter === 'all' || w.rank === rankFilter)
+  const rankCounts = {
+    aplus: watchlist.filter(w => w.rank === 'A+').length,
+    a: watchlist.filter(w => w.rank === 'A').length,
+    b: watchlist.filter(w => w.rank === 'B').length,
+    c: watchlist.filter(w => w.rank === 'C').length,
   }
 
   return (
@@ -144,8 +224,8 @@ export default function WolvesScanner() {
               <Zap size={26} className="text-amber-400" /> Wolves Scanner
             </h1>
             <p className="text-gray-500 text-sm">
-              ADX + RSI + Bollinger Band confluence, plus standalone ADX/RSI events per timeframe.
-              Ported from the local scanner.
+              ADX + RSI + Bollinger Band confluence, standalone ADX/RSI/BB events, and a Rank/Decision
+              Score watchlist -- ported from the local scanner.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -179,6 +259,10 @@ export default function WolvesScanner() {
           <button onClick={() => setTab('events')}
             className={`px-4 py-1.5 text-sm font-bold rounded-md transition-all ${tab === 'events' ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>
             Fresh Events (Standalone)
+          </button>
+          <button onClick={() => setTab('watchlist')}
+            className={`px-4 py-1.5 text-sm font-bold rounded-md transition-all ${tab === 'watchlist' ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>
+            Decision Watchlist
           </button>
         </div>
 
@@ -268,7 +352,7 @@ export default function WolvesScanner() {
         {tab === 'events' && (
           <>
             {/* Summary cards */}
-            <div className="grid grid-cols-4 gap-3 mb-5">
+            <div className="grid grid-cols-5 gap-3 mb-5">
               <div className="bg-rose-950/20 border border-rose-800/40 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">⚡ ADX Full Alignment</p>
                 <p className="text-2xl font-black text-rose-300">{eventCounts.alignment}</p>
@@ -283,6 +367,11 @@ export default function WolvesScanner() {
                 <p className="text-xs text-gray-500 mb-1">📊 RSI Cross 60/40</p>
                 <p className="text-2xl font-black text-emerald-300">{eventCounts.rsi}</p>
                 <p className="text-xs text-gray-600">standalone, any single timeframe</p>
+              </div>
+              <div className="bg-sky-950/20 border border-sky-800/40 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">📉 BB Events</p>
+                <p className="text-2xl font-black text-sky-300">{eventCounts.bb}</p>
+                <p className="text-xs text-gray-600">compression + plain band breaks</p>
               </div>
               <div className="bg-indigo-950/20 border border-indigo-800/40 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">👴 Grandfather-Father-Son</p>
@@ -315,12 +404,15 @@ export default function WolvesScanner() {
                     <th className="text-right px-4 py-3">Close</th>
                     <th className="text-right px-4 py-3">ADX</th>
                     <th className="text-right px-4 py-3">RSI</th>
+                    <th className="text-right px-4 py-3">Decision Score</th>
+                    <th className="text-left px-4 py-3">Freshness</th>
+                    <th className="text-right px-4 py-3">Times Seen</th>
                     <th className="text-left px-4 py-3">Time</th>
                   </tr>
                 </thead>
                 <tbody>
                   {!loading && filteredEvents.length === 0 && (
-                    <tr><td colSpan={8} className="text-center text-gray-500 py-10">
+                    <tr><td colSpan={11} className="text-center text-gray-500 py-10">
                       No Fresh Events yet today. {events.length === 0 ? 'Try "Run scan now" if the market is open.' : ''}
                     </td></tr>
                   )}
@@ -337,7 +429,95 @@ export default function WolvesScanner() {
                       <td className="px-4 py-3 text-right text-gray-200">{e.close ?? '—'}</td>
                       <td className="px-4 py-3 text-right text-gray-200">{e.adx ?? '—'}</td>
                       <td className="px-4 py-3 text-right text-gray-200">{e.rsi ?? '—'}</td>
+                      <td className="px-4 py-3 text-right font-bold text-white">{e.decision_score ?? '—'}</td>
+                      <td className={`px-4 py-3 ${FRESHNESS_STYLES[e.signal_freshness || ''] || 'text-gray-500'}`}>{e.signal_freshness || '—'}</td>
+                      <td className="px-4 py-3 text-right text-gray-400">{e.times_seen ?? 1}</td>
                       <td className="px-4 py-3 text-gray-500">{e.scan_time || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {tab === 'watchlist' && (
+          <>
+            {/* Summary cards */}
+            <div className="grid grid-cols-4 gap-3 mb-5">
+              <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">⭐ Rank A+</p>
+                <p className="text-2xl font-black text-emerald-300">{rankCounts.aplus}</p>
+                <p className="text-xs text-gray-600">ADX + RSI + BB confluence, 2+ timeframes</p>
+              </div>
+              <div className="bg-cyan-950/20 border border-cyan-800/40 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Rank A</p>
+                <p className="text-2xl font-black text-cyan-300">{rankCounts.a}</p>
+                <p className="text-xs text-gray-600">Multi-timeframe ADX + RSI confluence</p>
+              </div>
+              <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Rank B</p>
+                <p className="text-2xl font-black text-amber-300">{rankCounts.b}</p>
+                <p className="text-xs text-gray-600">Fresh single-trigger breakout</p>
+              </div>
+              <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Rank C</p>
+                <p className="text-2xl font-black text-gray-300">{rankCounts.c}</p>
+                <p className="text-xs text-gray-600">Single-timeframe continuation</p>
+              </div>
+            </div>
+
+            {/* Rank filter */}
+            <div className="flex items-center gap-2 mb-4">
+              {(['all', 'A+', 'A', 'B', 'C'] as const).map(t => (
+                <button key={t} onClick={() => setRankFilter(t)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                    rankFilter === t ? 'bg-white text-gray-900 border-white' : 'bg-gray-900 text-gray-400 border-gray-700 hover:text-white'
+                  }`}>
+                  {t === 'all' ? 'All' : t}
+                </button>
+              ))}
+            </div>
+
+            {/* Watchlist table */}
+            <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
+                    <th className="text-left px-4 py-3">Rank</th>
+                    <th className="text-left px-4 py-3">Symbol</th>
+                    <th className="text-left px-4 py-3">Sector</th>
+                    <th className="text-left px-4 py-3">Direction</th>
+                    <th className="text-left px-4 py-3">Signal Type</th>
+                    <th className="text-left px-4 py-3">Timeframes</th>
+                    <th className="text-left px-4 py-3">Sector Tailwind</th>
+                    <th className="text-right px-4 py-3">Decision Score</th>
+                    <th className="text-left px-4 py-3">Confidence</th>
+                    <th className="text-left px-4 py-3">Why</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!loading && filteredWatchlist.length === 0 && (
+                    <tr><td colSpan={10} className="text-center text-gray-500 py-10">
+                      No watchlist rows yet today. {watchlist.length === 0 ? 'Try "Run scan now" if the market is open.' : ''}
+                    </td></tr>
+                  )}
+                  {filteredWatchlist.map(w => (
+                    <tr key={w.event_key} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg border ${RANK_STYLES[w.rank] || 'bg-gray-900 text-gray-400 border-gray-700'}`}>
+                          {w.rank}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-white">{w.symbol}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{w.sector || 'Unclassified'}</td>
+                      <td className={`px-4 py-3 font-medium ${w.direction === 'Bullish' ? 'text-emerald-400' : 'text-red-400'}`}>{w.direction}</td>
+                      <td className="px-4 py-3 text-gray-300 text-xs">{w.signal_type || '—'}</td>
+                      <td className="px-4 py-3 text-gray-300">{w.timeframes || '—'}</td>
+                      <td className={`px-4 py-3 text-xs ${TAILWIND_STYLES[w.sector_tailwind || ''] || 'text-gray-500'}`}>{w.sector_tailwind || '—'}</td>
+                      <td className="px-4 py-3 text-right font-bold text-white">{w.decision_score ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-300">{w.confidence}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate" title={w.why || ''}>{w.why || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

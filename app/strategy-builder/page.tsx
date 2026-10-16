@@ -3,7 +3,8 @@ import Navbar from '@/components/Navbar'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ALL_SYMBOLS, getLotSize } from '@/lib/symbols'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
+import { chartColors } from '@/lib/chartColors'
 
 const API = 'https://api.greeknova.com'
 
@@ -14,6 +15,16 @@ interface ChainData { symbol: string; spot: number; expiry: string; days_left: n
 type Action = 'BUY' | 'SELL'
 type OptType = 'CE' | 'PE'
 interface Leg { id: string; action: Action; optType: OptType; strike: number; premium: number; lots: number; tradingsymbol?: string | null }
+
+interface GammaHistoryPoint {
+  date: string
+  spot: number
+  regime: 'LONG_GAMMA' | 'SHORT_GAMMA'
+  local_net_gex: number | null
+  call_wall_strike: number | null
+  put_wall_strike: number | null
+  expiry: string | null
+}
 
 // Oct 16 2026 (Zerodha Publisher basket-order button): Zerodha's condition
 // for enabling full multi-user market-data access is that GreekNova add a
@@ -148,6 +159,15 @@ function StrategyBuilderInner() {
   const [legs, setLegs] = useState<Leg[]>([])
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null)
 
+  // Oct 16 2026: gamma-regime history for the current symbol -- works for
+  // any stock or index, not just the 5 gex_regime_log-tracked indices --
+  // so legs can be checked against where the regime/walls have actually
+  // been sitting, not just today's snapshot. See /gamma-history/{symbol}
+  // on the backend (computed on demand, no new storage).
+  const [gammaHistory, setGammaHistory] = useState<GammaHistoryPoint[] | null>(null)
+  const [gammaHistoryLoading, setGammaHistoryLoading] = useState(false)
+  const [showGammaHistory, setShowGammaHistory] = useState(false)
+
   const lotSize = getLotSize(symbol)
 
   const fetchData = useCallback(async () => {
@@ -164,6 +184,18 @@ function StrategyBuilderInner() {
 
   useEffect(() => { setExpiry(''); setLegs([]); setActiveTemplate(null) }, [symbol])
   useEffect(() => { fetchData() }, [symbol, expiry])
+
+  useEffect(() => {
+    if (!showGammaHistory || !symbol) return
+    let cancelled = false
+    setGammaHistoryLoading(true)
+    fetch(`${API}/gamma-history/${symbol}?days=20`)
+      .then((r) => r.json())
+      .then((j) => { if (!cancelled) setGammaHistory(j?.points ?? []) })
+      .catch(() => { if (!cancelled) setGammaHistory([]) })
+      .finally(() => { if (!cancelled) setGammaHistoryLoading(false) })
+    return () => { cancelled = true }
+  }, [symbol, showGammaHistory])
 
   // Coming from the Premium Screen's "Build" link: once the chain loads, sell the
   // exact call-wall / put-wall strikes it linked to (nearest available strike),
@@ -480,6 +512,74 @@ function StrategyBuilderInner() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+
+            {/* Gamma regime history -- Oct 16 2026: lets you check your legs
+                against where this symbol's gamma regime and walls have
+                actually been sitting over the last ~20 sessions, not just
+                today's snapshot. Works for any symbol (on-demand reconstruction
+                from oi_snapshots), not just the 5 indices Session Replay covers. */}
+            <div className="mb-6">
+              <button
+                onClick={() => setShowGammaHistory((v) => !v)}
+                className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500">
+                {showGammaHistory ? 'Hide' : 'Show'} gamma regime history ({symbol}) {showGammaHistory ? '▲' : '▼'}
+              </button>
+
+              {showGammaHistory && (
+                <div className="mt-3 rounded-xl border border-gray-800 bg-gray-900/20 p-4">
+                  {gammaHistoryLoading ? (
+                    <p className="text-xs text-gray-500">Loading gamma history…</p>
+                  ) : !gammaHistory?.length ? (
+                    <p className="text-xs text-gray-500">No gamma history available yet for {symbol}.</p>
+                  ) : (
+                    <>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={gammaHistory} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }}
+                              tickFormatter={(d) => d.slice(5)} />
+                            <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(v) => fmtNum(v)}
+                              domain={['auto', 'auto']} />
+                            <Tooltip
+                              contentStyle={{ background: '#0c0c16', border: '1px solid #1f2937', fontSize: 11 }}
+                              formatter={(v: any, name: any) => [typeof v === 'number' ? fmtNum(v) : v, name]}
+                              labelFormatter={(l) => `${l}`} />
+                            {/* Current leg strikes, so you can see at a glance whether a leg sits inside
+                                the historical call/put wall band or outside it. */}
+                            {Array.from(new Set(legs.map((l) => l.strike))).map((strike) => (
+                              <ReferenceLine key={strike} y={strike} stroke="#9ca3af" strokeDasharray="2 4"
+                                label={{ value: `leg ${strike}`, position: 'insideRight', fill: '#9ca3af', fontSize: 9 }} />
+                            ))}
+                            <Line type="monotone" dataKey="spot" name="Spot" stroke={chartColors.spot} strokeWidth={2}
+                              dot={(props: any) => {
+                                const pt = gammaHistory[props.index]
+                                const color = pt?.regime === 'SHORT_GAMMA' ? chartColors.put : chartColors.call
+                                return <circle key={props.index} cx={props.cx} cy={props.cy} r={3} fill={color} stroke="none" />
+                              }} />
+                            <Line type="monotone" dataKey="call_wall_strike" name="Call wall" stroke={chartColors.callWall}
+                              strokeWidth={1} strokeDasharray="4 3" dot={false} />
+                            <Line type="monotone" dataKey="put_wall_strike" name="Put wall" stroke={chartColors.putWall}
+                              strokeWidth={1} strokeDasharray="4 3" dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-500">
+                        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: chartColors.call }} /> Long Gamma session</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: chartColors.put }} /> Short Gamma session</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed" style={{ borderColor: chartColors.callWall }} /> Call wall</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed" style={{ borderColor: chartColors.putWall }} /> Put wall</span>
+                      </div>
+                      <p className="mt-2 text-[10px] text-gray-600">
+                        Reconstructed on demand from captured option-chain snapshots — not a live recommendation.
+                        Long Gamma dampens moves (dealer hedging works against the trend); Short Gamma amplifies them.
+                        A trending move can still happen in either regime.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
             </div>

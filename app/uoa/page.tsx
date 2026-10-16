@@ -119,7 +119,7 @@ function StockAtHighBadge({ atDayHigh, pct }: { atDayHigh: boolean; pct: number 
 
 export default function UOA() {
   // Oct 7 2026: shared AlertsContext instance -- see jungle/page.tsx comment.
-  const { enabledSignals, toggleSignal, spikeThreshold, volThreshold, saveThresholds } = useAlerts()
+  const { enabledSignals, toggleSignal, spikeThreshold, volThreshold, strikeZone: pushStrikeZone, saveThresholds } = useAlerts()
   const [data, setData] = useState<UOAData | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all'|'index'|'stocks'>('all')
@@ -245,7 +245,7 @@ export default function UOA() {
           {Object.entries(SIGNAL_META).map(([sig, meta]) => (
             <AlertToggle key={sig} signals={[sig]} label={meta.label} enabledSignals={enabledSignals} onToggle={toggleSignal} />
           ))}
-          <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} onSave={saveThresholds} />
+          <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} strikeZone={pushStrikeZone} onSave={saveThresholds} />
         </div>
 
         {/* Technical-level alerts -- opt-in only, off by default even for

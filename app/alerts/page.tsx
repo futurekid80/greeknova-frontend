@@ -24,7 +24,7 @@ function inStrikeZone(n: number | null | undefined, zone: string): boolean {
 export default function Alerts() {
   const {
     alerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck,
-    spikeThreshold, volThreshold, saveThresholds,
+    spikeThreshold, volThreshold, strikeZone: pushStrikeZone, saveThresholds,
     enableAlerts, disableAlerts, checkNow, clearAlerts, playSound,
   } = useAlerts()
 
@@ -430,7 +430,7 @@ export default function Alerts() {
         )}
 
         <div className="mb-4">
-          <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} onSave={saveThresholds} />
+          <AlertThresholds spikeThreshold={spikeThreshold} volThreshold={volThreshold} strikeZone={pushStrikeZone} onSave={saveThresholds} />
         </div>
 
         {baseAlerts.length === 0 ? (

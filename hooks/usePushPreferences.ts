@@ -19,6 +19,10 @@ export function usePushPreferences() {
   const [enabledSignals, setEnabledSignals] = useState<string[] | null>(null)
   const [spikeThreshold, setSpikeThreshold] = useState<number>(10)
   const [volThreshold, setVolThreshold] = useState<number>(20)
+  // Oct 16 2026 ("even 1 rupee option alert i get"): same ATM/±1/±2/±5/±10/
+  // All vocabulary as StrikeZoneFilter elsewhere -- 'all' means no filter,
+  // matching the push_subscriptions.strike_zone column default.
+  const [strikeZone, setStrikeZone] = useState<string>('all')
   const [loading, setLoading] = useState(true)
 
   // BUG FIX (Oct 11 2026): AlertToggle can bundle several signal names into
@@ -84,6 +88,7 @@ export function usePushPreferences() {
           setEnabledSignals(loaded)
           if (prefs.spike_threshold != null) setSpikeThreshold(Number(prefs.spike_threshold))
           if (prefs.vol_threshold != null) setVolThreshold(Number(prefs.vol_threshold))
+          if (prefs.strike_zone) setStrikeZone(String(prefs.strike_zone))
         }
       } catch (e) {
         console.error('Failed to load push preferences', e)
@@ -114,21 +119,25 @@ export function usePushPreferences() {
     }
   }, [endpoint])
 
-  const saveThresholds = useCallback(async (oi: number, vol: number) => {
+  // zone defaults to the current strikeZone when a caller doesn't pass one
+  // (keeps the two existing 2-arg call sites working untouched).
+  const saveThresholds = useCallback(async (oi: number, vol: number, zone?: string) => {
     const current = enabledSignalsRef.current
     if (!endpoint || current === null) return
+    const nextZone = zone ?? strikeZone
     setSpikeThreshold(oi)
     setVolThreshold(vol)
+    setStrikeZone(nextZone)
     try {
       await fetch(`${API}/push-preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, enabled_signals: current, spike_threshold: oi, vol_threshold: vol }),
+        body: JSON.stringify({ endpoint, enabled_signals: current, spike_threshold: oi, vol_threshold: vol, strike_zone: nextZone }),
       })
     } catch (e) {
       console.error('Failed to save thresholds', e)
     }
-  }, [endpoint])
+  }, [endpoint, strikeZone])
 
-  return { endpoint, enabledSignals, spikeThreshold, volThreshold, loading, toggleSignal, saveThresholds }
+  return { endpoint, enabledSignals, spikeThreshold, volThreshold, strikeZone, loading, toggleSignal, saveThresholds }
 }

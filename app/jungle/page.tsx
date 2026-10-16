@@ -69,7 +69,7 @@ export default function OptionsJungle() {
   // for the whole app) instead of this page's own separate fetch -- saving
   // here now also updates the in-browser Alert Engine (and the Alerts/UOA
   // pages) immediately, with no reload needed. See AlertsContext.tsx.
-  const { enabledSignals, toggleSignal, spikeThreshold: pushSpikeThreshold, volThreshold: pushVolThreshold, saveThresholds } = useAlerts()
+  const { enabledSignals, toggleSignal, spikeThreshold: pushSpikeThreshold, volThreshold: pushVolThreshold, strikeZone: pushStrikeZone, saveThresholds } = useAlerts()
   const [data, setData]             = useState<JungleData | null>(null)
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState<'oi' | 'vol'>('oi')
@@ -284,7 +284,7 @@ export default function OptionsJungle() {
           <AlertToggle signals={['SHORT_BUILDUP']} label="Short Buildup" enabledSignals={enabledSignals} onToggle={toggleSignal} />
           <AlertToggle signals={['SHORT_COVERING']} label="Short Covering" enabledSignals={enabledSignals} onToggle={toggleSignal} />
           <AlertToggle signals={['LONG_UNWINDING']} label="Long Unwinding" enabledSignals={enabledSignals} onToggle={toggleSignal} />
-          <AlertThresholds spikeThreshold={pushSpikeThreshold} volThreshold={pushVolThreshold} onSave={saveThresholds} />
+          <AlertThresholds spikeThreshold={pushSpikeThreshold} volThreshold={pushVolThreshold} strikeZone={pushStrikeZone} onSave={saveThresholds} />
         </div>
 
         {/* Technical-level alerts -- opt-in only, off by default even for

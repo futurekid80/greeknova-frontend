@@ -79,9 +79,10 @@ interface AlertsContextValue {
   unreadCount: number
   spikeThreshold: number
   volThreshold: number
+  strikeZone: string
   enabledSignals: string[] | null
   toggleSignal: (signal: string, on: boolean) => Promise<void>
-  saveThresholds: (oi: number, vol: number) => Promise<void>
+  saveThresholds: (oi: number, vol: number, zone?: string) => Promise<void>
   enableAlerts: () => Promise<void>
   disableAlerts: () => Promise<void>
   checkNow: () => Promise<void>
@@ -110,7 +111,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   // 10-15 alerts every 5 min below my threshold" report. Fix: make system A
   // read the SAME numbers from system B (one source of truth) instead of
   // maintaining its own parallel copy.
-  const { spikeThreshold, volThreshold, enabledSignals, toggleSignal, saveThresholds } = usePushPreferences()
+  const { spikeThreshold, volThreshold, strikeZone, enabledSignals, toggleSignal, saveThresholds } = usePushPreferences()
   const [alerts, setAlerts]           = useState<Alert[]>([])
   const [priorityAlerts, setPriorityAlerts] = useState<Alert[]>([])
   const [marketOpen, setMarketOpen]   = useState(false)
@@ -217,7 +218,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
           // they finish loading, so this initial ENABLE doesn't need to be
           // perfect, just get the engine running.
           navigator.serviceWorker.ready.then(reg => {
-            reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold, volThreshold, enabledSignals } })
+            reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold, volThreshold, enabledSignals, strikeZone } })
           })
         }
       }).catch(() => {})
@@ -319,7 +320,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('gn_alerts_enabled', 'true')
     setEnabled(true)
     const reg = await navigator.serviceWorker.ready
-    reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold, volThreshold, enabledSignals } })
+    reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold, volThreshold, enabledSignals, strikeZone } })
 
     // Also subscribe this device to real server-sent push — this is what
     // makes alerts arrive reliably even when the tab is closed/backgrounded,
@@ -344,7 +345,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
         await fetch(`${API}/push-subscribe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subscription: sub.toJSON(), spikeThreshold, volThreshold, enabledSignals }),
+          body: JSON.stringify({ subscription: sub.toJSON(), spikeThreshold, volThreshold, enabledSignals, strikeZone }),
         })
       }
     } catch (e) {
@@ -399,9 +400,9 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!enabled) return
     navigator.serviceWorker?.ready.then(reg => {
-      reg.active?.postMessage({ type: 'UPDATE_THRESHOLD', data: { spikeThreshold, volThreshold, enabledSignals } })
+      reg.active?.postMessage({ type: 'UPDATE_THRESHOLD', data: { spikeThreshold, volThreshold, enabledSignals, strikeZone } })
     })
-  }, [enabled, spikeThreshold, volThreshold, enabledSignals])
+  }, [enabled, spikeThreshold, volThreshold, enabledSignals, strikeZone])
 
   // Oct 16 2026 ("shows everything, becomes noisy" report): enabledSignals
   // (the "Alerts: OI Spikes / Fresh Builds / ..." mute toggles on Jungle/UOA)
@@ -419,7 +420,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   return (
     <AlertsContext.Provider value={{
       alerts, visibleAlerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck, unreadCount,
-      spikeThreshold, volThreshold, enabledSignals, toggleSignal, saveThresholds,
+      spikeThreshold, volThreshold, strikeZone, enabledSignals, toggleSignal, saveThresholds,
       enableAlerts, disableAlerts, checkNow, clearAlerts, markAllRead, playSound,
     }}>
       {children}

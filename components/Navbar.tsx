@@ -25,7 +25,36 @@ import VixGauge from '@/components/VixGauge'
 // (same hrefs) as they already appear under Positional/Intraday/Option
 // Sellers above -- this is a second, OI-specific front door to them, not a
 // replacement for the persona grouping.
+//
+// Oct 16 2026: same precedent again for a cross-cutting "Scanners" group --
+// per Manish, scanners (the ATM Option Scanner, and now Wolves alongside
+// it) were landing wherever their persona happened to put them, with no
+// single place to see "every scanner GreekNova has" at a glance. This
+// groups every scanner-type page (ATM Option Scanner, Wolves, Custom
+// Scanner, CPR, Intraday Futures, Options Jungle, Wall Migration, First
+// Hour Breakout, Spike/Volume/Spot Volume/Vacuum/Trend Ignition) into one
+// dropdown. Same rule as Open Interest above: nothing moved or removed,
+// these are the same pages at the same hrefs as wherever they already
+// live -- this is a second front door, not a replacement.
 const NAV_GROUPS = [
+  {
+    label: '🔎 Scanners',
+    links: [
+      { href: '/scanners',    label: '🎯 ATM Option Scanner' },
+      { href: '/wolves',      label: '🐺 Wolves Scanner' },
+      { href: '/custom-scanner', label: '🎯 Custom Scanner' },
+      { href: '/signals/cpr', label: '📐 CPR Scanner' },
+      { href: '/signals/intraday', label: '📋 Intraday Futures Scanner' },
+      { href: '/jungle',      label: '🌿 Options Jungle' },
+      { href: '/signals/wall-migration', label: '🧱 Wall Migration' },
+      { href: '/first-hour-breakout', label: '🌅 First Hour Breakout' },
+      { href: '/spikes',      label: '⚡ Spike Scanner' },
+      { href: '/volume',      label: '📊 Volume Scanner' },
+      { href: '/spotvolume',  label: '⚡ Spot Volume Breakout' },
+      { href: '/vacuum',      label: '🌀 Vacuum Scanner' },
+      { href: '/trend-ignition', label: '🔥 Trend Ignition' },
+    ]
+  },
   {
     label: 'Market',
     links: [

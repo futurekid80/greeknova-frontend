@@ -55,13 +55,17 @@ export default function WolvesScanner() {
   }, [])
 
   const runNow = async () => {
+    // The scan runs in the background on the server and takes 2-4 minutes
+    // for the full universe -- this call just kicks it off and returns
+    // immediately. We poll fetchData a few times after, since there's no
+    // push notification when it's done.
     setRunning(true)
     try {
-      const res = await fetch(`${API}/wolves/run-now`, { method: 'POST' })
-      await res.json()
-      await fetchData()
+      await fetch(`${API}/wolves/run-now`, { method: 'POST' })
     } catch (e) { console.error(e) }
-    setRunning(false)
+    setTimeout(fetchData, 60_000)
+    setTimeout(fetchData, 120_000)
+    setTimeout(() => { fetchData(); setRunning(false) }, 180_000)
   }
 
   useEffect(() => {

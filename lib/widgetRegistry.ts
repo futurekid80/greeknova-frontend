@@ -92,6 +92,9 @@ export const WIDGETS: Widget[] = [
   // via Customize.
   { key: 'intraday-scanner',   label: 'Intraday Futures Scanner', description: 'Live futures OI/price scan, intraday',                 href: '/signals/intraday',     destination: 'alerts', defaultEnabled: true },
   { key: 'cpr-scanner',        label: 'CPR Scanner',              description: 'Central Pivot Range scan across the F&O universe',     href: '/signals/cpr',          destination: 'alerts', defaultEnabled: true },
+  // Oct 16 2026: ADX+RSI+BB "3 Wolves" confluence scan, ported from
+  // Manish's local Fyers Streamlit tool onto Kite data.
+  { key: 'wolves-scanner',     label: 'Wolves Scanner',           description: 'ADX+RSI+BB confluence scan — Scout/Alpha/Apex tiers', href: '/wolves',               destination: 'alerts', defaultEnabled: true },
   // Also missed on Oct 14, lower-traffic so added but off by default --
   // still reachable via Customize/See all now instead of being orphaned.
   { key: 'oi-map',             label: 'OI Map',                   description: 'Visual OI map across strikes',                         href: '/oi-map',               destination: 'overview', defaultEnabled: false },

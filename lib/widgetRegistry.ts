@@ -95,7 +95,10 @@ export const WIDGETS: Widget[] = [
   // Also missed on Oct 14, lower-traffic so added but off by default --
   // still reachable via Customize/See all now instead of being orphaned.
   { key: 'oi-map',             label: 'OI Map',                   description: 'Visual OI map across strikes',                         href: '/oi-map',               destination: 'overview', defaultEnabled: false },
-  { key: 'oipulse',            label: 'OI Pulse',                 description: 'Live OI pulse view',                                   href: '/oipulse',              destination: 'overview', defaultEnabled: false },
+  // Oct 16 2026: oipulse's tile removed -- the page itself was retired when
+  // Positional Radar -> Positional Intelligence replaced it (see
+  // app/oipulse/page.tsx's own "do not edit, dead page" note). It was still
+  // selectable here, so a user could add a dead tile to their dashboard.
 ]
 
 export function widgetsByDestination(destination: Destination): Widget[] {

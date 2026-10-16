@@ -7,13 +7,70 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, R
 
 const API = 'https://api.greeknova.com'
 
-interface Greeks { ltp: number; iv: number | null; oi: number; volume: number }
+interface Greeks { ltp: number; iv: number | null; oi: number; volume: number; tradingsymbol?: string | null }
 interface ChainRow { strike: number; is_atm: boolean; ce: Greeks; pe: Greeks }
 interface ChainData { symbol: string; spot: number; expiry: string; days_left: number; expiries: string[]; chain: ChainRow[] }
 
 type Action = 'BUY' | 'SELL'
 type OptType = 'CE' | 'PE'
-interface Leg { id: string; action: Action; optType: OptType; strike: number; premium: number; lots: number }
+interface Leg { id: string; action: Action; optType: OptType; strike: number; premium: number; lots: number; tradingsymbol?: string | null }
+
+// Oct 16 2026 (Zerodha Publisher basket-order button): Zerodha's condition
+// for enabling full multi-user market-data access is that GreekNova add a
+// real order-placement flow via Kite Connect's "Publisher" feature -- a
+// free, no-approval-needed basket-order redirect (kite.trade/publisher/).
+// We never see the user's token or confirm the order ourselves; we just
+// build the basket JSON from the already-computed strategy legs and submit
+// a hidden form to Kite, where the user reviews and places it themselves.
+// Needs NEXT_PUBLIC_KITE_PUBLISHER_API_KEY set once Manish creates the
+// Publisher app in the Kite Connect developer console.
+const KITE_PUBLISHER_API_KEY = process.env.NEXT_PUBLIC_KITE_PUBLISHER_API_KEY || ''
+const KITE_BASKET_URL = 'https://kite.zerodha.com/connect/basket'
+
+function exchangeFor(symbol: string): 'NFO' | 'BFO' {
+  return symbol === 'SENSEX' ? 'BFO' : 'NFO'
+}
+
+function placeViaZerodha(symbol: string, legs: Leg[], lotSize: number) {
+  if (!KITE_PUBLISHER_API_KEY) {
+    alert('Zerodha order placement isn\'t configured yet on this deployment.')
+    return
+  }
+  const missing = legs.filter((l) => !l.tradingsymbol)
+  if (missing.length) {
+    alert('One or more legs are missing their Zerodha trading symbol -- try re-picking the strike, or refresh the chain.')
+    return
+  }
+  const exchange = exchangeFor(symbol)
+  const orders = legs.map((l) => ({
+    variety: 'regular',
+    tradingsymbol: l.tradingsymbol,
+    exchange,
+    transaction_type: l.action,
+    order_type: 'LIMIT',
+    quantity: l.lots * lotSize,
+    product: 'NRML',
+    price: l.premium,
+    validity: 'DAY',
+  }))
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = KITE_BASKET_URL
+  form.target = '_blank'
+  const apiKeyInput = document.createElement('input')
+  apiKeyInput.type = 'hidden'
+  apiKeyInput.name = 'api_key'
+  apiKeyInput.value = KITE_PUBLISHER_API_KEY
+  const dataInput = document.createElement('input')
+  dataInput.type = 'hidden'
+  dataInput.name = 'data'
+  dataInput.value = JSON.stringify(orders)
+  form.appendChild(apiKeyInput)
+  form.appendChild(dataInput)
+  document.body.appendChild(form)
+  form.submit()
+  document.body.removeChild(form)
+}
 
 let legIdCounter = 0
 const newLegId = () => `leg-${++legIdCounter}-${Date.now()}`
@@ -119,11 +176,11 @@ function StrategyBuilderInner() {
     const built: Leg[] = []
     if (urlSellCE) {
       const row = nearest(Number(urlSellCE))
-      built.push({ id: newLegId(), action: 'SELL', optType: 'CE', strike: row.strike, premium: row.ce.ltp || 0, lots: 1 })
+      built.push({ id: newLegId(), action: 'SELL', optType: 'CE', strike: row.strike, premium: row.ce.ltp || 0, lots: 1, tradingsymbol: row.ce.tradingsymbol })
     }
     if (urlSellPE) {
       const row = nearest(Number(urlSellPE))
-      built.push({ id: newLegId(), action: 'SELL', optType: 'PE', strike: row.strike, premium: row.pe.ltp || 0, lots: 1 })
+      built.push({ id: newLegId(), action: 'SELL', optType: 'PE', strike: row.strike, premium: row.pe.ltp || 0, lots: 1, tradingsymbol: row.pe.tradingsymbol })
     }
     if (built.length) { setLegs(built); setActiveTemplate(null) }
   }, [data, urlSellCE, urlSellPE])
@@ -152,7 +209,8 @@ function StrategyBuilderInner() {
       const row = strikeAt(tl.offset)
       if (!row) continue
       const premium = tl.optType === 'CE' ? row.ce.ltp : row.pe.ltp
-      built.push({ id: newLegId(), action: tl.action, optType: tl.optType, strike: row.strike, premium: premium || 0, lots: 1 })
+      const tsym = tl.optType === 'CE' ? row.ce.tradingsymbol : row.pe.tradingsymbol
+      built.push({ id: newLegId(), action: tl.action, optType: tl.optType, strike: row.strike, premium: premium || 0, lots: 1, tradingsymbol: tsym })
     }
     setLegs(built)
     setActiveTemplate(t.key)
@@ -164,6 +222,7 @@ function StrategyBuilderInner() {
       id: newLegId(), action: 'BUY', optType: 'CE',
       strike: atmRow?.strike ?? (data?.spot ?? 0),
       premium: atmRow?.ce.ltp ?? 0, lots: 1,
+      tradingsymbol: atmRow?.ce.tradingsymbol,
     }])
     setActiveTemplate(null)
   }
@@ -171,10 +230,14 @@ function StrategyBuilderInner() {
     setLegs((prev) => prev.map((l) => {
       if (l.id !== id) return l
       const merged = { ...l, ...patch }
-      // if strike or optType changed, re-pull the live premium for that strike
+      // if strike or optType changed, re-pull the live premium (and the
+      // matching Zerodha tradingsymbol -- Oct 16 2026 Publisher button) for that strike
       if ((patch.strike !== undefined || patch.optType !== undefined) && data) {
         const row = data.chain.find((r) => r.strike === merged.strike)
-        if (row) merged.premium = merged.optType === 'CE' ? row.ce.ltp : row.pe.ltp
+        if (row) {
+          merged.premium = merged.optType === 'CE' ? row.ce.ltp : row.pe.ltp
+          merged.tradingsymbol = merged.optType === 'CE' ? row.ce.tradingsymbol : row.pe.tradingsymbol
+        }
       }
       return merged
     }))
@@ -350,7 +413,17 @@ function StrategyBuilderInner() {
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[11px] text-gray-500 uppercase tracking-wide">Legs</p>
-                <button onClick={addLeg} className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500">+ Add leg</button>
+                <div className="flex items-center gap-2">
+                  {legs.length > 0 && (
+                    <button
+                      onClick={() => placeViaZerodha(symbol, legs, lotSize)}
+                      title="Opens Kite with this basket pre-filled -- you review and place it yourself, we never see your order"
+                      className="text-xs px-3 py-1.5 rounded-lg border border-emerald-700/50 bg-emerald-950/40 text-emerald-400 font-semibold hover:bg-emerald-950/60">
+                      Place via Zerodha ↗
+                    </button>
+                  )}
+                  <button onClick={addLeg} className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500">+ Add leg</button>
+                </div>
               </div>
               {legs.length === 0 ? (
                 <p className="text-xs text-gray-600">Pick a premade strategy above, or add a leg to build your own.</p>
@@ -492,7 +565,7 @@ function StrategyBuilderInner() {
               </ul>
             </details>
 
-            <p className="mt-4 text-[11px] text-gray-600">Informational and educational only. Not SEBI registered. Not investment advice.</p>
+            <p className="mt-4 text-[11px] text-gray-600">Informational and educational only. Not SEBI registered. Not investment advice. "Place via Zerodha" opens your own Kite account with these legs pre-filled for you to review and place yourself — GreekNova never sees or confirms the order.</p>
           </>
         )}
       </div>

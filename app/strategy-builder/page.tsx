@@ -10,7 +10,7 @@ const API = 'https://api.greeknova.com'
 
 interface Greeks { ltp: number; iv: number | null; oi: number; volume: number; tradingsymbol?: string | null }
 interface ChainRow { strike: number; is_atm: boolean; ce: Greeks; pe: Greeks }
-interface ChainData { symbol: string; spot: number; expiry: string; days_left: number; expiries: string[]; chain: ChainRow[] }
+interface ChainData { symbol: string; spot: number; expiry: string; days_left: number; expiries: string[]; chain: ChainRow[]; timestamp?: string; is_stale?: boolean }
 
 type Action = 'BUY' | 'SELL'
 type OptType = 'CE' | 'PE'
@@ -361,6 +361,11 @@ function StrategyBuilderInner() {
         {(urlSellCE || urlSellPE) && (
           <p className="text-xs text-cyan-400 mb-2 -mt-3">
             Pre-filled from the Premium Screen: selling {urlSellPE ? `PE ${urlSellPE}` : ''}{urlSellPE && urlSellCE ? ' and ' : ''}{urlSellCE ? `CE ${urlSellCE}` : ''} — the strikes carrying the most gamma-weighted OI on each side.
+          </p>
+        )}
+        {data?.is_stale && (
+          <p className="text-xs text-amber-400 mb-2 -mt-3">
+            Market is closed — showing the last captured chain{data.timestamp ? ` (${new Date(data.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST)` : ''}, not live prices.
           </p>
         )}
         {(urlRv1 || urlVerdict) && (

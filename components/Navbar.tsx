@@ -539,6 +539,18 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
               🏠 Dashboard
               {active === '/dashboard' && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
             </Link>
+            {/* Oct 18 2026: always-visible "Watch Demo" link -- Manish's call
+                was that a new visitor (or an existing user who missed the
+                announcement) should never have to hunt for the walkthrough
+                video, so this sits right next to Dashboard rather than
+                behind the classicNav toggle like the rest of the nav. */}
+            <Link href="/demo"
+              className={`text-sm font-semibold transition-colors relative ${
+                active === '/demo' ? 'text-white' : 'text-cyan-400 hover:text-cyan-300'
+              }`}>
+              🎬 Watch Demo
+              {active === '/demo' && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
+            </Link>
             {/* Oct 14 2026: the old 5-dropdown persona/OI nav (Market, Open
                 Interest, Positional, Intraday, Option Sellers -- NAV_GROUPS
                 below) and the standalone VIX/Alerts text links (STANDALONE

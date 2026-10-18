@@ -48,7 +48,6 @@ export const WIDGETS: Widget[] = [
   { key: 'eod-report',         label: 'EOD Report',               description: 'Formatted end-of-day report',                         href: '/eod-report',           destination: 'overview', defaultEnabled: false },
   { key: 'confluence',         label: 'Signal Confluence',        description: 'Multiple signals agreeing on one symbol',             href: '/confluence',           destination: 'overview', defaultEnabled: false },
   { key: 'first-hour-breakout',label: 'First Hour Breakout',      description: 'Opening-hour breakout scanner',                        href: '/first-hour-breakout',  destination: 'overview', defaultEnabled: false },
-  { key: 'ask',                label: 'Ask GreekNova',            description: 'Ask questions about the data in plain English',        href: '/ask',                  destination: 'overview', defaultEnabled: false },
 
   // ── Gamma & Greeks ────────────────────────────────────────────────────
   { key: 'gamma-squeeze',      label: 'Gamma Squeeze',            description: 'Net GEX, flip point, wall velocity',                   href: '/gamma-squeeze',        destination: 'gamma-greeks', defaultEnabled: true },
@@ -95,9 +94,11 @@ export const WIDGETS: Widget[] = [
   // Oct 16 2026: ADX+RSI+BB "3 Wolves" confluence scan, ported from
   // Manish's local Fyers Streamlit tool onto Kite data.
   { key: 'wolves-scanner',     label: 'Wolves Scanner',           description: 'ADX+RSI+BB confluence scan — Scout/Alpha/Apex tiers', href: '/wolves',               destination: 'alerts', defaultEnabled: true },
-  // Also missed on Oct 14, lower-traffic so added but off by default --
-  // still reachable via Customize/See all now instead of being orphaned.
-  { key: 'oi-map',             label: 'OI Map',                   description: 'Visual OI map across strikes',                         href: '/oi-map',               destination: 'overview', defaultEnabled: false },
+  // Oct 18 2026: 'Ask GreekNova' and 'OI Map' tiles removed -- both are
+  // retired/never-linked pages (no entry in the Classic nav either) that
+  // had slipped back in as selectable Dashboard tiles during the Oct 14
+  // consolidation pass. Same precedent as oipulse below: page files left
+  // in place, untouched, just no longer discoverable anywhere.
   // Oct 16 2026: oipulse's tile removed -- the page itself was retired when
   // Positional Radar -> Positional Intelligence replaced it (see
   // app/oipulse/page.tsx's own "do not edit, dead page" note). It was still

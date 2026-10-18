@@ -147,6 +147,24 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     try { playTerminalBeep(getAudioCtx()) } catch (e) {}
   }, [getAudioCtx])
 
+  // Oct 18 2026: a user who already had alerts enabled from a previous
+  // session (gn_alerts_enabled=true in localStorage, restored below without
+  // a click) never gets their AudioContext unlocked this session -- it's
+  // only created/resumed inside enableAlerts() or the Test Sound button,
+  // both direct clicks. Browsers block audio.start() with no prior user
+  // gesture in the page, so the very first real alert fires silently and
+  // support hears "alert sound doesn't work" even though it's enabled.
+  // Fix: unlock on the page's first real interaction, whatever it is.
+  useEffect(() => {
+    const unlock = () => { try { getAudioCtx() } catch {} }
+    document.addEventListener('pointerdown', unlock, { once: true, passive: true })
+    document.addEventListener('keydown', unlock, { once: true })
+    return () => {
+      document.removeEventListener('pointerdown', unlock)
+      document.removeEventListener('keydown', unlock)
+    }
+  }, [getAudioCtx])
+
   useEffect(() => {
     if (!signedIn) return
     let localAlerts: Alert[] = []

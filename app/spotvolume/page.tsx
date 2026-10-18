@@ -221,8 +221,27 @@ export default function SpotVolumeScanner() {
                         )}
                       </td>
                       <td className="py-3 px-3 text-right text-gray-300">{r.cmp?.toLocaleString() ?? '—'}</td>
-                      <td className="py-3 px-3 text-right font-bold text-orange-400">
-                        {r.burst_ratio}x <span className="text-gray-600 text-xs">({r.baseline_used})</span>
+                      {/* Oct 18 2026: for breakout rows, show breakout-day volume
+                          (breakout_vol_ratio -- the number that actually decides
+                          confirmed vs vol-pending) as the headline figure instead of
+                          the stale burst-day ratio. Was showing burst_ratio always,
+                          which made "vol pending" breakouts look like they had the
+                          burst day's huge volume behind them when they didn't. */}
+                      <td className="py-3 px-3 text-right font-bold">
+                        {r.state === 'breakout' ? (
+                          <>
+                            <span className={r.confirmed ? 'text-emerald-400' : 'text-amber-400'}>
+                              {r.breakout_vol_ratio}x
+                            </span>{' '}
+                            <span className="text-gray-600 text-xs">
+                              (burst {r.burst_ratio}x {r.baseline_used})
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-orange-400">
+                            {r.burst_ratio}x <span className="text-gray-600 text-xs">({r.baseline_used})</span>
+                          </span>
+                        )}
                       </td>
                       <td className={`py-3 px-3 text-right font-bold ${divergent ? 'text-red-400' : 'text-gray-400'}`}>
                         {futRatio != null ? `${futRatio}x` : '—'}
@@ -243,7 +262,7 @@ export default function SpotVolumeScanner() {
                       <td className="py-3 px-3 text-right text-gray-400">{r.burst_high?.toLocaleString()}</td>
                       <td className="py-3 px-3 text-gray-400">
                         {r.state === 'breakout'
-                          ? `${fmtDate(r.breakout_date || '')} · ${r.breakout_vol_ratio}x`
+                          ? fmtDate(r.breakout_date || '')
                           : r.state === 'bursting'
                           ? 'Live — forming now'
                           : (

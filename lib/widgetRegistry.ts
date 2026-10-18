@@ -81,7 +81,11 @@ export const WIDGETS: Widget[] = [
   { key: 'volume',             label: 'Volume Scanner',           description: 'Unusual volume scanner',                               href: '/volume',               destination: 'alerts', defaultEnabled: false },
   { key: 'spotvolume',         label: 'Spot Volume Breakout',     description: 'Cash-market volume breakout scanner',                  href: '/spotvolume',           destination: 'alerts', defaultEnabled: false },
   { key: 'vacuum',             label: 'Vacuum Scanner',           description: 'OI vacuum / rapid-unwind scanner',                     href: '/vacuum',               destination: 'alerts', defaultEnabled: false },
-  { key: 'trend-ignition',     label: 'Trend Ignition',           description: 'Early trend-ignition scanner',                         href: '/trend-ignition',       destination: 'alerts', defaultEnabled: false },
+  // Oct 18 2026: 'Trend Ignition' removed -- this route (/trend-ignition)
+  // is entirely CommodityNova/MCX backend logic (commoditynova/mcx_*.py),
+  // never an F&O feature -- it had been mistakenly offered here as if it
+  // were a GreekNova scanner. Manish wants MCX hidden from discovery for
+  // now (CUG backend scanning stays live for existing members).
   // Oct 15 2026: these two existed under the old "⚡ Intraday" nav group
   // (Intraday Futures Scanner, CPR Scanner) but got missed when every page
   // was given a widget entry here on Oct 14 -- with the old dropdown nav

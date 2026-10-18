@@ -52,7 +52,6 @@ const NAV_GROUPS = [
       { href: '/volume',      label: '📊 Volume Scanner' },
       { href: '/spotvolume',  label: '⚡ Spot Volume Breakout' },
       { href: '/vacuum',      label: '🌀 Vacuum Scanner' },
-      { href: '/trend-ignition', label: '🔥 Trend Ignition' },
     ]
   },
   {

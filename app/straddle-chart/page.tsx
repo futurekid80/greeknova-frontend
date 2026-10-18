@@ -22,7 +22,7 @@ type ChartData = {
   error?: string
 }
 
-const CHART_HEIGHT = 480
+const CHART_HEIGHT = 560 // taller now: 3 stacked panes instead of 2 (Oct 18 2026 redesign)
 
 // BUG FIX (Oct 5 2026): same fix as StockChart.tsx -- lightweight-charts
 // renders numeric Time values in UTC with no display-timezone option, so
@@ -131,7 +131,7 @@ export default function StraddleChartPage() {
     let disposed = false
     async function render() {
       if (!data || !data.points.length || !containerRef.current) return
-      const { createChart, LineSeries, ColorType } = await import('lightweight-charts')
+      const { createChart, LineSeries, BaselineSeries, ColorType } = await import('lightweight-charts')
       if (disposed || !containerRef.current) return
 
       if (chartRef.current) {
@@ -151,44 +151,61 @@ export default function StraddleChartPage() {
       })
       chartRef.current = chart
 
-      // DESIGN FIX (Oct 9 2026): Spot/VWAP and Combined/CE/PE used to share
-      // one plot area on two differently-scaled price axes (~22,600 vs
-      // ~150-350). Same axes or not, both sets of lines occupied the same
-      // pixels, so the chart read as a tangle no matter how the legend
-      // labeled them -- that's the "messy, haphazard" complaint. Splitting
-      // them into two stacked panes (same synced time axis, independent
-      // price scales each) removes the overlap at the source instead of
-      // trying to fix it with more labels or colors. Premium (the page's
-      // actual subject) gets the larger top pane; Spot/VWAP is directional
-      // context in a smaller pane below.
+      // DESIGN FIX (Oct 18 2026): replaces the Oct 9 2026 two-pane layout.
+      // That fix solved the axis-scale collision (CE/PE/Combined vs
+      // Spot/VWAP) but left two panes that didn't read as useful: CE and PE
+      // sat as two near-parallel flat lines in the Premium pane telling no
+      // real story, and Spot/VWAP in their own pane move so closely
+      // together most sessions that the pane looked dead even though it
+      // was rendering correctly ("all disoriented... CE/PE doing nothing...
+      // Spot/VWAP sitting down doing nothing" -- Manish, Oct 18 2026).
+      // Three panes now, each with one job: Combined premium (magnitude,
+      // unchanged), Call-Put Skew (which leg is pricier right now, a
+      // BaselineSeries that colors itself green/red around zero instead of
+      // two flat lines), Spot vs VWAP (spot's %% distance from VWAP, same
+      // diverging treatment, so "above or below" reads as a color instead
+      // of comparing two squiggly price lines across panes). Previewed as
+      // a mocked artifact and approved before building this.
       const combinedSeries = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 3, title: 'Combined (CE+PE)' }, 0)
       combinedSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.combined })) as any)
 
-      const ceSeries = chart.addSeries(LineSeries, { color: '#16a34a', lineWidth: 1, title: 'CE' }, 0)
-      ceSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.ce })) as any)
-
-      const peSeries = chart.addSeries(LineSeries, { color: '#dc2626', lineWidth: 1, title: 'PE' }, 0)
-      peSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.pe })) as any)
-
-      if (spotPoints.length) {
-        const spotSeries = chart.addSeries(LineSeries, { color: '#60a5fa', lineWidth: 1, title: 'Spot' }, 1)
-        spotSeries.setData(spotPoints.map((p) => ({ time: chartTime(p.time), value: p.value })) as any)
-      }
-      if (vwapPoints.length) {
-        const vwapSeries = chart.addSeries(LineSeries, {
-          color: '#a855f7',
+      if (data.points.length) {
+        const skewSeries = chart.addSeries(BaselineSeries, {
+          baseValue: { type: 'price', price: 0 },
+          topLineColor: '#22c55e', topFillColor1: 'rgba(34,197,94,0.28)', topFillColor2: 'rgba(34,197,94,0.02)',
+          bottomLineColor: '#ef4444', bottomFillColor1: 'rgba(239,68,68,0.02)', bottomFillColor2: 'rgba(239,68,68,0.26)',
           lineWidth: 2,
-          lineStyle: 2, // dashed
-          title: 'VWAP',
+          title: 'Call − Put Skew',
         }, 1)
-        vwapSeries.setData(vwapPoints.map((p) => ({ time: chartTime(p.time), value: p.value })) as any)
+        skewSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.ce - p.pe })) as any)
       }
 
-      // Premium pane gets roughly 2x the vertical space of the Spot/VWAP
-      // context pane below it.
+      // Spot/VWAP deviation needs both arrays aligned by index -- they're
+      // built from the same `candles` map in `load()` above, so index i in
+      // each shares the same timestamp.
+      if (spotPoints.length && vwapPoints.length) {
+        const devPoints = spotPoints.map((sp, i) => {
+          const vw = vwapPoints[i]?.value
+          return vw ? { time: sp.time, value: ((sp.value - vw) / vw) * 100 } : null
+        }).filter(Boolean) as { time: number; value: number }[]
+        if (devPoints.length) {
+          const vwapDevSeries = chart.addSeries(BaselineSeries, {
+            baseValue: { type: 'price', price: 0 },
+            topLineColor: '#22c55e', topFillColor1: 'rgba(34,197,94,0.28)', topFillColor2: 'rgba(34,197,94,0.02)',
+            bottomLineColor: '#ef4444', bottomFillColor1: 'rgba(239,68,68,0.02)', bottomFillColor2: 'rgba(239,68,68,0.26)',
+            lineWidth: 2,
+            title: 'Spot vs VWAP %',
+          }, 2)
+          vwapDevSeries.setData(devPoints as any)
+        }
+      }
+
+      // Premium pane gets roughly 3x the vertical space of each context
+      // pane below it.
       const panes = chart.panes()
-      panes[0]?.setStretchFactor(2)
+      panes[0]?.setStretchFactor(3)
       panes[1]?.setStretchFactor(1)
+      panes[2]?.setStretchFactor(1)
 
       chart.timeScale().fitContent()
     }
@@ -220,6 +237,16 @@ export default function StraddleChartPage() {
     changeFromOpen != null && data?.day_open_combined
       ? (changeFromOpen / data.day_open_combined) * 100
       : null
+
+  // Oct 18 2026: quick-glance VWAP bias badge for the stats row, same
+  // signal as the new Spot-vs-VWAP pane -- latest spot/vwap values instead
+  // of re-deriving the whole chart series here.
+  const lastSpot = spotPoints.length ? spotPoints[spotPoints.length - 1].value : null
+  const lastVwap = vwapPoints.length ? vwapPoints[vwapPoints.length - 1].value : null
+  const vwapBiasUp = lastSpot != null && lastVwap != null ? lastSpot > lastVwap : null
+  const vwapDevPct = lastSpot != null && lastVwap != null && lastVwap !== 0
+    ? ((lastSpot - lastVwap) / lastVwap) * 100
+    : null
 
   return (
     <div className="min-h-screen bg-[#07070e] text-gray-200">
@@ -315,7 +342,7 @@ export default function StraddleChartPage() {
 
         {!loading && !error && data && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
               <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Strike</p>
                 <p className="text-lg font-black text-white">{data.strike}</p>
@@ -352,35 +379,74 @@ export default function StraddleChartPage() {
                   )}
                 </p>
               </div>
+              {/* Oct 18 2026: new 5th tile -- same bias the Spot-vs-VWAP
+                  pane shows, as a quick-glance badge for anyone who isn't
+                  reading the chart itself. */}
+              <div
+                className={`rounded-xl px-4 py-3 border ${
+                  vwapBiasUp === true
+                    ? 'bg-emerald-950/20 border-emerald-900/40'
+                    : vwapBiasUp === false
+                    ? 'bg-red-950/20 border-red-900/40'
+                    : 'bg-gray-900/40 border-gray-800'
+                }`}
+              >
+                <p
+                  className={`text-[10px] uppercase tracking-wide mb-1 ${
+                    vwapBiasUp === true ? 'text-emerald-600' : vwapBiasUp === false ? 'text-red-500' : 'text-gray-500'
+                  }`}
+                >
+                  Spot vs VWAP
+                </p>
+                <p className={`text-lg font-black ${vwapBiasUp === true ? 'text-emerald-400' : vwapBiasUp === false ? 'text-red-400' : 'text-white'}`}>
+                  {vwapBiasUp === null ? '—' : vwapBiasUp ? '▲ Above' : '▼ Below'}
+                  {vwapDevPct != null && (
+                    <span className="text-xs ml-1 font-normal opacity-70">
+                      ({vwapDevPct >= 0 ? '+' : ''}
+                      {fmt(vwapDevPct, 2)}%)
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
 
             <div className="bg-gray-900/20 border border-gray-800 rounded-xl p-4">
               {/* Legend grouped by pane, so it reads as "two charts, clearly
                   labeled" instead of one flat row of five mixed-scale lines. */}
+              {/* DESIGN FIX (Oct 18 2026): legend now matches the 3-pane
+                  layout above -- Premium (just Combined now), Skew (CE vs
+                  PE as one diverging line instead of two flat ones), and
+                  Spot vs VWAP (as a %% deviation instead of two raw price
+                  lines). */}
               <div className="flex flex-col gap-2 mb-3 text-xs">
                 <div className="flex items-center gap-4 flex-wrap">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-16 shrink-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-20 shrink-0">
                     Premium
                   </span>
                   <span className="flex items-center gap-1.5 text-amber-400">
                     <span className="w-3 h-0.5 bg-amber-500 inline-block" /> Combined (CE+PE)
                   </span>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-20 shrink-0">
+                    Skew
+                  </span>
                   <span className="flex items-center gap-1.5 text-emerald-400">
-                    <span className="w-3 h-0.5 bg-emerald-500 inline-block" /> CE
+                    <span className="w-3 h-0.5 bg-emerald-500 inline-block" /> Calls richer
                   </span>
                   <span className="flex items-center gap-1.5 text-red-400">
-                    <span className="w-3 h-0.5 bg-red-500 inline-block" /> PE
+                    <span className="w-3 h-0.5 bg-red-500 inline-block" /> Puts richer
                   </span>
                 </div>
                 <div className="flex items-center gap-4 flex-wrap">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-16 shrink-0">
-                    Price
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-20 shrink-0">
+                    Spot/VWAP
                   </span>
-                  <span className="flex items-center gap-1.5 text-blue-400">
-                    <span className="w-3 h-0.5 bg-blue-400 inline-block" /> Spot
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <span className="w-3 h-0.5 bg-emerald-500 inline-block" /> Above VWAP
                   </span>
-                  <span className="flex items-center gap-1.5 text-purple-400">
-                    <span className="w-3 border-t-2 border-dashed border-purple-400 inline-block" /> VWAP
+                  <span className="flex items-center gap-1.5 text-red-400">
+                    <span className="w-3 h-0.5 bg-red-500 inline-block" /> Below VWAP
                   </span>
                 </div>
               </div>

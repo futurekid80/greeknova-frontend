@@ -1205,13 +1205,18 @@ export default function MarketPulse() {
   const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)
   useEffect(() => {
     fetchData()
-    // BUG FIX (Sep 12 2026): a page load landing in the ~few-second window
-    // every 5 min when run_full_capture is writing to oi_snapshots can hit
-    // a transient timeout on cpr-scanner/oi-pulse/uoa/index-data. Auto
-    // refresh is opt-in and off by default, so a first-load failure here
-    // had no safety net -- a single silent retry a few seconds later
-    // covers that narrow window without needing a manual refresh.
-    const retryTimer = setTimeout(() => { fetchData() }, 4000)
+    // BUG FIX (Oct 18 2026): removed the old unconditional "blind retry"
+    // that always re-ran fetchData() 4s after every single mount (Sep 12
+    // 2026 note below), regardless of whether the first call succeeded --
+    // confirmed live it was doubling every request on this page
+    // (cpr-scanner/oi-pulse/uoa/52-week-high/index-data all firing twice
+    // per load) and was the single biggest contributor to the homepage
+    // feeling slow, on top of being needless extra backend load. The Oct
+    // 16 2026 retryAttemptsRef mechanism below already covers the real
+    // failure case this was meant for (oi-pulse coming back empty) --
+    // it only retries when something actually needs it, with backoff,
+    // capped at 3 attempts -- so the blind one was pure redundancy once
+    // that landed.
     // Fetch IV range for index cards
     supabase.from('iv_history')
       .select('symbol, atm_iv, trade_date')
@@ -1231,7 +1236,7 @@ export default function MarketPulse() {
         })
         setIvData(result)
       })
-    return () => { clearTimeout(retryTimer); if (retryTimerRef.current) clearTimeout(retryTimerRef.current) }
+    return () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current) }
   }, [])
 
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))

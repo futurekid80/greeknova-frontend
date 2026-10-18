@@ -73,14 +73,11 @@ export const WIDGETS: Widget[] = [
   { key: 'uoa',                label: 'UOA',                      description: 'Unusual options activity',                             href: '/uoa',                  destination: 'option-sellers', defaultEnabled: false },
   { key: 'custom-scanner',     label: 'Custom Scanner',           description: 'Build and save your own scan conditions',             href: '/custom-scanner',       destination: 'option-sellers', defaultEnabled: false },
   { key: 'wall-migration',     label: 'Wall Migration',           description: 'OI wall convergence/migration scanner',                href: '/signals/wall-migration',destination: 'option-sellers', defaultEnabled: false },
-  { key: 'scanners',           label: 'Options Scanner',          description: 'Unified PCR-based options scanner',                    href: '/scanners',             destination: 'option-sellers', defaultEnabled: false },
 
   // ── Alerts & Scanners ─────────────────────────────────────────────────
   { key: 'alerts',             label: 'Alerts',                   description: 'Your live alert feed',                                 href: '/alerts',               destination: 'alerts', defaultEnabled: true },
-  { key: 'spikes',             label: 'Spike Scanner',            description: 'Price/OI spike scanner',                               href: '/spikes',               destination: 'alerts', defaultEnabled: false },
   { key: 'volume',             label: 'Volume Scanner',           description: 'Unusual volume scanner',                               href: '/volume',               destination: 'alerts', defaultEnabled: false },
   { key: 'spotvolume',         label: 'Spot Volume Breakout',     description: 'Cash-market volume breakout scanner',                  href: '/spotvolume',           destination: 'alerts', defaultEnabled: false },
-  { key: 'vacuum',             label: 'Vacuum Scanner',           description: 'OI vacuum / rapid-unwind scanner',                     href: '/vacuum',               destination: 'alerts', defaultEnabled: false },
   // Oct 18 2026: 'Trend Ignition' removed -- this route (/trend-ignition)
   // is entirely CommodityNova/MCX backend logic (commoditynova/mcx_*.py),
   // never an F&O feature -- it had been mistakenly offered here as if it

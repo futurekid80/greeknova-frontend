@@ -40,7 +40,9 @@ const NAV_GROUPS = [
   {
     label: '🔎 Scanners',
     links: [
-      { href: '/scanners',    label: '🎯 ATM Option Scanner' },
+      // Oct 18 2026: ATM Option Scanner (/scanners), Spike Scanner (/spikes) and
+      // Vacuum Scanner (/vacuum) hidden from nav discovery per Manish -- not retired,
+      // pages/backend untouched, just not surfaced here anymore (not actively used).
       { href: '/wolves',      label: '🐺 Wolves Scanner' },
       { href: '/custom-scanner', label: '🎯 Custom Scanner' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
@@ -48,10 +50,8 @@ const NAV_GROUPS = [
       { href: '/jungle',      label: '🌿 Options Jungle' },
       { href: '/signals/wall-migration', label: '🧱 Wall Migration' },
       { href: '/first-hour-breakout', label: '🌅 First Hour Breakout' },
-      { href: '/spikes',      label: '⚡ Spike Scanner' },
       { href: '/volume',      label: '📊 Volume Scanner' },
       { href: '/spotvolume',  label: '⚡ Spot Volume Breakout' },
-      { href: '/vacuum',      label: '🌀 Vacuum Scanner' },
     ]
   },
   {

@@ -526,7 +526,7 @@ export default function WolvesScanner() {
                       <td className={`px-4 py-3 text-xs ${TAILWIND_STYLES[w.sector_tailwind || ''] || 'text-gray-500'}`}>{w.sector_tailwind || '—'}</td>
                       <td className="px-4 py-3 text-right font-bold text-white">{w.decision_score ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-300">{w.confidence}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate" title={w.why || ''}>{w.why || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs max-w-md whitespace-normal leading-snug align-top">{w.why || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

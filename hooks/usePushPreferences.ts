@@ -100,24 +100,61 @@ export function usePushPreferences() {
     return () => { cancelled = true }
   }, [])
 
+  // BUG FIX (Oct 19 2026, "freshbuildup off but still getting the chrome
+  // alert, persistent, reported by users"): the old save here was
+  // fire-and-forget -- it updated enabledSignalsRef/enabledSignals (what
+  // every page's toggle renders, since AlertsProvider is a single instance
+  // mounted once in app/layout.tsx) BEFORE the POST even went out, and the
+  // POST's result was never looked at. fetch() only throws on a network
+  // failure, not on an HTTP error status, and /push-preferences'
+  // save_preferences() returns {"error": ...} with a plain 200 on a
+  // Supabase failure -- so a cold Railway dyno, a transient Supabase
+  // blip, or a save racing the dead-subscription cleanup in
+  // push_notifications._send_one() all left the UI showing "muted"
+  // everywhere (same shared context, never re-checked against the server
+  // except on a full reload) while the push_subscriptions row kept
+  // whatever it had before -- FRESH_BUILD still enabled, still firing.
+  // postSignals() now verifies the response (network error, non-2xx, or a
+  // JSON {"error": ...} body all count as failure), retries once, and --
+  // only if both attempts fail -- rolls the optimistic update back to the
+  // last known-saved value, so the toggle never claims a mute that the
+  // server doesn't actually have.
+  const postSignals = useCallback(async (payload: Record<string, unknown>) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(`${API}/push-preferences`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && !data.error) return true
+        console.error('Failed to save push preference (server):', data.error || res.status)
+      } catch (e) {
+        console.error('Failed to save push preference (network):', e)
+      }
+      if (attempt === 0) await new Promise(r => setTimeout(r, 800))
+    }
+    return false
+  }, [])
+
   const toggleSignal = useCallback(async (signal: string, on: boolean) => {
-    const current = enabledSignalsRef.current
-    if (!endpoint || current === null) return
+    const previous = enabledSignalsRef.current
+    if (!endpoint || previous === null) return
     const next = on
-      ? Array.from(new Set([...current, signal]))
-      : current.filter(s => s !== signal)
+      ? Array.from(new Set([...previous, signal]))
+      : previous.filter(s => s !== signal)
     enabledSignalsRef.current = next
     setEnabledSignals(next)
-    try {
-      await fetch(`${API}/push-preferences`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, enabled_signals: next }),
-      })
-    } catch (e) {
-      console.error('Failed to save alert preference', e)
+    const ok = await postSignals({ endpoint, enabled_signals: next })
+    if (!ok && enabledSignalsRef.current === next) {
+      // Save never landed -- the device is still actually subscribed to
+      // whatever `previous` says, so show that instead of a mute the
+      // server never applied.
+      enabledSignalsRef.current = previous
+      setEnabledSignals(previous)
     }
-  }, [endpoint])
+  }, [endpoint, postSignals])
 
   // zone defaults to the current strikeZone when a caller doesn't pass one
   // (keeps the two existing 2-arg call sites working untouched).
@@ -125,19 +162,19 @@ export function usePushPreferences() {
     const current = enabledSignalsRef.current
     if (!endpoint || current === null) return
     const nextZone = zone ?? strikeZone
+    const prevThreshold = spikeThreshold
+    const prevVol = volThreshold
+    const prevZone = strikeZone
     setSpikeThreshold(oi)
     setVolThreshold(vol)
     setStrikeZone(nextZone)
-    try {
-      await fetch(`${API}/push-preferences`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, enabled_signals: current, spike_threshold: oi, vol_threshold: vol, strike_zone: nextZone }),
-      })
-    } catch (e) {
-      console.error('Failed to save thresholds', e)
+    const ok = await postSignals({ endpoint, enabled_signals: current, spike_threshold: oi, vol_threshold: vol, strike_zone: nextZone })
+    if (!ok) {
+      setSpikeThreshold(prevThreshold)
+      setVolThreshold(prevVol)
+      setStrikeZone(prevZone)
     }
-  }, [endpoint, strikeZone])
+  }, [endpoint, strikeZone, spikeThreshold, volThreshold, postSignals])
 
   return { endpoint, enabledSignals, spikeThreshold, volThreshold, strikeZone, loading, toggleSignal, saveThresholds }
 }

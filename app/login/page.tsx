@@ -127,6 +127,19 @@ export default function LoginPage() {
 
               {kiteError && <p className="text-red-400 text-sm mb-4">{kiteError}</p>}
 
+              <p className="text-gray-500 text-xs leading-snug mb-4 bg-gray-800/50 border border-gray-800 rounded-lg px-3 py-2">
+                Next, Zerodha (not GreekNova) will show its own authorization
+                screen listing: <em>account balance &amp; margins, profile
+                details, holdings &amp; positions</em>. That's Zerodha's fixed
+                screen for every Kite Connect app &mdash; Sensibull, Streak,
+                Smallcase, all of them see the exact same wording &mdash; it
+                isn't something GreekNova requests or can change. GreekNova
+                itself never reads your balance or holdings and never places
+                trades; we only use this to read live market data. (Don't
+                take our word for it: log into any of those other apps with
+                Zerodha and you'll see this identical screen.)
+              </p>
+
               <button
                 onClick={handleZerodhaLogin}
                 disabled={!kiteDisclaimerChecked}

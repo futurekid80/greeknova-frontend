@@ -21,7 +21,7 @@ const ALL_SYMBOLS = _CANON_SYMBOLS
 // fetch() has no built-in timeout, so one hung request blocked
 // setLoading(false) for the whole page. Every fetch that feeds that
 // Promise.allSettled now races against this timeout instead.
-function fetchWithTimeout(url: string, ms = 15000): Promise<Response> {
+function fetchWithTimeout(url: string, ms = 8000): Promise<Response> {
   const controller = new AbortController()
   const t = setTimeout(() => controller.abort(), ms)
   return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(t))
@@ -1098,40 +1098,58 @@ export default function MarketPulse() {
       }
     }
     if (!session) { setLoading(false); return }
-    let indexJsonEarly: any = null
     try {
       const cached = sessionStorage.getItem('gn_cpr_cache')
       const cacheTime = sessionStorage.getItem('gn_cpr_time')
       const cacheAge = cacheTime ? Date.now() - Number(cacheTime) : Infinity
       if (cached && cacheAge < 5 * 60 * 1000) { setCprData(JSON.parse(cached)); setLoading(false) }
     } catch {}
+    // Oct 20 2026 (second pass -- "still slow"): UOA and index-data don't
+    // feed into the cpr/oi-pulse/52wh enrichment below, but were still
+    // awaited in the SAME Promise.allSettled as those three -- so the main
+    // Pulse table (and the global `loading` flag) waited on the SLOWEST of
+    // all five calls, even for the two that have nothing to do with it.
+    // Each independent group now fires, resolves, and paints on its own:
+    // a slow UOA or index-data response no longer holds up the CPR/Pulse
+    // table (and vice versa), so the page's main content shows as soon as
+    // ITS OWN three calls are back, not whichever of all five is slowest.
+    fetchWithTimeout(`${API}/uoa`).then(r => r.json()).then(uoaJson => {
+      setUoaSignals(uoaJson?.signals || [])
+    }).catch(e => console.error('uoa failed:', e))
+
+    fetchWithTimeout(`${API}/index-data`).then(r => r.json()).then(indexJson => {
+      if (indexJson?.timestamp) {
+        const ts = indexJson.timestamp
+        setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))
+        const cmpMap2: Record<string,number> = {}
+        const seen = new Set<string>()
+        ;(indexJson.cmps || []).forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
+        setCmps(cmpMap2)
+        const indexData = indexJson.rows || []
+        const idxResults = PULSE_CARD_SYMBOLS
+          .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
+          .filter(Boolean) as IndexAnalysis[]
+        setAnalyses(idxResults)
+      }
+    }).catch(e => console.error('index-data failed:', e))
+
     try {
-      // Oct 20 2026 ("page always feels slow to load"): /index-data used to
-      // be fetched in its own separate `await` AFTER this whole block
-      // finished -- so every load paid for two full round-trips back to
-      // back (this batch, then index-data) even though index-data doesn't
-      // depend on any of these four's results. It's the one thing gating
-      // the "Loading index data..." spinner, so that spinner sat on screen
-      // for the sum of both calls instead of just one. Folding it into the
-      // same Promise.allSettled lets it run concurrently with the rest,
-      // cutting that wait roughly in half on a cold cache.
+      // CPR / OI-pulse / 52-week-high enrich each other (CPR + 52wh data is
+      // merged onto each pulse row below), so these three stay batched
+      // together -- but no longer wait on uoa/index-data above.
       const results = await Promise.allSettled([
         fetchWithTimeout(`${API}/cpr-scanner`).then(r => r.json()),
         fetchWithTimeout(`${API}/oi-pulse`).then(r => r.json()),
-        fetchWithTimeout(`${API}/uoa`).then(r => r.json()),
         fetchWithTimeout(`${API}/52-week-high`).then(r => r.json()),
-        fetchWithTimeout(`${API}/index-data`).then(r => r.json()),
       ])
       const ok = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' ? r.value : null
-      const [cprJson, pulseJson, uoaJson, week52Json, indexJsonFromBatch] = results.map(ok)
-      indexJsonEarly = indexJsonFromBatch
+      const [cprJson, pulseJson, week52Json] = results.map(ok)
       results.forEach((r, i) => {
         if (r.status === 'rejected') {
-          console.error(['cpr-scanner','oi-pulse','uoa','52-week-high','index-data'][i], 'failed:', r.reason)
+          console.error(['cpr-scanner','oi-pulse','52-week-high'][i], 'failed:', r.reason)
         }
       })
       const week52Map = Object.fromEntries((week52Json?.rows || []).map((r: any) => [r.symbol, r]))
-      setUoaSignals(uoaJson?.signals || [])
       const cprRows: CPRRow[] = cprJson?.data || []
       if (cprJson) setCprData(cprRows)
       try {
@@ -1190,30 +1208,10 @@ export default function MarketPulse() {
           sessionStorage.setItem('gn_breadth_stocks', JSON.stringify(pulseItems))
         } catch {}
       }
-    } catch(e) { console.error('cpr/oi-pulse/uoa/52wh block failed:', e) }
-    // Oct 20 2026: index-data is now fetched inside the batch above so it
-    // runs concurrently with the other four instead of after them. This
-    // block stays as a fallback -- outside that try, so a failure in any
-    // of the other four still can't prevent it -- but only does a second
-    // fetch if the batched one didn't come back (e.g. the whole batch
-    // threw before reaching the destructuring line above).
-    try {
-      const indexJson = indexJsonEarly ?? await (await fetchWithTimeout(`${API}/index-data`)).json()
-      if (indexJson?.timestamp) {
-        const ts = indexJson.timestamp
-        setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))
-        const cmpMap2: Record<string,number> = {}
-        const seen = new Set<string>()
-        ;(indexJson.cmps || []).forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })
-        setCmps(cmpMap2)
-        const indexData = indexJson.rows || []
-        const idxResults = PULSE_CARD_SYMBOLS
-          .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
-          .filter(Boolean) as IndexAnalysis[]
-        setAnalyses(idxResults)
-      }
-    } catch(e) { console.error('index-data failed:', e) }
-    setLoading(false)
+    } catch(e) {
+      console.error('cpr/oi-pulse/52wh block failed:', e)
+      setLoading(false)
+    }
   }
 
   const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)

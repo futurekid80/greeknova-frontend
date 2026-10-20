@@ -1098,6 +1098,7 @@ export default function MarketPulse() {
       }
     }
     if (!session) { setLoading(false); return }
+    let indexJsonEarly: any = null
     try {
       const cached = sessionStorage.getItem('gn_cpr_cache')
       const cacheTime = sessionStorage.getItem('gn_cpr_time')
@@ -1105,17 +1106,28 @@ export default function MarketPulse() {
       if (cached && cacheAge < 5 * 60 * 1000) { setCprData(JSON.parse(cached)); setLoading(false) }
     } catch {}
     try {
+      // Oct 20 2026 ("page always feels slow to load"): /index-data used to
+      // be fetched in its own separate `await` AFTER this whole block
+      // finished -- so every load paid for two full round-trips back to
+      // back (this batch, then index-data) even though index-data doesn't
+      // depend on any of these four's results. It's the one thing gating
+      // the "Loading index data..." spinner, so that spinner sat on screen
+      // for the sum of both calls instead of just one. Folding it into the
+      // same Promise.allSettled lets it run concurrently with the rest,
+      // cutting that wait roughly in half on a cold cache.
       const results = await Promise.allSettled([
         fetchWithTimeout(`${API}/cpr-scanner`).then(r => r.json()),
         fetchWithTimeout(`${API}/oi-pulse`).then(r => r.json()),
         fetchWithTimeout(`${API}/uoa`).then(r => r.json()),
         fetchWithTimeout(`${API}/52-week-high`).then(r => r.json()),
+        fetchWithTimeout(`${API}/index-data`).then(r => r.json()),
       ])
       const ok = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' ? r.value : null
-      const [cprJson, pulseJson, uoaJson, week52Json] = results.map(ok)
+      const [cprJson, pulseJson, uoaJson, week52Json, indexJsonFromBatch] = results.map(ok)
+      indexJsonEarly = indexJsonFromBatch
       results.forEach((r, i) => {
         if (r.status === 'rejected') {
-          console.error(['cpr-scanner','oi-pulse','uoa','52-week-high'][i], 'failed:', r.reason)
+          console.error(['cpr-scanner','oi-pulse','uoa','52-week-high','index-data'][i], 'failed:', r.reason)
         }
       })
       const week52Map = Object.fromEntries((week52Json?.rows || []).map((r: any) => [r.symbol, r]))
@@ -1179,12 +1191,14 @@ export default function MarketPulse() {
         } catch {}
       }
     } catch(e) { console.error('cpr/oi-pulse/uoa/52wh block failed:', e) }
-    // Fetched unconditionally (outside the try above) so a failure in any
-    // of the other four endpoints can no longer prevent this from running
-    // and clearing "Loading index data...".
+    // Oct 20 2026: index-data is now fetched inside the batch above so it
+    // runs concurrently with the other four instead of after them. This
+    // block stays as a fallback -- outside that try, so a failure in any
+    // of the other four still can't prevent it -- but only does a second
+    // fetch if the batched one didn't come back (e.g. the whole batch
+    // threw before reaching the destructuring line above).
     try {
-      const indexRes = await fetchWithTimeout(`${API}/index-data`)
-      const indexJson = await indexRes.json()
+      const indexJson = indexJsonEarly ?? await (await fetchWithTimeout(`${API}/index-data`)).json()
       if (indexJson?.timestamp) {
         const ts = indexJson.timestamp
         setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))

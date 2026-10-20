@@ -24,6 +24,7 @@ interface WolfRow {
 
 interface WolvesData {
   date: string
+  is_fallback?: boolean
   wolves: WolfRow[]
 }
 
@@ -53,6 +54,7 @@ interface FreshEventRow {
 
 interface FreshEventsData {
   date: string
+  is_fallback?: boolean
   events: FreshEventRow[]
 }
 
@@ -85,6 +87,7 @@ interface WatchlistRow {
 
 interface WatchlistData {
   date: string
+  is_fallback?: boolean
   watchlist: WatchlistRow[]
 }
 
@@ -234,11 +237,15 @@ export default function WolvesScanner() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {data?.date && (
-              <div className="text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
-                Scan date: {data.date}
-              </div>
-            )}
+            {(() => {
+              const active = tab === 'wolves' ? data : tab === 'events' ? eventsData : watchlistData
+              if (!active?.date) return null
+              return (
+                <div className="text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
+                  Scan date: {active.date}{active.is_fallback ? ' (last trading day)' : ''}
+                </div>
+              )
+            })()}
             <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Next refresh in {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
@@ -328,7 +335,7 @@ export default function WolvesScanner() {
                 <tbody>
                   {!loading && filteredWolves.length === 0 && (
                     <tr><td colSpan={9} className="text-center text-gray-500 py-10">
-                      No Wolves yet today. {wolves.length === 0 ? 'Try "Run scan now" if the market is open.' : ''}
+                      {data?.is_fallback ? `No Wolves yet on ${data.date}.` : 'No Wolves yet today.'} Try "Run scan now" if the market is open.
                     </td></tr>
                   )}
                   {filteredWolves.map(w => (
@@ -420,7 +427,7 @@ export default function WolvesScanner() {
                 <tbody>
                   {!loading && filteredEvents.length === 0 && (
                     <tr><td colSpan={13} className="text-center text-gray-500 py-10">
-                      No Fresh Events yet today. {events.length === 0 ? 'Try "Run scan now" if the market is open.' : ''}
+                      {eventsData?.is_fallback ? `No Fresh Events yet on ${eventsData.date}.` : 'No Fresh Events yet today.'} Try "Run scan now" if the market is open.
                     </td></tr>
                   )}
                   {filteredEvents.map(e => (
@@ -508,7 +515,7 @@ export default function WolvesScanner() {
                 <tbody>
                   {!loading && filteredWatchlist.length === 0 && (
                     <tr><td colSpan={10} className="text-center text-gray-500 py-10">
-                      No watchlist rows yet today. {watchlist.length === 0 ? 'Try "Run scan now" if the market is open.' : ''}
+                      {watchlistData?.is_fallback ? `No watchlist rows yet on ${watchlistData.date}.` : 'No watchlist rows yet today.'} Try "Run scan now" if the market is open.
                     </td></tr>
                   )}
                   {filteredWatchlist.map(w => (

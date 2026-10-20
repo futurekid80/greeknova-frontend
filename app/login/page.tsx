@@ -134,12 +134,6 @@ export default function LoginPage() {
               >
                 Continue with Zerodha →
               </button>
-              <button
-                onClick={() => { setStep('demo'); setError('') }}
-                className="w-full text-gray-500 hover:text-gray-300 text-sm py-2 mt-2 transition"
-              >
-                Have a demo access code?
-              </button>
             </div>
           )}
           {step === 'demo' && (

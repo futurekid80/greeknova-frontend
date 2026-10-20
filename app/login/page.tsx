@@ -100,7 +100,9 @@ export default function LoginPage() {
                 Welcome to GreekNova
               </h2>
               <p className="text-gray-400 text-sm mb-6">
-                Log in with your Zerodha Kite account to access GreekNova.
+                Log in with your Zerodha Kite account. New here? You get a
+                free 7-day trial automatically &mdash; no card, no payment,
+                just your Zerodha login.
               </p>
 
               {returnNotice && (

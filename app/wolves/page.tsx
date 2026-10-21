@@ -149,6 +149,7 @@ export default function WolvesScanner() {
   const [running, setRunning] = useState(false)
   const [tierFilter, setTierFilter] = useState<'all' | 'Apex Wolf' | 'Alpha Wolf' | 'Scout Wolf'>('all')
   const [eventTypeFilter, setEventTypeFilter] = useState<typeof EVENT_TYPES[number]>('all')
+  const [eventSortMode, setEventSortMode] = useState<'priority' | 'latest'>('priority')
   const [rankFilter, setRankFilter] = useState<'all' | 'A+' | 'A' | 'B' | 'C'>('all')
   const [countdown, setCountdown] = useState(300)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -201,7 +202,11 @@ export default function WolvesScanner() {
     scout: wolves.filter(w => w.wolf_tier === 'Scout Wolf').length,
   }
 
-  const events = (eventsData?.events || []).slice().sort((a, b) => (a.priority ?? 9) - (b.priority ?? 9) || (b.scan_time || '').localeCompare(a.scan_time || ''))
+  const events = (eventsData?.events || []).slice().sort((a, b) =>
+    eventSortMode === 'latest'
+      ? (b.scan_time || '').localeCompare(a.scan_time || '')
+      : (a.priority ?? 9) - (b.priority ?? 9) || (b.scan_time || '').localeCompare(a.scan_time || '')
+  )
   const filteredEvents = events.filter(e => eventTypeFilter === 'all' || e.event_type === eventTypeFilter)
   const eventCounts = {
     alignment: events.filter(e => e.event_type === 'ADX Full Alignment').length,
@@ -390,6 +395,19 @@ export default function WolvesScanner() {
                 <p className="text-2xl font-black text-indigo-300">{eventCounts.gfs}</p>
                 <p className="text-xs text-gray-600">Monthly/Weekly/Daily RSI setup</p>
               </div>
+            </div>
+
+            {/* Sort mode toggle */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs text-gray-500 font-bold uppercase">Sort:</span>
+              {(['priority', 'latest'] as const).map(m => (
+                <button key={m} onClick={() => setEventSortMode(m)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                    eventSortMode === m ? 'bg-emerald-500 text-gray-900 border-emerald-500' : 'bg-gray-900 text-gray-400 border-gray-700 hover:text-white'
+                  }`}>
+                  {m === 'priority' ? 'Priority' : 'Latest First'}
+                </button>
+              ))}
             </div>
 
             {/* Event type filter */}

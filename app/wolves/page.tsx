@@ -193,7 +193,7 @@ export default function WolvesScanner() {
     }
   }, [fetchData])
 
-  const wolves = (data?.wolves || []).slice().sort((a, b) => (TIER_ORDER[a.wolf_tier] ?? 9) - (TIER_ORDER[b.wolf_tier] ?? 9))
+  const wolves = (data?.wolves || []).slice().sort((a, b) => (TIER_ORDER[a.wolf_tier] ?? 9) - (TIER_ORDER[b.wolf_tier] ?? 9) || (b.scan_time || '').localeCompare(a.scan_time || ''))
   const filteredWolves = wolves.filter(w => tierFilter === 'all' || w.wolf_tier === tierFilter)
   const counts = {
     apex: wolves.filter(w => w.wolf_tier === 'Apex Wolf').length,
@@ -201,7 +201,7 @@ export default function WolvesScanner() {
     scout: wolves.filter(w => w.wolf_tier === 'Scout Wolf').length,
   }
 
-  const events = (eventsData?.events || []).slice().sort((a, b) => (a.priority ?? 9) - (b.priority ?? 9))
+  const events = (eventsData?.events || []).slice().sort((a, b) => (a.priority ?? 9) - (b.priority ?? 9) || (b.scan_time || '').localeCompare(a.scan_time || ''))
   const filteredEvents = events.filter(e => eventTypeFilter === 'all' || e.event_type === eventTypeFilter)
   const eventCounts = {
     alignment: events.filter(e => e.event_type === 'ADX Full Alignment').length,
@@ -317,7 +317,7 @@ export default function WolvesScanner() {
             </div>
 
             {/* Wolves table */}
-            <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
@@ -405,7 +405,7 @@ export default function WolvesScanner() {
             </div>
 
             {/* Fresh Events table */}
-            <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
@@ -496,7 +496,7 @@ export default function WolvesScanner() {
             </div>
 
             {/* Watchlist table */}
-            <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">

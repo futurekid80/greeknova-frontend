@@ -8,6 +8,26 @@ const SYMBOLS = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX'] as co
 type Symbol = typeof SYMBOLS[number]
 
 type Point = { time: number; ce: number; pe: number; combined: number }
+
+// Oct 22 2026: ATM +-1 strike comparison ("3 straddle comparison" --
+// Manish's own framing) and NIFTY FUT VWAP, both added to the same
+// /straddle-chart response -- see api/straddle_chart.py for how they're
+// computed without touching Kite's Historical Data endpoint.
+type CompareStrike = {
+  strike: number
+  role: 'atm' | 'minus1' | 'plus1'
+  points: Point[]
+  day_open_combined: number | null
+  latest_combined: number | null
+  change_pct: number | null
+}
+type FutVwapPoint = { time: number; price: number; vwap: number }
+type FutVwap = {
+  points: FutVwapPoint[]
+  latest_price: number
+  latest_vwap: number
+  above_vwap: boolean
+}
 type ChartData = {
   symbol: string
   date: string
@@ -19,8 +39,13 @@ type ChartData = {
   points: Point[]
   day_open_combined: number | null
   latest_combined: number | null
+  compare_strikes?: CompareStrike[]
+  fut_vwap?: FutVwap | null
   error?: string
 }
+
+const ROLE_COLOR: Record<CompareStrike['role'], string> = { minus1: '#38bdf8', atm: '#f59e0b', plus1: '#c084fc' }
+const ROLE_LABEL: Record<CompareStrike['role'], string> = { minus1: 'ATM −1', atm: 'ATM', plus1: 'ATM +1' }
 
 const CHART_HEIGHT = 560 // taller now: 3 stacked panes instead of 2 (Oct 18 2026 redesign)
 
@@ -49,6 +74,7 @@ export default function StraddleChartPage() {
 
   const [vwapPoints, setVwapPoints] = useState<{ time: number; value: number }[]>([])
   const [spotPoints, setSpotPoints] = useState<{ time: number; value: number }[]>([])
+  const [showOverlay, setShowOverlay] = useState(true)
 
   const load = useCallback(async (sym: Symbol, strikeOverride: number | null, expiryOverride: string | null) => {
     setLoading(true)
@@ -132,6 +158,17 @@ export default function StraddleChartPage() {
       const combinedSeries = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 3, title: 'Combined (CE+PE)' }, 0)
       combinedSeries.setData(data.points.map((p) => ({ time: chartTime(p.time), value: p.combined })) as any)
 
+      // Oct 22 2026: ATM +-1 overlay. ATM itself is the combinedSeries
+      // above (already amber) -- only draw the two neighboring strikes
+      // here, so toggling "Overlay" off/on doesn't duplicate the ATM line.
+      if (showOverlay && data.compare_strikes) {
+        for (const cs of data.compare_strikes) {
+          if (cs.role === 'atm' || !cs.points.length) continue
+          const s = chart.addSeries(LineSeries, { color: ROLE_COLOR[cs.role], lineWidth: 2, title: `${cs.strike} (${ROLE_LABEL[cs.role]})` }, 0)
+          s.setData(cs.points.map((p) => ({ time: chartTime(p.time), value: p.combined })) as any)
+        }
+      }
+
       if (data.points.length) {
         const skewSeries = chart.addSeries(BaselineSeries, {
           baseValue: { type: 'price', price: 0 },
@@ -180,7 +217,7 @@ export default function StraddleChartPage() {
         chartRef.current = null
       }
     }
-  }, [data, spotPoints, vwapPoints])
+  }, [data, spotPoints, vwapPoints, showOverlay])
 
   useEffect(() => {
     function onResize() {
@@ -295,7 +332,7 @@ export default function StraddleChartPage() {
 
         {!loading && !error && data && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
               <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Strike</p>
                 <p className="text-lg font-black text-white">{data.strike}</p>
@@ -332,7 +369,100 @@ export default function StraddleChartPage() {
                   )}
                 </p>
               </div>
+              {/* Oct 22 2026: NIFTY FUT VWAP -- built from the live FUT
+                  volume the capture job already writes to oi_snapshots
+                  every poll, not from Kite's Historical Data endpoint
+                  (which is what made the old Spot/VWAP tile permanently
+                  broken). See api/straddle_chart.py _compute_fut_vwap. */}
+              <div
+                className={`rounded-xl px-4 py-3 border ${
+                  data.fut_vwap
+                    ? data.fut_vwap.above_vwap
+                      ? 'bg-emerald-950/20 border-emerald-900/40'
+                      : 'bg-red-950/20 border-red-900/40'
+                    : 'bg-gray-900/40 border-gray-800'
+                }`}
+              >
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">{symbol} FUT vs VWAP</p>
+                {data.fut_vwap ? (
+                  <>
+                    <p className={`text-lg font-black ${data.fut_vwap.above_vwap ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {data.fut_vwap.above_vwap ? '▲ Above' : '▼ Below'}
+                    </p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      {fmt(data.fut_vwap.latest_price)} / VWAP {fmt(data.fut_vwap.latest_vwap)}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-lg font-black text-white">—</p>
+                )}
+              </div>
             </div>
+
+            {/* NEW (Oct 22 2026): 3-strike comparison strip. Reuses the same
+                single whole-day fetch straddle_chart.py already does for the
+                ATM strike -- the two neighboring strikes cost nothing extra
+                server-side, just sliced from data already in hand. */}
+            {data.compare_strikes && data.compare_strikes.length > 1 && (
+              <div className="bg-gray-900/20 border border-gray-800 rounded-xl p-4 mb-5">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                  <div>
+                    <p className="text-sm font-bold text-white flex items-center gap-2">
+                      Compare 3 strikes
+                      <span className="text-[10px] font-semibold text-amber-400 bg-amber-950/40 border border-amber-900/50 rounded px-1.5 py-0.5">NEW</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">Which neighboring strike's straddle is decaying fastest, as a drift tell</p>
+                  </div>
+                  <button
+                    onClick={() => setShowOverlay((v) => !v)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      showOverlay
+                        ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-400'
+                        : 'bg-gray-900/60 border-gray-800 text-gray-500'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${showOverlay ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+                    Overlay on chart
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {data.compare_strikes.map((cs) => {
+                    const fastest = data.compare_strikes!.reduce((a, b) =>
+                      (a.change_pct ?? 0) < (b.change_pct ?? 0) ? a : b
+                    )
+                    const slowest = data.compare_strikes!.reduce((a, b) =>
+                      (a.change_pct ?? 0) > (b.change_pct ?? 0) ? a : b
+                    )
+                    const badge = cs.strike === fastest.strike ? 'Decaying fastest' : cs.strike === slowest.strike ? 'Decaying slowest' : null
+                    return (
+                      <div
+                        key={cs.strike}
+                        className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3 relative"
+                        style={{ borderLeft: `3px solid ${ROLE_COLOR[cs.role]}` }}
+                      >
+                        {badge && (
+                          <span className={`absolute top-3 right-3 text-[9px] font-bold tracking-wide ${badge === 'Decaying fastest' ? 'text-emerald-400' : 'text-gray-500'}`}>
+                            {badge.toUpperCase()}
+                          </span>
+                        )}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-black text-white">{cs.strike}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: ROLE_COLOR[cs.role], background: `${ROLE_COLOR[cs.role]}1a` }}>
+                            {ROLE_LABEL[cs.role]}
+                          </span>
+                        </div>
+                        <p className="text-lg font-black text-white">{fmt(cs.latest_combined)}</p>
+                        <p className="text-[11px] text-gray-500">opened {fmt(cs.day_open_combined)}</p>
+                        <p className={`text-sm font-bold mt-1.5 ${(cs.change_pct ?? 0) <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {cs.change_pct != null ? (cs.change_pct >= 0 ? '+' : '') + fmt(cs.change_pct, 1) + '%' : '—'}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="bg-gray-900/20 border border-gray-800 rounded-xl p-4">
               {/* Legend grouped by pane, so it reads as "two charts, clearly
@@ -351,6 +481,18 @@ export default function StraddleChartPage() {
                     <span className="w-3 h-0.5 bg-amber-500 inline-block" /> Combined (CE+PE)
                   </span>
                 </div>
+                {showOverlay && data.compare_strikes && data.compare_strikes.length > 1 && (
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-20 shrink-0">
+                      Compare
+                    </span>
+                    {data.compare_strikes.filter((cs) => cs.role !== 'atm').map((cs) => (
+                      <span key={cs.strike} className="flex items-center gap-1.5" style={{ color: ROLE_COLOR[cs.role] }}>
+                        <span className="w-3 h-0.5 inline-block" style={{ background: ROLE_COLOR[cs.role] }} /> {cs.strike} ({ROLE_LABEL[cs.role]})
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center gap-4 flex-wrap">
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-20 shrink-0">
                     Skew

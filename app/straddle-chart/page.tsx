@@ -57,61 +57,24 @@ export default function StraddleChartPage() {
       const params = new URLSearchParams({ t: String(Date.now()) })
       if (strikeOverride != null) params.set('strike', String(strikeOverride))
       if (expiryOverride) params.set('expiry', expiryOverride)
-      const [res, chartRes] = await Promise.all([
-        fetch(`${API}/straddle-chart/${sym}?${params}`, { cache: 'no-store' }),
-        // Spot + VWAP come from the same intraday candle endpoint the Price
-        // Chart page uses — option sellers watch spot vs VWAP for direction
-        // bias while the straddle premium itself is on a different scale,
-        // so both get plotted in a separate chart pane.
-        fetch(`${API}/chart-data/${sym}?interval=minute&range=1d&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
-      ])
+      // Oct 22 2026: Spot/VWAP overlay removed -- it depended on
+      // /chart-data, which fails platform-wide right now (Kite Connect's
+      // Historical Data API isn't subscribed on the production app -- see
+      // Navbar.tsx for the full story). Leaving it in meant every load of
+      // this page paid for a guaranteed-to-fail fetch before it could
+      // finish. spotPoints/vwapPoints stay declared as permanently-empty
+      // state below so the chart-render effect and derived badges degrade
+      // to "no overlay" cleanly -- re-add this fetch the moment Historical
+      // Data is sorted (see git history for the removed version).
+      const res = await fetch(`${API}/straddle-chart/${sym}?${params}`, { cache: 'no-store' })
       const j: ChartData = await res.json()
       if (j.error) {
         setError(j.error)
         setData(null)
-        setVwapPoints([])
-        setSpotPoints([])
       } else {
         setData(j)
         setStrike(j.strike)
         setExpiry(j.expiry)
-
-        if (chartRes) {
-          try {
-            const cj = await chartRes.json()
-            const allCandles = cj.candles || []
-            // BUG FIX (Oct 5 2026): /chart-data?range=1d deliberately returns
-            // up to 5 CALENDAR days of candles (so the 1D view still has data
-            // right after a weekend/holiday -- see chart_data.py) while the
-            // straddle series itself is always exactly one trading day. Left
-            // untrimmed, Spot/VWAP carried several days of history against
-            // Combined/CE/PE's single day: the two mismatched date ranges
-            // made Spot/VWAP look "frozen" when panning -- it wasn't frozen,
-            // its time domain was just several times wider, so the same drag
-            // distance moved it proportionally far less. Trim to the most
-            // recent trading day's candles only, same technique StockChart.tsx
-            // uses for its own 1D session view, so Spot/VWAP cover exactly
-            // the same window as the straddle premium series.
-            const toIstDate = (epochSec: number) =>
-              new Date(epochSec * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
-            const lastDate = allCandles.length ? toIstDate(allCandles[allCandles.length - 1].time) : null
-            const candles = lastDate ? allCandles.filter((c: any) => toIstDate(c.time) === lastDate) : allCandles
-            setSpotPoints(candles.map((c: any) => ({ time: c.time, value: c.close })))
-            let cumPV = 0
-            let cumVol = 0
-            setVwapPoints(
-              candles.map((c: any) => {
-                const typical = (c.high + c.low + c.close) / 3
-                cumPV += typical * (c.volume || 0)
-                cumVol += c.volume || 0
-                return { time: c.time, value: cumVol > 0 ? cumPV / cumVol : typical }
-              })
-            )
-          } catch {
-            setSpotPoints([])
-            setVwapPoints([])
-          }
-        }
       }
     } catch (e: any) {
       setError(e?.message || 'Failed to load straddle chart')
@@ -238,16 +201,6 @@ export default function StraddleChartPage() {
       ? (changeFromOpen / data.day_open_combined) * 100
       : null
 
-  // Oct 18 2026: quick-glance VWAP bias badge for the stats row, same
-  // signal as the new Spot-vs-VWAP pane -- latest spot/vwap values instead
-  // of re-deriving the whole chart series here.
-  const lastSpot = spotPoints.length ? spotPoints[spotPoints.length - 1].value : null
-  const lastVwap = vwapPoints.length ? vwapPoints[vwapPoints.length - 1].value : null
-  const vwapBiasUp = lastSpot != null && lastVwap != null ? lastSpot > lastVwap : null
-  const vwapDevPct = lastSpot != null && lastVwap != null && lastVwap !== 0
-    ? ((lastSpot - lastVwap) / lastVwap) * 100
-    : null
-
   return (
     <div className="min-h-screen bg-[#07070e] text-gray-200">
       <Navbar active="/straddle-chart" />
@@ -342,7 +295,7 @@ export default function StraddleChartPage() {
 
         {!loading && !error && data && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               <div className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Strike</p>
                 <p className="text-lg font-black text-white">{data.strike}</p>
@@ -379,35 +332,6 @@ export default function StraddleChartPage() {
                   )}
                 </p>
               </div>
-              {/* Oct 18 2026: new 5th tile -- same bias the Spot-vs-VWAP
-                  pane shows, as a quick-glance badge for anyone who isn't
-                  reading the chart itself. */}
-              <div
-                className={`rounded-xl px-4 py-3 border ${
-                  vwapBiasUp === true
-                    ? 'bg-emerald-950/20 border-emerald-900/40'
-                    : vwapBiasUp === false
-                    ? 'bg-red-950/20 border-red-900/40'
-                    : 'bg-gray-900/40 border-gray-800'
-                }`}
-              >
-                <p
-                  className={`text-[10px] uppercase tracking-wide mb-1 ${
-                    vwapBiasUp === true ? 'text-emerald-600' : vwapBiasUp === false ? 'text-red-500' : 'text-gray-500'
-                  }`}
-                >
-                  Spot vs VWAP
-                </p>
-                <p className={`text-lg font-black ${vwapBiasUp === true ? 'text-emerald-400' : vwapBiasUp === false ? 'text-red-400' : 'text-white'}`}>
-                  {vwapBiasUp === null ? '—' : vwapBiasUp ? '▲ Above' : '▼ Below'}
-                  {vwapDevPct != null && (
-                    <span className="text-xs ml-1 font-normal opacity-70">
-                      ({vwapDevPct >= 0 ? '+' : ''}
-                      {fmt(vwapDevPct, 2)}%)
-                    </span>
-                  )}
-                </p>
-              </div>
             </div>
 
             <div className="bg-gray-900/20 border border-gray-800 rounded-xl p-4">
@@ -436,17 +360,6 @@ export default function StraddleChartPage() {
                   </span>
                   <span className="flex items-center gap-1.5 text-red-400">
                     <span className="w-3 h-0.5 bg-red-500 inline-block" /> Puts richer
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 flex-wrap">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 w-20 shrink-0">
-                    Spot/VWAP
-                  </span>
-                  <span className="flex items-center gap-1.5 text-emerald-400">
-                    <span className="w-3 h-0.5 bg-emerald-500 inline-block" /> Above VWAP
-                  </span>
-                  <span className="flex items-center gap-1.5 text-red-400">
-                    <span className="w-3 h-0.5 bg-red-500 inline-block" /> Below VWAP
                   </span>
                 </div>
               </div>

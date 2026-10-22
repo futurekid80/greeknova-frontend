@@ -37,7 +37,8 @@ export const WIDGETS: Widget[] = [
   { key: 'premarket',          label: 'Pre-Market Brief',         description: 'Pre-open summary and prior-day EOD intelligence',     href: '/premarket',            destination: 'overview', defaultEnabled: true },
   { key: 'watchlist',          label: 'Watchlist',                description: 'Your saved symbols at a glance',                       href: '/watchlist',            destination: 'overview', defaultEnabled: false },
   { key: 'journal',            label: 'Journal',                  description: 'Your trading journal',                                 href: '/journal',              destination: 'overview', defaultEnabled: false },
-  { key: 'price-chart',        label: 'Price Chart',              description: 'Candlestick chart for any symbol',                     href: '/stock-chart/NIFTY',    destination: 'overview', defaultEnabled: false },
+  // 'price-chart' removed (Oct 22 2026): depends on Kite's Historical Data
+  // API, not available on the production app -- see Navbar.tsx for detail.
   { key: 'oi-buildup-period',  label: 'Weekly/Monthly OI Buildup',description: 'OI buildup across weekly and monthly series',          href: '/oi-buildup-period',    destination: 'overview', defaultEnabled: false },
   { key: 'rollover',           label: 'Rollover Tracker',         description: 'Futures rollover percentages into next series',       href: '/rollover',             destination: 'overview', defaultEnabled: false },
   { key: 'delivery-confluence',label: 'Delivery Confluence',      description: 'FUT OI x cash delivery scoring',                       href: '/delivery-confluence',  destination: 'overview', defaultEnabled: false },

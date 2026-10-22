@@ -60,11 +60,13 @@ const NAV_GROUPS = [
       { href: '/',           label: '📡 Market Pulse' },
       { href: '/watchlist',  label: 'Watchlist' },
       { href: '/journal',    label: '📓 Journal' },
-      // Defaults to NIFTY since this is a fixed nav link (no symbol
-      // context) -- the page itself lets you switch symbol via the URL,
-      // and the homepage's Stock Command Centre search links to a
-      // specific symbol's chart directly.
-      { href: '/stock-chart/NIFTY', label: '📈 Price Chart' },
+      // Price Chart removed (Oct 22 2026): depends on Kite Connect's
+      // Historical Data API, which isn't available on the production app
+      // (Personal-type apps can't subscribe to it) -- every request fails
+      // with "Insufficient permission for that call." Pulled from nav
+      // rather than ship a broken page; route itself (app/stock-chart)
+      // and the backend /chart-data endpoint are left in place in case
+      // this gets resolved later.
     ]
   },
   {

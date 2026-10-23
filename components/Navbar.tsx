@@ -532,7 +532,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
           always render in full; on a narrow window the nav just wraps to a
           second line instead of hiding or cutting anything off. */}
       <nav className="sticky top-0 z-50 border-b border-gray-800/50 bg-[#07070e]/90 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-8">
+        <div className="max-w-7xl mx-auto px-6 min-h-14 flex items-center gap-8">
           <Link href="/" className="flex items-center gap-3 shrink-0">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center">
               <span className="text-xs font-black text-white">GN</span>
@@ -553,7 +553,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
                 this doesn't replace or remove any of them, it's a second,
                 customizable front door. */}
             <Link href="/dashboard"
-              className={`text-sm font-semibold transition-colors relative ${
+              className={`text-sm font-semibold transition-colors relative shrink-0 whitespace-nowrap ${
                 active === '/dashboard' ? 'text-white' : 'text-emerald-400 hover:text-emerald-300'
               }`}>
               🏠 Dashboard
@@ -565,7 +565,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
                 video, so this sits right next to Dashboard rather than
                 behind the classicNav toggle like the rest of the nav. */}
             <Link href="/demo"
-              className={`text-sm font-semibold transition-colors relative ${
+              className={`text-sm font-semibold transition-colors relative shrink-0 whitespace-nowrap ${
                 active === '/demo' ? 'text-white' : 'text-cyan-400 hover:text-cyan-300'
               }`}>
               🎬 Watch Demo

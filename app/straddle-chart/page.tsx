@@ -441,16 +441,18 @@ export default function StraddleChartPage() {
                         className="bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3 relative"
                         style={{ borderLeft: `3px solid ${ROLE_COLOR[cs.role]}` }}
                       >
-                        {badge && (
-                          <span className={`absolute top-3 right-3 text-[9px] font-bold tracking-wide ${badge === 'Decaying fastest' ? 'text-emerald-400' : 'text-gray-500'}`}>
-                            {badge.toUpperCase()}
-                          </span>
-                        )}
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-2 gap-2">
                           <span className="font-black text-white">{cs.strike}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: ROLE_COLOR[cs.role], background: `${ROLE_COLOR[cs.role]}1a` }}>
-                            {ROLE_LABEL[cs.role]}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {badge && (
+                              <span className={`text-[9px] font-bold tracking-wide whitespace-nowrap ${badge === 'Decaying fastest' ? 'text-emerald-400' : 'text-gray-500'}`}>
+                                {badge.toUpperCase()}
+                              </span>
+                            )}
+                            <span className="text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" style={{ color: ROLE_COLOR[cs.role], background: `${ROLE_COLOR[cs.role]}1a` }}>
+                              {ROLE_LABEL[cs.role]}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-lg font-black text-white">{fmt(cs.latest_combined)}</p>
                         <p className="text-[11px] text-gray-500">opened {fmt(cs.day_open_combined)}</p>

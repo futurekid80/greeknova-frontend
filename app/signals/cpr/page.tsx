@@ -30,6 +30,7 @@ interface CPRRow {
 interface CPRData {
   data: CPRRow[]; total: number; trade_date: string
   confluence_count: number; narrow_count: number; source: string
+  expected_date?: string; is_stale?: boolean
 }
 
 const SIGNAL_ICONS: Record<string, string> = {
@@ -150,9 +151,14 @@ const fetchData = useCallback(async () => {
           </div>
           <div className="flex items-center gap-3">
             {data?.trade_date && (
-              <div className="text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">
-                Trade date: {data.trade_date}
+              <div className={`text-xs border rounded-lg px-3 py-2 ${data.is_stale ? 'bg-amber-950/40 border-amber-700 text-amber-300' : 'bg-gray-900 border-gray-700 text-gray-400'}`}>
+                Data as of: {data.trade_date}
                 {data.source === 'live' && <span className="text-amber-400 ml-1">(live fallback)</span>}
+                {data.is_stale && (
+                  <span className="ml-1.5 font-semibold">
+                    ⚠️ Stale — expected {data.expected_date}
+                  </span>
+                )}
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-400">

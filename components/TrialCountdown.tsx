@@ -4,8 +4,15 @@
 // gate (services/access_gate.py) starts blocking every request. Reads
 // /me/trial-status, which classifies status the exact same way the gate
 // does -- this can never show "3 days left" while the gate quietly
-// disagrees. Renders nothing for members, signed-out visitors, or once a
-// trial has actually expired (the gate's own block message covers that).
+// disagrees. Renders nothing for signed-out visitors, or once a trial has
+// actually expired (the gate's own block message covers that).
+//
+// Oct 24 2026: extended to paid members too -- /me/trial-status now also
+// returns trial_expires_date/days_left for status === 'member' (reading
+// beta_users.expires_at). Informational only, same as the trial case: this
+// badge does NOT gate access, expires_at still isn't enforced anywhere
+// (see access_gate.py). Only shown inside 60 days of expiry so a founding
+// member mid-way through their year doesn't see a permanent badge.
 import { useEffect, useState } from 'react'
 
 const API = 'https://api.greeknova.com'
@@ -38,10 +45,16 @@ export default function TrialCountdown() {
     return () => { cancelled = true; clearInterval(t) }
   }, [])
 
-  if (!data || data.status !== 'trial_active' || data.days_left === null) return null
+  if (!data || data.days_left === null) return null
+  if (data.status !== 'trial_active' && data.status !== 'member') return null
+  // Paid members: only worth a badge once they're within 60 days of expiry
+  // -- otherwise this would be a permanent fixture in the navbar all year.
+  if (data.status === 'member' && data.days_left > 60) return null
 
   const urgent = data.days_left <= 2
-  const label = data.days_left === 0 ? 'Trial ends today' : `Trial: ${data.days_left} day${data.days_left === 1 ? '' : 's'} left`
+  const label = data.status === 'member'
+    ? (data.days_left <= 0 ? 'Plan expired' : `Plan: ${data.days_left} day${data.days_left === 1 ? '' : 's'} left`)
+    : (data.days_left === 0 ? 'Trial ends today' : `Trial: ${data.days_left} day${data.days_left === 1 ? '' : 's'} left`)
 
   return (
     <div

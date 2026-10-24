@@ -614,7 +614,6 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
               <span className="text-xs font-black text-white">GN</span>
             </div>
             <span className="font-black text-white text-base">GreekNova</span>
-            <span className="text-xs font-medium px-1.5 py-0.5 bg-emerald-950 text-emerald-500 border border-emerald-800/50 rounded-md">BETA</span>
           </Link>
 
           {/* FIX (Oct 23 2026, 3rd pass): wraps to a second line instead

@@ -1030,6 +1030,20 @@ export default function MarketPulse() {
   // render time -- same hydration-mismatch class as isMarketOpen above.
   // Default false matches SSR; real value set client-only post-mount.
   const [isPreOpen, setIsPreOpen] = useState(false)
+  // FIX (Oct 24 2026): the top ticker bar used to say "LIVE" unconditionally,
+  // any day, any hour -- flagged by Manish as misleading on a Saturday when
+  // there's no live capture running at all. Mirrors the same
+  // weekday+9:15-15:30 IST check already used in contexts/AlertsContext.tsx.
+  const [marketOpen, setMarketOpen] = useState(false)
+  // FIX (Oct 24 2026): "Loading index data..." used to render forever
+  // whenever /index-data genuinely came back with zero rows or failed (not
+  // just while a request was in flight) -- indistinguishable from an
+  // actually-stuck spinner, and the single biggest driver of "this page
+  // loading is very repetitive and unsolved" reports. fetchAttempted flips
+  // true once the independent index-data fetch below settles (success or
+  // failure), so the empty state can tell "still loading" apart from
+  // "tried, nothing to show."
+  const [fetchAttempted, setFetchAttempted] = useState(false)
   // ADX map fetch removed (Jul 27 2026) — built and shipped, but results
   // weren't giving the desired signal quality, so it's turned off for now
   // rather than kept running (it was also the single slowest fetch on this
@@ -1063,6 +1077,8 @@ export default function MarketPulse() {
       const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
       const h = ist.getHours(), m = ist.getMinutes(), day = ist.getDay()
       setIsPreOpen(day !== 0 && day !== 6 && (h < 9 || (h === 9 && m < 15)))
+      const totalMin = h * 60 + m
+      setMarketOpen(day !== 0 && day !== 6 && totalMin >= 555 && totalMin <= 930)
     }
     calc()
     const t = setInterval(calc, 60 * 1000)
@@ -1131,7 +1147,8 @@ export default function MarketPulse() {
           .filter(Boolean) as IndexAnalysis[]
         setAnalyses(idxResults)
       }
-    }).catch(e => console.error('index-data failed:', e))
+      setFetchAttempted(true)
+    }).catch(e => { console.error('index-data failed:', e); setFetchAttempted(true) })
 
     try {
       // CPR / OI-pulse / 52-week-high enrich each other (CPR + 52wh data is
@@ -1275,8 +1292,11 @@ export default function MarketPulse() {
       )}
       <div className="bg-gray-950 border-b border-gray-800/50 overflow-hidden">
         <div className="flex items-center h-9">
-          <div className="flex-shrink-0 bg-emerald-950 border-r border-emerald-800/50 px-3 h-full flex items-center">
-            <span className="text-xs font-black text-emerald-400 tracking-wider">LIVE</span>
+          <div className={`flex-shrink-0 border-r px-3 h-full flex items-center gap-1.5 ${marketOpen ? 'bg-emerald-950 border-emerald-800/50' : 'bg-gray-900 border-gray-800'}`}>
+            {marketOpen && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>}
+            <span className={`text-xs font-black tracking-wider ${marketOpen ? 'text-emerald-400' : 'text-gray-500'}`}>
+              {marketOpen ? 'LIVE' : 'MARKET CLOSED'}
+            </span>
           </div>
           <div className="flex items-center gap-6 px-4 overflow-x-auto scrollbar-hide">
             {analyses.map(a => (
@@ -1363,6 +1383,22 @@ export default function MarketPulse() {
                 <IndexCard a={a} cpr={cprMap[a.symbol]} cmp={cmps[a.symbol]} iv={ivData[a.symbol]}/>
               </div>
             ))}
+          </div>
+        ) : fetchAttempted ? (
+          // FIX (Oct 24 2026): this used to render the loading spinner text
+          // ("Loading index data...") forever whenever the fetch genuinely
+          // came back with nothing -- a stale/empty /index-data response, a
+          // swallowed error, an expired session -- which read as the page
+          // being permanently stuck. Now that a real attempt has finished
+          // and still has nothing to show, say so plainly and offer Retry
+          // instead of lying about still loading.
+          <div className="flex flex-col items-center justify-center py-8 text-center mb-6 gap-2">
+            <p className="text-gray-500 text-sm">
+              {marketOpen ? "Couldn't load live index data." : "No index data available right now."}
+            </p>
+            <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-xs font-medium text-white rounded-lg border border-gray-700">
+              <RefreshCw size={12}/>Retry
+            </button>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-8 text-center mb-6">

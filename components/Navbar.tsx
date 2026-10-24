@@ -7,6 +7,7 @@ import { supabase, getSessionCached, withTimeout } from '@/lib/supabase'
 import { clearCachedMarketData } from '@/lib/authFetch'
 import VixGauge from '@/components/VixGauge'
 import TrialCountdown from '@/components/TrialCountdown'
+import TrialPhonePrompt from '@/components/TrialPhonePrompt'
 
 // Oct 2 2026: regrouped by trader persona (Positional / Intraday / Option
 // Sellers) instead of by data-type (Market / OI Analysis / Greeks / Signals)
@@ -664,6 +665,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
 
           <div className="ml-auto flex items-center gap-2 shrink-0">
             <TrialCountdown />
+            <TrialPhonePrompt />
             <VixGauge />
             <BellBadge />
             <button

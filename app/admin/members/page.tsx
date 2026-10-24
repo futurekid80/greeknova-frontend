@@ -12,6 +12,18 @@ import { supabase } from '@/lib/supabase'
 const API = 'https://api.greeknova.com'
 const ADMIN_EMAIL = 'megha.jethmalani@gmail.com'
 
+// FIX (Oct 24 2026): local YYYY-MM-DD, not toISOString() -- that reads the
+// UTC date, which is still 'yesterday' for ~5.5 hours every night in IST
+// (e.g. 1AM IST on the 24th is 7:30PM UTC on the 23rd), so the date field
+// would silently default to the wrong day overnight.
+function todayStr() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 const PLAN_OPTIONS = [
   { value: 'founding', label: 'Founding — ₹3,999 (lifetime-locked, 100 seats)' },
   { value: 'monthly', label: 'Monthly — ₹499' },
@@ -57,7 +69,7 @@ export default function AdminMembersPage() {
   const [authorized, setAuthorized] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
-  const [form, setForm] = useState({ email: '', name: '', plan: 'monthly' })
+  const [form, setForm] = useState({ email: '', name: '', plan: 'monthly', payment_date: todayStr() })
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -120,7 +132,7 @@ export default function AdminMembersPage() {
           ok: true,
           text: `${data.status === 'renewed' ? 'Renewed' : 'Added'} ${data.email} on ${data.plan_label} — expires ${new Date(data.expires_at).toLocaleDateString('en-IN')}`,
         })
-        setForm({ email: '', name: '', plan: form.plan })
+        setForm({ email: '', name: '', plan: form.plan, payment_date: todayStr() })
         loadMembers()
       }
     } catch (e) {
@@ -158,7 +170,7 @@ export default function AdminMembersPage() {
           Manual stopgap — there&apos;s no Razorpay webhook yet, so after you see a payment land in your Razorpay dashboard, log it here. This records the plan and computes an expiry date, but <strong className="text-amber-400">access is not auto-revoked when a plan lapses</strong> — it&apos;s tracked here so you can see who&apos;s due, not enforced yet.
         </p>
 
-        <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 rounded-lg p-5 mb-10 grid gap-4 sm:grid-cols-[2fr_1.5fr_2fr_auto] items-end">
+        <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 rounded-lg p-5 mb-10 grid gap-4 sm:grid-cols-[2fr_1.5fr_1.3fr_2fr_auto] items-end">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Email (who paid)</label>
             <input
@@ -177,6 +189,19 @@ export default function AdminMembersPage() {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="optional"
+              className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1" title="New member's subscription starts this date, rolled to the next trading day if it's a weekend/holiday. Renewals still extend from their existing expiry instead.">
+              Payment date
+            </label>
+            <input
+              type="date"
+              required
+              value={form.payment_date}
+              max={todayStr()}
+              onChange={(e) => setForm({ ...form, payment_date: e.target.value })}
               className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm"
             />
           </div>

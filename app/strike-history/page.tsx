@@ -139,13 +139,14 @@ export default function StrikeHistoryPage() {
   const summary = data?.summary
   const strikes = meta?.chain?.map(c => c.strike) ?? []
 
-  // Shade the last ~30 min of the session on both charts -- the same
-  // window an OI-spike alert measures, so it's obvious which part of the
+  // Shade the last ~5 min of the session on both charts -- the same
+  // window an OI-spike alert measures (corrected Oct 25 2026 from an
+  // earlier 30-min assumption), so it's obvious which part of the
   // day the alert was actually reacting to.
   const windowStartTime = points.length
     ? (() => {
         const lastT = new Date(points[points.length - 1].timestamp).getTime()
-        const target = lastT - 30 * 60 * 1000
+        const target = lastT - 5 * 60 * 1000
         let w = points[0]
         for (const p of points) {
           if (new Date(p.timestamp).getTime() <= target) w = p
@@ -264,7 +265,7 @@ export default function StrikeHistoryPage() {
               />
               <StatCard label="LAST OI" value={fmtOI(summary.last_oi)} />
               <StatCard
-                label="OI (LAST ~30 MIN)"
+                label="OI (LAST ~5 MIN)"
                 value={summary.oi_window_pct !== null ? `${summary.oi_window_pct >= 0 ? '+' : ''}${summary.oi_window_pct}%` : '—'}
                 accent={summary.oi_window_pct !== null && summary.oi_window_pct >= 0 ? 'text-emerald-400' : 'text-gray-300'}
               />
@@ -310,7 +311,7 @@ export default function StrikeHistoryPage() {
             </div>
 
             <p className="text-xs text-gray-500">
-              Shaded band = the last ~30 min of the session, the same window an OI-spike Alert measures. Snapshots are captured every ~5 min during market hours, so this is a close read of the real move, not tick-by-tick. This page shows the raw numbers only — it doesn't render its own bullish/bearish verdict.
+              Shaded band = the last ~5 min of the session, the same window an OI-spike Alert measures. Snapshots are captured every ~5 min during market hours, so this band is roughly one snapshot wide — close to the exact reading, not a smoothed average. This page shows the raw numbers only — it doesn't render its own bullish/bearish verdict.
             </p>
           </>
         )}

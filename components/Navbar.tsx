@@ -75,6 +75,7 @@ const NAV_GROUPS = [
     links: [
       { href: '/oiprofile',  label: '📊 OI Profile' },
       { href: '/oihistory',  label: '🕑 OI History' },
+      { href: '/strike-history', label: '🔬 Strike OI + Premium History' },
       { href: '/oi-buildup-period', label: '📅 Weekly/Monthly OI Buildup' },
       { href: '/oiheatmap',  label: '🌡️ OI Heatmap' },
       { href: '/jungle',      label: '🌿 Options Jungle' },
@@ -120,6 +121,7 @@ const NAV_GROUPS = [
       { href: '/straddle-chart', label: '🍲 Straddle Chart' },
       { href: '/gamma-squeeze', label: '⚡ Gamma Squeeze' },
       { href: '/session-replay', label: '⏮️ Session Replay' },
+      { href: '/strike-history', label: '🔬 Strike OI + Premium History' },
       { href: '/theta', label: 'Θ Theta Decay' },
       { href: '/vega', label: 'ν Vega Exposure' },
       { href: '/iv',          label: 'IV Analysis' },

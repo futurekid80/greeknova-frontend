@@ -62,6 +62,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="en">
+      <head>
+        {/* Oct 25 2026: PWA setup -- lets GreekNova be "Added to Home
+            Screen" on phones (installable, full-screen, no browser
+            address bar) without a separate native app build. sw.js was
+            already being registered above for push alerts; this just
+            adds the manifest + icons + iOS meta tags that make the
+            browser treat the site as installable. */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#0a0e14" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="GreekNova" />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body>
         <AlertsProvider>
           <DisclaimerModal />

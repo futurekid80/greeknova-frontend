@@ -37,7 +37,16 @@ interface ScanResult {
   confluence_count?: number
   hits?: StealthHit[]
   error?: string
+  window?: string
+  window_label?: string
+  tiers?: [string, number, number][]  // [tier, min_oi_pct, max_premium_pct] -- drives the legend text per window
 }
+
+const WINDOW_OPTIONS: { value: string; label: string }[] = [
+  { value: '5min', label: '5-min' },
+  { value: 'hourly', label: 'Hourly' },
+  { value: 'eod', label: 'EOD / since open' },
+]
 
 const TIER_STYLE: Record<string, string> = {
   ELITE:  'text-amber-400 border-amber-700/50 bg-amber-950/20',
@@ -88,20 +97,26 @@ export default function StrikeStealthBuildup() {
   // which strikes the scan even considers, not a client-side list filter)
   // -- defaults to "5" to stay quiet out of the box.
   const [zone, setZone] = useState('5')
+  // (Oct 27 2026, Manish's ask): which comparison baseline to scan against --
+  // 5-min (original instant pulse), hourly (intraday monitoring), or EOD/
+  // since-open (live-running cumulative, for next-day trade planning the
+  // same way Positional Intelligence's Elite Setups are used). SERVER-SIDE,
+  // changes the whole scan, not a client-side filter.
+  const [timeWindow, setTimeWindow] = useState('5min')
 
-  const load = useCallback((z: string) => {
+  const load = useCallback((z: string, w: string) => {
     setLoading(true)
-    fetch(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}`)
+    fetch(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
       .then(r => r.json())
       .then(setData)
       .catch(() => setData({ error: 'Failed to load' }))
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load(zone) }, [load, zone])
+  useEffect(() => { load(zone, timeWindow) }, [load, zone, timeWindow])
   useEffect(() => {
     setShowAll(false)
-  }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone])
+  }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone, timeWindow])
 
   const allHits = data?.hits || []
   const expiryOptions = Array.from(new Set(allHits.map(h => h.expiry).filter((e): e is string => !!e))).sort()
@@ -125,24 +140,40 @@ export default function StrikeStealthBuildup() {
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Zap size={20} className="text-amber-400" /> Option Strike Stealth Buildup
           </h1>
-          <button onClick={() => load(zone)}
+          <button onClick={() => load(zone, timeWindow)}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
         <p className="text-xs text-gray-500 mb-4">
           OI piling up hard at a single strike (within the zone picked below) while that strike&apos;s own premium
-          barely moves — size going on without moving the tape. 🔗 Confluence marks a symbol that also has a live
-          FUT-level Stealth Buildup right now (always within ATM±5, regardless of the zone picked below) — the
-          strongest version of this signal.
+          barely moves — size going on without moving the tape, measured over whichever window you pick: 5-min for
+          an instant pulse, Hourly for intraday monitoring, or EOD/since-open for a next-day trade read, the same
+          way you&apos;d use Positional Intelligence&apos;s Elite Setups. 🔗 Confluence marks a symbol that also has
+          a live FUT-level Stealth Buildup right now (always within ATM±5, regardless of the zone picked below) —
+          the strongest version of this signal.
         </p>
 
         {data?.ts_new && (
           <p className="text-[11px] text-gray-500 mb-4">
-            Snapshot window: {fmtTime(data.ts_old)} → {fmtTime(data.ts_new)} IST ·{' '}
+            {data.window_label ?? 'Window'}: {fmtTime(data.ts_old)} → {fmtTime(data.ts_new)} IST ·{' '}
             {data.total ?? 0} hits, {data.confluence_count ?? 0} with Confluence
           </p>
         )}
+
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-gray-400 mr-1">⏱️ Window:</span>
+          {WINDOW_OPTIONS.map(w => (
+            <button key={w.value} onClick={() => setTimeWindow(w.value)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                timeWindow === w.value
+                  ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+              }`}>
+              {w.label}
+            </button>
+          ))}
+        </div>
 
         <div className="mb-4">
           <StrikeZoneFilter value={zone} onChange={setZone} label="🎯 Strike zone:" />
@@ -265,10 +296,25 @@ export default function StrikeStealthBuildup() {
         )}
 
         <div className="mt-6 p-4 rounded-xl border border-gray-800 bg-gray-900/30">
-          <p className="text-xs text-gray-400"><span className="text-amber-400 font-semibold">Elite</span> = strongest OI growth (≥25% in this window) with the quietest premium (≤3%)</p>
-          <p className="text-xs text-gray-400"><span className="text-emerald-400 font-semibold">Strong</span> = ≥15% OI growth, premium ≤5%</p>
-          <p className="text-xs text-gray-400"><span className="text-sky-400 font-semibold">Watch</span> = ≥8% OI growth, premium ≤8%</p>
-          <p className="text-xs text-gray-500 mt-2">First-pass thresholds — may need tuning after a few live sessions (currently ELITE OI≥25%/prem≤3%, STRONG 15/5, WATCH 8/8). Strike zone scanned is whatever you pick above (defaults to ATM±5).</p>
+          {data?.tiers ? (
+            data.tiers.map(([tier, minOi, maxPrem]) => (
+              <p key={tier} className="text-xs text-gray-400">
+                <span className={`font-semibold ${tier === 'ELITE' ? 'text-amber-400' : tier === 'STRONG' ? 'text-emerald-400' : 'text-sky-400'}`}>
+                  {tier.charAt(0) + tier.slice(1).toLowerCase()}
+                </span>{' '}= OI growth ≥{minOi}%, premium move ≤{maxPrem}% — both measured over the {(data.window_label ?? 'current').toLowerCase()} window
+              </p>
+            ))
+          ) : (
+            <>
+              <p className="text-xs text-gray-400"><span className="text-amber-400 font-semibold">Elite</span> = strongest OI growth with the quietest premium</p>
+              <p className="text-xs text-gray-400"><span className="text-emerald-400 font-semibold">Strong</span> = strong OI growth, quiet premium</p>
+              <p className="text-xs text-gray-400"><span className="text-sky-400 font-semibold">Watch</span> = notable OI growth, fairly quiet premium</p>
+            </>
+          )}
+          <p className="text-xs text-gray-500 mt-2">
+            First-pass thresholds — may need tuning after a few live sessions, independently per window (5-min/Hourly/EOD each have their own cutoffs above, since OI/premium naturally move by very different amounts over 5 minutes vs an hour vs a full day).
+            Strike zone scanned is whatever you pick above (defaults to ATM±5).
+          </p>
         </div>
       </div>
     </div>

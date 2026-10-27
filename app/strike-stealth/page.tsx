@@ -1,10 +1,14 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, Zap } from 'lucide-react'
+import { RefreshCw, Zap, Search } from 'lucide-react'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 
 const API = 'https://api.greeknova.com'
+
+// Same canonical index list used across Jungle/OI Profile/PCR/Strike History etc.
+const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
+const PAGE_SIZE = 20
 
 interface StealthHit {
   symbol: string
@@ -71,6 +75,14 @@ export default function StrikeStealthBuildup() {
   const [loading, setLoading] = useState(true)
   const [tierFilter, setTierFilter] = useState<'all' | 'ELITE' | 'STRONG' | 'WATCH'>('all')
   const [confluenceOnly, setConfluenceOnly] = useState(false)
+  // (Oct 27 2026, Manish's ask): extra client-side filters so the list stays
+  // scannable without endless scrolling -- these slice the already-fetched
+  // `hits` array, no extra round-trip to the backend.
+  const [instrumentFilter, setInstrumentFilter] = useState<'all' | 'index' | 'stocks'>('all')
+  const [optionTypeFilter, setOptionTypeFilter] = useState<'all' | 'CE' | 'PE'>('all')
+  const [expiryFilter, setExpiryFilter] = useState<'all' | string>('all')
+  const [search, setSearch] = useState('')
+  const [showAll, setShowAll] = useState(false)
   // (Oct 27 2026, Manish's ask): same selectable ATM/+-1/+-2/+-5/+-10/All
   // zone used on Jungle/UOA/OI Profile/Alerts, SERVER-SIDE here (changes
   // which strikes the scan even considers, not a client-side list filter)
@@ -87,10 +99,22 @@ export default function StrikeStealthBuildup() {
   }, [])
 
   useEffect(() => { load(zone) }, [load, zone])
+  useEffect(() => {
+    setShowAll(false)
+  }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone])
 
-  const hits = (data?.hits || [])
+  const allHits = data?.hits || []
+  const expiryOptions = Array.from(new Set(allHits.map(h => h.expiry).filter((e): e is string => !!e))).sort()
+
+  const filteredHits = allHits
     .filter(h => tierFilter === 'all' || h.tier === tierFilter)
     .filter(h => !confluenceOnly || h.is_confluence)
+    .filter(h => instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol)))
+    .filter(h => optionTypeFilter === 'all' || h.option_type === optionTypeFilter)
+    .filter(h => expiryFilter === 'all' || h.expiry === expiryFilter)
+    .filter(h => !search.trim() || h.symbol.toLowerCase().includes(search.trim().toLowerCase()))
+
+  const hits = showAll ? filteredHits : filteredHits.slice(0, PAGE_SIZE)
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -145,11 +169,54 @@ export default function StrikeStealthBuildup() {
           </button>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          {(['all', 'index', 'stocks'] as const).map(v => (
+            <button key={v} onClick={() => setInstrumentFilter(v)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                instrumentFilter === v
+                  ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+              }`}>
+              {v === 'all' ? 'Index + Stocks' : v === 'index' ? 'Index only' : 'Stocks only'}
+            </button>
+          ))}
+          <div className="flex items-center gap-1 ml-1">
+            {(['all', 'CE', 'PE'] as const).map(v => (
+              <button key={v} onClick={() => setOptionTypeFilter(v)}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                  optionTypeFilter === v
+                    ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
+                    : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+                }`}>
+                {v === 'all' ? 'CE + PE' : v}
+              </button>
+            ))}
+          </div>
+          {expiryOptions.length > 1 && (
+            <select value={expiryFilter} onChange={e => setExpiryFilter(e.target.value)}
+              className="bg-gray-800/40 border border-gray-700 text-gray-300 text-xs font-bold rounded-lg px-3 py-1.5 ml-1 focus:outline-none focus:border-cyan-700">
+              <option value="all">All expiries</option>
+              {expiryOptions.map(exp => (
+                <option key={exp} value={exp}>{fmtExpiry(exp)}</option>
+              ))}
+            </select>
+          )}
+          <div className="relative ml-auto">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search symbol…"
+              className="bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-1.5 w-40 focus:outline-none focus:border-cyan-700 placeholder:text-gray-600" />
+          </div>
+        </div>
+
         {loading && !data && <p className="text-gray-500 text-sm">Loading…</p>}
         {data?.error && <p className="text-red-400 text-sm">{data.error}</p>}
 
-        {!loading && hits.length === 0 && !data?.error && (
-          <p className="text-gray-500 text-sm">No stealth buildup hits in this snapshot window.</p>
+        {!loading && filteredHits.length === 0 && !data?.error && (
+          <p className="text-gray-500 text-sm">
+            {allHits.length === 0
+              ? 'No stealth buildup hits in this snapshot window.'
+              : 'No hits match the current filters — try widening them.'}
+          </p>
         )}
 
         <div className="space-y-2">
@@ -189,6 +256,13 @@ export default function StrikeStealthBuildup() {
             </div>
           ))}
         </div>
+
+        {!showAll && filteredHits.length > PAGE_SIZE && (
+          <button onClick={() => setShowAll(true)}
+            className="mt-3 w-full text-center text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg py-2">
+            Show {filteredHits.length - PAGE_SIZE} more
+          </button>
+        )}
 
         <div className="mt-6 p-4 rounded-xl border border-gray-800 bg-gray-900/30">
           <p className="text-xs text-gray-400"><span className="text-amber-400 font-semibold">Elite</span> = strongest OI growth (≥25% in this window) with the quietest premium (≤3%)</p>

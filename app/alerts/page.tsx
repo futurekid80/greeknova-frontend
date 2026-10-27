@@ -2,7 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useEffect, useRef, useState } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock, Search, X, ExternalLink } from 'lucide-react'
-import { useAlerts, sortKey } from '@/contexts/AlertsContext'
+import { useAlerts, sortKey, type Alert } from '@/contexts/AlertsContext'
 import AlertThresholds from '@/components/AlertThresholds'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
@@ -19,6 +19,20 @@ function inStrikeZone(n: number | null | undefined, zone: string): boolean {
   if (zone === 'ATM') return n === 0
   const bound = parseInt(zone, 10)
   return Number.isFinite(bound) ? Math.abs(n) <= bound : true
+}
+
+// (Oct 27 2026, Vinod feedback): symbol-level signals -- PDH/PDL/PWH/PWL,
+// EMA crosses -- aren't about any one option strike at all (no `strike` on
+// the alert, see push_checker.py's _check_technical_levels), so a Strike
+// Zone filter has nothing to evaluate them against. inStrikeZone() already
+// returned false for these (null strikesAway treated as "unknown, exclude"
+// -- correct for an option alert with missing data), which was right for
+// that case but wrong here: it silently hid every symbol-level alert the
+// moment any zone other than "All" was picked, instead of just leaving
+// them untouched by a filter that doesn't apply to them.
+function passesStrikeZone(a: Alert, zone: string): boolean {
+  if (a.strike === null || a.strike === undefined) return true
+  return inStrikeZone(a.strikesAway, zone)
 }
 
 export default function Alerts() {
@@ -183,7 +197,7 @@ export default function Alerts() {
     })
     .filter(a => typeFilter === 'all' || a.signal === typeFilter)
     .filter(a => !watchlistOnly || watchlist.includes(a.symbol))
-    .filter(a => inStrikeZone(a.strikesAway, strikeZone))
+    .filter(a => passesStrikeZone(a, strikeZone))
     .sort((a, b) => sortOrder === 'newest' ? sortKey(b) - sortKey(a) : sortKey(a) - sortKey(b))
 
   const statusText = () => {
@@ -369,6 +383,17 @@ export default function Alerts() {
             </button>
           )}
         </div>
+
+        {/* (Oct 27 2026, Vinod feedback): OI Spikes/Call Writing/Put Writing/etc
+            all measure the SAME fixed 5-min window -- said once here instead of
+            repeated on every single alert row. Near-Strike Unwind alerts use a
+            different (~20min) window and still state that per-alert below, since
+            it genuinely varies from this. */}
+        {baseAlerts.length > 0 && (
+          <p className="text-[11px] text-gray-500 mb-3">
+            OI % changes below are measured over a 5-min rolling window (Near-Strike Unwind alerts use ~20min instead, noted per alert).
+          </p>
+        )}
 
         {baseAlerts.length > 0 && (
           <div className="mb-4">

@@ -266,7 +266,8 @@ async function checkOptionsJungle() {
     const icon    = isBuild ? '🔥' : '📉'
     const expStr  = spike.expiry ? ` (${spike.expiry.slice(5).replace('-','/')})` : ''
     const title   = `${icon} OI ${spike.direction} — ${spike.symbol} ${spike.strike} ${spike.option_type}${expStr}`
-    const body    = `OI ${spike.oi_pct > 0 ? '+' : ''}${spike.oi_pct}% in 5 min | OI: ${fmtOI(spike.new_oi)} | LTP: ₹${spike.last_price}${spike.interpretation ? ' | ' + spike.interpretation.replace(/_/g,' ') : ''}`
+    // (Oct 27 2026, Vinod feedback): dropped the repeated "in 5 min" -- mirrors services/push_checker.py's server-side version of this same message.
+    const body    = `OI ${spike.oi_pct > 0 ? '+' : ''}${spike.oi_pct}% | OI: ${fmtOI(spike.new_oi)} | LTP: ₹${spike.last_price}${spike.interpretation ? ' | ' + spike.interpretation.replace(/_/g,' ') : ''}`
 
     playSound()
 
@@ -385,6 +386,10 @@ async function checkUOAWhales() {
 function fmtOI(n) {
   if (Math.abs(n) >= 10000000) return `${(n/10000000).toFixed(2)}Cr`
   if (Math.abs(n) >= 100000)   return `${(n/100000).toFixed(1)}L`
+  // (Oct 27 2026, Vinod feedback): below 1L this used to fall through to a
+  // plain comma-grouped number (e.g. "47,175") -- mirrors the same K-tier
+  // fix made server-side in services/push_checker.py's _fmt_oi().
+  if (Math.abs(n) >= 1000)     return `${(n/1000).toFixed(0)}K`
   return n.toLocaleString()
 }
 

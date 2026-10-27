@@ -97,9 +97,10 @@ export default function StrikeStealthBuildup() {
           </button>
         </div>
         <p className="text-xs text-gray-500 mb-4">
-          OI piling up hard at a single strike (within ATM±10) while that strike&apos;s own premium barely moves —
-          size going on without moving the tape. 🔗 Confluence marks a symbol that also has a live FUT-level
-          Stealth Buildup right now (within ATM±5) — the strongest version of this signal.
+          OI piling up hard at a single strike (within the zone picked below) while that strike&apos;s own premium
+          barely moves — size going on without moving the tape. 🔗 Confluence marks a symbol that also has a live
+          FUT-level Stealth Buildup right now (always within ATM±5, regardless of the zone picked below) — the
+          strongest version of this signal.
         </p>
 
         {data?.ts_new && (
@@ -178,7 +179,7 @@ export default function StrikeStealthBuildup() {
           <p className="text-xs text-gray-400"><span className="text-amber-400 font-semibold">Elite</span> = strongest OI growth (≥25% in this window) with the quietest premium (≤3%)</p>
           <p className="text-xs text-gray-400"><span className="text-emerald-400 font-semibold">Strong</span> = ≥15% OI growth, premium ≤5%</p>
           <p className="text-xs text-gray-400"><span className="text-sky-400 font-semibold">Watch</span> = ≥8% OI growth, premium ≤8%</p>
-          <p className="text-xs text-gray-500 mt-2">First-pass thresholds — may need tuning after a few live sessions (currently ELITE OI≥25%/prem≤3%, STRONG 15/5, WATCH 8/8, scanned within ATM±10).</p>
+          <p className="text-xs text-gray-500 mt-2">First-pass thresholds — may need tuning after a few live sessions (currently ELITE OI≥25%/prem≤3%, STRONG 15/5, WATCH 8/8). Strike zone scanned is whatever you pick above (defaults to ATM±5).</p>
         </div>
       </div>
     </div>

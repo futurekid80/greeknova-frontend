@@ -46,6 +46,7 @@ const NAV_GROUPS = [
       // pages/backend untouched, just not surfaced here anymore (not actively used).
       { href: '/wolves',      label: '🐺 Wolves Scanner' },
       { href: '/custom-scanner', label: '🎯 Custom Scanner' },
+      { href: '/strike-stealth', label: '🕵️ Option Strike Stealth Buildup' },
       { href: '/signals/cpr', label: '📐 CPR Scanner' },
       { href: '/signals/intraday', label: '📋 Intraday Futures Scanner' },
       { href: '/jungle',      label: '🌿 Options Jungle' },
@@ -89,6 +90,7 @@ const NAV_GROUPS = [
     label: '🎯 Positional',
     links: [
       { href: '/positional',  label: '🧠 Positional Intelligence' },
+      { href: '/strike-stealth', label: '🕵️ Option Strike Stealth Buildup' },
       { href: '/oi-buildup-period', label: '📊 Weekly/Monthly OI Buildup' },
       { href: '/rollover', label: '🔄 Rollover Tracker' },
       { href: '/delivery-confluence', label: '📦 Delivery Confluence' },

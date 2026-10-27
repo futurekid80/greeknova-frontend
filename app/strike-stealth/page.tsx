@@ -10,6 +10,7 @@ interface StealthHit {
   symbol: string
   is_confluence: boolean
   strike: number
+  expiry: string | null
   option_type: 'CE' | 'PE'
   strikes_away: number | null
   cmp: number | null
@@ -45,6 +46,15 @@ function fmtOI(n: number) {
   if (Math.abs(n) >= 100000) return `${(n / 100000).toFixed(1)}L`
   if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(0)}K`
   return n.toLocaleString()
+}
+
+function fmtExpiry(expiry: string | null) {
+  if (!expiry) return null
+  try {
+    return new Date(expiry + 'T00:00:00').toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short',
+    })
+  } catch { return expiry }
 }
 
 function fmtTime(ts?: string) {
@@ -154,6 +164,11 @@ export default function StrikeStealthBuildup() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-white">{h.symbol}</span>
                     <span className="text-gray-300">{h.strike} {h.option_type}</span>
+                    {h.expiry && (
+                      <span className="text-[11px] text-gray-500 border border-gray-700 rounded px-1.5 py-0.5">
+                        exp {fmtExpiry(h.expiry)}
+                      </span>
+                    )}
                     {h.strikes_away !== null && (
                       <span className="text-[11px] text-gray-500">
                         {h.strikes_away === 0 ? 'ATM' : `${h.strikes_away > 0 ? '+' : ''}${h.strikes_away} from ATM`}

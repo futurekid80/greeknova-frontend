@@ -206,16 +206,24 @@ export default function RolloverPage() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-950/60 border border-blue-800/50 text-blue-400 uppercase tracking-wider">
-                Series Rollover
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                data.dte <= 0
+                  ? 'bg-amber-950/60 border border-amber-800/50 text-amber-400'
+                  : 'bg-blue-950/60 border border-blue-800/50 text-blue-400'
+              }`}>
+                {data.dte <= 0 ? 'Final — Series Closed' : 'Series Rollover (Live)'}
               </span>
               <span className="text-xs text-gray-600 bg-gray-900 border border-gray-800 px-2 py-0.5 rounded-full">
-                {data.dte} days to expiry
+                {data.dte <= 0 ? 'Expired today' : `${data.dte} days to expiry`}
               </span>
             </div>
             <h1 className="text-3xl font-black tracking-tight text-white mb-1">Rollover Tracker</h1>
             <p className="text-gray-500 text-sm">
-              {fmtDate(data.curr_expiry)} → {fmtDate(data.next_expiry)} · {data.total_symbols} symbols · Benchmark: {fmtDate(data.prev_bench_date)} (same DTE last series)
+              {data.dte <= 0 ? (
+                <>Final {fmtDate(data.curr_expiry)} → {fmtDate(data.next_expiry)} split · {data.total_symbols} symbols · this series has settled — next refresh (after today) will track {fmtDate(data.next_expiry)}'s own rollover as it begins</>
+              ) : (
+                <>{fmtDate(data.curr_expiry)} → {fmtDate(data.next_expiry)} · {data.total_symbols} symbols · Benchmark: {fmtDate(data.prev_bench_date)} (same DTE last series)</>
+              )}
             </p>
           </div>
           <button onClick={fetchData} disabled={loading}
@@ -227,7 +235,7 @@ export default function RolloverPage() {
         {/* Series Overview Banner */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="col-span-2 md:col-span-1 bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
-            <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Market Rollover</p>
+            <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{data.dte <= 0 ? 'Market Rollover (Final)' : 'Market Rollover'}</p>
             <p className="text-3xl font-black text-white">{data.market_rollover_pct}%</p>
             {data.vs_prev_market !== null && (
               <p className={`text-xs mt-1 font-semibold ${data.vs_prev_market >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>

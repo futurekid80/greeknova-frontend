@@ -2,7 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useEffect, useRef, useState } from 'react'
 import { Bell, BellOff, RefreshCw, Trash2, Clock, Search, X, ExternalLink } from 'lucide-react'
-import { useAlerts } from '@/contexts/AlertsContext'
+import { useAlerts, sortKey } from '@/contexts/AlertsContext'
 import AlertThresholds from '@/components/AlertThresholds'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
@@ -184,7 +184,7 @@ export default function Alerts() {
     .filter(a => typeFilter === 'all' || a.signal === typeFilter)
     .filter(a => !watchlistOnly || watchlist.includes(a.symbol))
     .filter(a => inStrikeZone(a.strikesAway, strikeZone))
-    .sort((a, b) => sortOrder === 'newest' ? b.id - a.id : a.id - b.id)
+    .sort((a, b) => sortOrder === 'newest' ? sortKey(b) - sortKey(a) : sortKey(a) - sortKey(b))
 
   const statusText = () => {
     if (!swReady) return 'Loading service worker...'
@@ -288,7 +288,7 @@ export default function Alerts() {
             <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
               {unwindAll
                 .filter(a => inStrikeZone(a.strikesAway, strikeZone))
-                .sort((a, b) => b.id - a.id)
+                .sort((a, b) => sortKey(b) - sortKey(a))
                 .map(alert => (
                   <div key={alert.id}
                     className="flex items-start justify-between p-4 rounded-xl border-2 border-fuchsia-500/60 bg-fuchsia-950/30 shadow-[0_0_20px_-8px_rgba(217,70,239,0.5)]">

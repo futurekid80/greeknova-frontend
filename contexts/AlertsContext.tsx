@@ -38,6 +38,34 @@ function isMarketOpen() {
   return total >= 555 && total <= 930
 }
 
+// (Oct 27 2026 bug fix): alerts come from two sources with INCOMPATIBLE id
+// scales -- server rows (alert_log.id) are a small sequential integer
+// (currently ~300k), while locally-detected alerts from the service worker
+// (OI Spikes, Fresh Builds, UOA Whales -- see public/sw.js) get
+// `id: Date.now() + Math.random()`, a ~1.7-TRILLION epoch-ms value. Sorting
+// the merged list by raw `Number(id)` always put every client-side alert
+// ahead of every server alert, regardless of actual recency -- so as the
+// in-browser Alert Engine kept firing through the day, it silently crowded
+// EVERY server-sourced alert (the only ones that carry `strikesAway`, set
+// server-side in push_notifications.py) out of the top-100 window. Result:
+// the ATM/±1/±2/etc Strike Zone filter -- which requires a non-null
+// strikesAway (see inStrikeZone() in app/alerts/page.tsx) -- always matched
+// zero rows, while "All" (no strikesAway requirement) kept looking normal,
+// masking the bug.
+//
+// Fix: sort by real wall-clock recency instead of raw id. Server alerts'
+// `receivedAt` is a full ISO timestamp (alert_log.created_at) that
+// Date.parse() handles natively. Client-synthesized alerts' `receivedAt` is
+// a locale-formatted, year-less string (e.g. "27 Oct, 12:47 pm") that
+// Date.parse() reliably fails on -- for those we fall back to their `id`,
+// which (despite not being comparable to a server id) IS itself already a
+// real epoch-ms timestamp, so it sorts correctly against other
+// client-side alerts and against parsed server timestamps alike.
+export function sortKey(a: Alert): number {
+  const t = Date.parse(a.receivedAt)
+  return Number.isNaN(t) ? Number(a.id) : t
+}
+
 function playTerminalBeep(ctx: AudioContext) {
   const now = ctx.currentTime
   const osc1 = ctx.createOscillator()
@@ -192,7 +220,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
           const byId = new Map(prev.map(a => [a.id, a]))
           for (const a of serverAlerts) if (!byId.has(a.id)) byId.set(a.id, a)
           const merged = Array.from(byId.values())
-            .sort((a, b) => Number(b.id) - Number(a.id))
+            .sort((a, b) => sortKey(b) - sortKey(a))
             .slice(0, 100)
           try { localStorage.setItem('gn_alerts', JSON.stringify(merged)) } catch {}
           return merged

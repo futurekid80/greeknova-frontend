@@ -1,7 +1,7 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, Zap, Search } from 'lucide-react'
+import { RefreshCw, Zap, Search, Download } from 'lucide-react'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 
 const API = 'https://api.greeknova.com'
@@ -79,6 +79,37 @@ function fmtTime(ts?: string) {
   } catch { return ts }
 }
 
+// (Oct 27 2026, Manish's ask): export whatever's currently filtered -- not
+// just the visible/capped rows -- so he can mark up / sort in Excel for his
+// own EOD analysis. Pure client-side, no backend round-trip: builds a CSV
+// Blob from the hits array already in hand and triggers a normal browser
+// download via a throwaway anchor tag.
+function downloadHitsCSV(hits: StealthHit[], window: string, zone: string) {
+  if (hits.length === 0) return
+  const cols: (keyof StealthHit)[] = [
+    'symbol', 'strike', 'option_type', 'expiry', 'strikes_away', 'atm_strike',
+    'tier', 'is_confluence', 'oi_pct', 'old_oi', 'new_oi',
+    'premium_pct', 'old_premium', 'new_premium', 'cmp',
+  ]
+  const header = ['Symbol', 'Strike', 'Type', 'Expiry', 'StrikesAway', 'ATMStrike', 'Tier', 'Confluence', 'OI%', 'OldOI', 'NewOI', 'Premium%', 'OldPremium', 'NewPremium', 'CMP']
+  const escapeCsv = (v: unknown) => {
+    const s = v === null || v === undefined ? '' : String(v)
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const rows = hits.map(h => cols.map(c => escapeCsv(h[c])).join(','))
+  const csv = [header.join(','), ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const today = new Date().toISOString().slice(0, 10)
+  a.href = url
+  a.download = `strike-stealth_${window}_zone${zone}_${today}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 export default function StrikeStealthBuildup() {
   const [data, setData] = useState<ScanResult | null>(null)
   const [loading, setLoading] = useState(true)
@@ -140,10 +171,17 @@ export default function StrikeStealthBuildup() {
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Zap size={20} className="text-amber-400" /> Option Strike Stealth Buildup
           </h1>
-          <button onClick={() => load(zone, timeWindow)}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => downloadHitsCSV(filteredHits, timeWindow, zone)}
+              disabled={filteredHits.length === 0}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5 disabled:opacity-40 disabled:hover:text-gray-400">
+              <Download size={12} /> Download CSV
+            </button>
+            <button onClick={() => load(zone, timeWindow)}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+            </button>
+          </div>
         </div>
         <p className="text-xs text-gray-500 mb-4">
           OI piling up hard at a single strike (within the zone picked below) while that strike&apos;s own premium

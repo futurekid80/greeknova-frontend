@@ -92,15 +92,31 @@ export default function Alerts() {
   // viewingPast is true.
   const [dateAlerts, setDateAlerts] = useState<typeof alerts>([])
   const [dateLoading, setDateLoading] = useState(false)
+  // Oct 29 2026: this used to collapse "request failed" (network hiccup,
+  // a 401 from a stale token) and "genuinely zero alerts that day" into the
+  // exact same empty-array state -- the page then confidently told someone
+  // "No alerts logged that day" when really the fetch just errored, hiding
+  // real history (alert_log had 6,775 rows for the day a user hit this).
+  // Tracking the failure separately lets the empty-state message below say
+  // which one actually happened.
+  const [dateFetchFailed, setDateFetchFailed] = useState(false)
+  const [dateRetryTick, setDateRetryTick] = useState(0)
   useEffect(() => {
-    if (!viewingPast) { setDateAlerts([]); return }
+    if (!viewingPast) { setDateAlerts([]); setDateFetchFailed(false); return }
     setDateLoading(true)
+    setDateFetchFailed(false)
     fetch(`https://api.greeknova.com/alerts?date=${selectedDate}&limit=200`)
-      .then((r) => r.json())
-      .then((j) => setDateAlerts(j.alerts || []))
-      .catch(() => setDateAlerts([]))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((j) => {
+        if (j.error) throw new Error(j.error)
+        setDateAlerts(j.alerts || [])
+      })
+      .catch(() => { setDateAlerts([]); setDateFetchFailed(true) })
       .finally(() => setDateLoading(false))
-  }, [viewingPast, selectedDate])
+  }, [viewingPast, selectedDate, dateRetryTick])
 
   // The live `alerts` list from context is capped at the last ~100 across every
   // stock, so on a busy morning an older alert for one symbol falls out of it
@@ -462,17 +478,25 @@ export default function Alerts() {
           <div className="flex flex-col items-center justify-center py-20 text-center border border-gray-800/50 rounded-2xl bg-gray-900/20">
             <div className="text-4xl mb-4">🔔</div>
             <h3 className="text-lg font-bold text-gray-400 mb-2">
-              {viewingPast ? (dateLoading ? 'Loading…' : 'No alerts logged that day') : enabled ? 'Monitoring in background' : 'Alerts disabled'}
+              {viewingPast ? (dateLoading ? 'Loading…' : dateFetchFailed ? 'Couldn\'t load that day' : 'No alerts logged that day') : enabled ? 'Monitoring in background' : 'Alerts disabled'}
             </h3>
             <p className="text-sm text-gray-600 max-w-sm">
               {viewingPast
-                ? 'Either a non-trading day, or nothing crossed the alert thresholds that session.'
+                ? dateFetchFailed
+                  ? 'The request to load this day failed — this is likely a temporary issue, not actually zero alerts. Try again.'
+                  : 'Either a non-trading day, or nothing crossed the alert thresholds that session.'
                 : enabled
                 ? marketOpen
                   ? 'Service worker is running across all tabs. Alerts will appear here, as browser notifications, and via the bell icon on any page.'
                   : 'Market is closed. Checks will auto-resume at 9:15 AM IST on next trading day.'
                 : 'Enable alerts to start monitoring OI spikes, fresh builds and UOA whale activity.'}
             </p>
+            {viewingPast && dateFetchFailed && (
+              <button onClick={() => setDateRetryTick(t => t + 1)}
+                className="mt-4 flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-950/30 border border-emerald-800/50 rounded-lg px-3 py-2 transition-all">
+                <RefreshCw size={11} />Retry
+              </button>
+            )}
             {!viewingPast && enabled && marketOpen && (
               <div className="mt-4 flex items-center gap-2 text-xs text-emerald-500">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

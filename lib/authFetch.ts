@@ -157,7 +157,35 @@ if (typeof window !== 'undefined' && !window.__gnAuthFetchInstalled) {
           if (!headers.has('Authorization')) {
             headers.set('Authorization', `Bearer ${token}`)
           }
-          return watchAccess(originalFetch(input, { ...init, headers }), true)
+          const res = await originalFetch(input, { ...init, headers })
+          // Oct 29 2026 ("alerts missing/yesterday shows empty" report): a
+          // signed-in session's access_token can go stale server-side (long-
+          // idle tab, a background refresh that silently didn't land) while
+          // the client still happily attaches it -- that 401s every gated
+          // call using it, and several callers (alert history/date-picker
+          // fetches especially) swallow the failure silently and just render
+          // "no data" instead of an error, which looks exactly like "really
+          // nothing happened" even though alert_log has thousands of rows.
+          // One forced refreshSession()+retry here fixes it transparently
+          // for every gated call site at once, instead of patching each
+          // caller's error handling individually.
+          if (res.status === 401) {
+            try {
+              const { data: refreshed } = await supabase.auth.refreshSession()
+              const newToken = refreshed.session?.access_token
+              if (newToken && newToken !== token) {
+                const retryHeaders = new Headers(
+                  init?.headers || (input instanceof Request ? input.headers : undefined)
+                )
+                retryHeaders.set('Authorization', `Bearer ${newToken}`)
+                return watchAccess(originalFetch(input, { ...init, headers: retryHeaders }), true)
+              }
+            } catch (e) {
+              // refresh itself failed (e.g. truly signed out) -- fall through
+              // to the original 401 response, same as before this fix
+            }
+          }
+          return watchAccess(Promise.resolve(res), true)
         }
       }
     } catch (e) {

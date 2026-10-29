@@ -1,7 +1,8 @@
 'use client'
 import Navbar from '@/components/Navbar'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
@@ -89,10 +90,17 @@ const MigrationTooltip = ({ active, payload, label }: any) => {
   )
 }
 
-export default function OIProfile() {
+function OIProfileInner() {
+  // Oct 29 2026: honor a deep link like /oiprofile?symbol=LODHA (e.g. from
+  // the Market Pulse "OI Profile ->" link) instead of silently always
+  // opening on NIFTY -- only trust it if it's a real index/stock symbol.
+  const searchParams = useSearchParams()
   const [data, setData]         = useState<ProfileData | null>(null)
   const [loading, setLoading]   = useState(true)
-  const [symbol, setSymbol]     = useState('NIFTY')
+  const [symbol, setSymbol]     = useState(() => {
+    const s = searchParams.get('symbol')?.toUpperCase()
+    return s && (INDICES.includes(s) || STOCKS.includes(s)) ? s : 'NIFTY'
+  })
   const [expiry, setExpiry]     = useState('')
   const [strikeZone, setStrikeZone] = useState('all')
   const [view, setView]         = useState<'profile'|'timeline'|'migration'>('profile')
@@ -620,5 +628,13 @@ export default function OIProfile() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function OIProfile() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#07070e]" />}>
+      <OIProfileInner />
+    </Suspense>
   )
 }

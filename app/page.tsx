@@ -1,6 +1,5 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import StockChart from '@/components/StockChart'
 export const dynamic = 'force-dynamic'
 import { useEffect, useState, useRef } from 'react'
 import { supabase, getSessionCached } from '@/lib/supabase'
@@ -821,13 +820,15 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-gray-900/80">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-black text-white">{symbol}</h2>
-          <a href={`/oi-profile?symbol=${symbol}`} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 px-2 py-1 rounded-lg">OI Profile →</a>
+          <a href={`/oiprofile?symbol=${symbol}`} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 px-2 py-1 rounded-lg">OI Profile →</a>
         </div>
         <button onClick={onClose} className="text-gray-600 hover:text-white p-1"><X size={16}/></button>
       </div>
-      <div className="p-4 pb-0">
-        <StockChart symbol={symbol} />
-      </div>
+      {/* Oct 29 2026: Price Chart dropped here too -- Kite's Historical Data
+          API isn't available on this app (personal-type Connect app, no
+          add-on), so this always errored with "Insufficient permission for
+          that call." Already pulled from the nav for the same reason on
+          Oct 22 2026; this was the one other place still rendering it. */}
       {loading && <div className="p-6 text-center text-gray-500 text-sm">Loading...</div>}
       {data && (
         <div className="grid grid-cols-2 gap-3 p-4">

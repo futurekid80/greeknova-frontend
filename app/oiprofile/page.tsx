@@ -531,8 +531,8 @@ export default function OIProfile() {
                   <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={fmtDate}/>
                   <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} domain={['auto', 'auto']} tickFormatter={v => v.toLocaleString()}/>
                   <Tooltip content={<MigrationTooltip/>}/>
-                  <Line type="monotone" dataKey="ce_wall" name="CE Wall" stroke={chartColors.callWall} strokeWidth={2} dot={{ fill: chartColors.callWall, r: 3 }} activeDot={{ r: 5 }} connectNulls/>
-                  <Line type="monotone" dataKey="pe_wall" name="PE Wall" stroke={chartColors.putWall} strokeWidth={2} dot={{ fill: chartColors.putWall, r: 3 }} activeDot={{ r: 5 }} connectNulls/>
+                  <Line type="monotone" dataKey="ce_wall" name="CE Wall" stroke={chartColors.putWall} strokeWidth={2} dot={{ fill: chartColors.putWall, r: 3 }} activeDot={{ r: 5 }} connectNulls/>
+                  <Line type="monotone" dataKey="pe_wall" name="PE Wall" stroke={chartColors.callWall} strokeWidth={2} dot={{ fill: chartColors.callWall, r: 3 }} activeDot={{ r: 5 }} connectNulls/>
                   <Line type="monotone" dataKey="cmp" name="Price" stroke={chartColors.spot} strokeWidth={1.5} strokeDasharray="5 3" dot={{ fill: chartColors.spot, r: 2 }} activeDot={{ r: 4 }} connectNulls/>
                 </LineChart>
               </ResponsiveContainer>

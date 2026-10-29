@@ -123,6 +123,12 @@ export default function GexByStrikePage() {
             <StatCard label="FLIP (nearby)" value={data.local_flip_point?.toLocaleString() ?? '—'} accent="text-violet-300" />
           </div>
 
+          {!data.flip_point && (
+            <p className="text-xs text-amber-400/80 -mt-4 mb-6">
+              FLIP is blank today: the violet cumulative line never crosses back above zero near spot — the chain is one-sided (heavy put writing), not a glitch.
+            </p>
+          )}
+
           <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-bold text-gray-300">
@@ -185,6 +191,11 @@ export default function GexByStrikePage() {
             <p className="text-xs text-gray-500 mt-2">
               Green = call-side gamma×OI, red = put-side gamma×OI (shown below axis). Violet line = running cumulative net GEX across strikes — where it crosses zero near spot is the (cumulative) Flip Point.
               Amber = spot. GreekNova computes gamma from IV solved off live traded premiums (Black-Scholes), weighted by open interest — unscaled by lot size, so bar height is relative, not ₹ notional.
+              <br className="hidden sm:block" />
+              <span className="text-gray-600">
+                FLIP = where that cumulative line crosses zero within 6% of spot — often blank on a one-sided day. FLIP (nearby) = a looser, single-strike crossing near spot; noisier, but almost always has a value.
+                This chart's &quot;Cumulative GEX&quot; walks the whole chain from the lowest strike up, so it reads much deeper than the near-spot Net GEX shown on Session Replay — the two are different metrics, not conflicting readings.
+              </span>
             </p>
           </div>
         </>

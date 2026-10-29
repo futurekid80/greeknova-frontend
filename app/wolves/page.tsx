@@ -121,6 +121,9 @@ const EVENT_TYPES = [
   'Grandfather-Father-Son Setup', 'Grandfather-Father-Son Exit',
 ] as const
 
+const EVENT_TIMEFRAMES = ['all', 'Hourly', 'Daily', 'Weekly', 'Monthly'] as const
+const FRESHNESS_OPTIONS = ['all', 'Fresh Now', 'Still Active', 'Seen Earlier Today'] as const
+
 const FRESHNESS_STYLES: Record<string, string> = {
   'Fresh Now':          'text-emerald-400',
   'Still Active':       'text-amber-400',
@@ -133,6 +136,8 @@ const RANK_STYLES: Record<string, string> = {
   'B':  'bg-amber-950/50 text-amber-300 border-amber-700/60',
   'C':  'bg-gray-800 text-gray-400 border-gray-700',
 }
+
+const RANK_ORDER: Record<string, number> = { 'A+': 0, 'A': 1, 'B': 2, 'C': 3 }
 
 const TAILWIND_STYLES: Record<string, string> = {
   'Sector Tailwind': 'text-emerald-400',
@@ -149,7 +154,11 @@ export default function WolvesScanner() {
   const [running, setRunning] = useState(false)
   const [tierFilter, setTierFilter] = useState<'all' | 'Apex Wolf' | 'Alpha Wolf' | 'Scout Wolf'>('all')
   const [eventTypeFilter, setEventTypeFilter] = useState<typeof EVENT_TYPES[number]>('all')
+  const [wolfSortMode, setWolfSortMode] = useState<'tier' | 'adx' | 'latest'>('tier')
   const [eventSortMode, setEventSortMode] = useState<'priority' | 'latest'>('priority')
+  const [watchlistSortMode, setWatchlistSortMode] = useState<'score' | 'rank' | 'latest'>('score')
+  const [eventTimeframeFilter, setEventTimeframeFilter] = useState<typeof EVENT_TIMEFRAMES[number]>('all')
+  const [eventFreshnessFilter, setEventFreshnessFilter] = useState<typeof FRESHNESS_OPTIONS[number]>('all')
   const [rankFilter, setRankFilter] = useState<'all' | 'A+' | 'A' | 'B' | 'C'>('all')
   const [countdown, setCountdown] = useState(300)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -194,7 +203,11 @@ export default function WolvesScanner() {
     }
   }, [fetchData])
 
-  const wolves = (data?.wolves || []).slice().sort((a, b) => (TIER_ORDER[a.wolf_tier] ?? 9) - (TIER_ORDER[b.wolf_tier] ?? 9) || (b.scan_time || '').localeCompare(a.scan_time || ''))
+  const wolves = (data?.wolves || []).slice().sort((a, b) =>
+    wolfSortMode === 'latest' ? (b.scan_time || '').localeCompare(a.scan_time || '')
+    : wolfSortMode === 'adx' ? (b.adx ?? 0) - (a.adx ?? 0)
+    : (TIER_ORDER[a.wolf_tier] ?? 9) - (TIER_ORDER[b.wolf_tier] ?? 9) || (b.scan_time || '').localeCompare(a.scan_time || '')
+  )
   const filteredWolves = wolves.filter(w => tierFilter === 'all' || w.wolf_tier === tierFilter)
   const counts = {
     apex: wolves.filter(w => w.wolf_tier === 'Apex Wolf').length,
@@ -207,7 +220,10 @@ export default function WolvesScanner() {
       ? (b.scan_time || '').localeCompare(a.scan_time || '')
       : (a.priority ?? 9) - (b.priority ?? 9) || (b.scan_time || '').localeCompare(a.scan_time || '')
   )
-  const filteredEvents = events.filter(e => eventTypeFilter === 'all' || e.event_type === eventTypeFilter)
+  const filteredEvents = events
+    .filter(e => eventTypeFilter === 'all' || e.event_type === eventTypeFilter)
+    .filter(e => eventTimeframeFilter === 'all' || e.timeframe === eventTimeframeFilter)
+    .filter(e => eventFreshnessFilter === 'all' || e.signal_freshness === eventFreshnessFilter)
   const eventCounts = {
     alignment: events.filter(e => e.event_type === 'ADX Full Alignment').length,
     adx: events.filter(e => e.event_type === 'ADX Cross 25').length,
@@ -216,7 +232,11 @@ export default function WolvesScanner() {
     gfs: events.filter(e => e.event_type.startsWith('Grandfather-Father-Son')).length,
   }
 
-  const watchlist = (watchlistData?.watchlist || []).slice().sort((a, b) => (b.decision_score ?? 0) - (a.decision_score ?? 0))
+  const watchlist = (watchlistData?.watchlist || []).slice().sort((a, b) =>
+    watchlistSortMode === 'latest' ? (b.scan_time || '').localeCompare(a.scan_time || '')
+    : watchlistSortMode === 'rank' ? (RANK_ORDER[a.rank] ?? 9) - (RANK_ORDER[b.rank] ?? 9) || (b.decision_score ?? 0) - (a.decision_score ?? 0)
+    : (b.decision_score ?? 0) - (a.decision_score ?? 0)
+  )
   const filteredWatchlist = watchlist.filter(w => rankFilter === 'all' || w.rank === rankFilter)
   const rankCounts = {
     aplus: watchlist.filter(w => w.rank === 'A+').length,
@@ -307,6 +327,19 @@ export default function WolvesScanner() {
                 <p className="text-2xl font-black text-cyan-300">{counts.scout}</p>
                 <p className="text-xs text-gray-600">Hourly ADX cross</p>
               </div>
+            </div>
+
+            {/* Sort mode toggle */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs text-gray-500 font-bold uppercase">Sort:</span>
+              {(['tier', 'adx', 'latest'] as const).map(m => (
+                <button key={m} onClick={() => setWolfSortMode(m)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                    wolfSortMode === m ? 'bg-emerald-500 text-gray-900 border-emerald-500' : 'bg-gray-900 text-gray-400 border-gray-700 hover:text-white'
+                  }`}>
+                  {m === 'tier' ? 'Tier' : m === 'adx' ? 'Highest ADX' : 'Latest First'}
+                </button>
+              ))}
             </div>
 
             {/* Tier filter */}
@@ -422,6 +455,32 @@ export default function WolvesScanner() {
               ))}
             </div>
 
+            {/* Timeframe + Freshness filters */}
+            <div className="flex items-center gap-4 mb-4 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-500 font-bold uppercase">Timeframe:</span>
+                {EVENT_TIMEFRAMES.map(tf => (
+                  <button key={tf} onClick={() => setEventTimeframeFilter(tf)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                      eventTimeframeFilter === tf ? 'bg-cyan-500 text-gray-900 border-cyan-500' : 'bg-gray-900 text-gray-400 border-gray-700 hover:text-white'
+                    }`}>
+                    {tf === 'all' ? 'All' : tf}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-500 font-bold uppercase">Freshness:</span>
+                {FRESHNESS_OPTIONS.map(f => (
+                  <button key={f} onClick={() => setEventFreshnessFilter(f)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                      eventFreshnessFilter === f ? 'bg-emerald-500 text-gray-900 border-emerald-500' : 'bg-gray-900 text-gray-400 border-gray-700 hover:text-white'
+                    }`}>
+                    {f === 'all' ? 'All' : f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Fresh Events table */}
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
@@ -443,7 +502,12 @@ export default function WolvesScanner() {
                   </tr>
                 </thead>
                 <tbody>
-                  {!loading && filteredEvents.length === 0 && (
+                  {!loading && filteredEvents.length === 0 && events.length > 0 && (
+                    <tr><td colSpan={13} className="text-center text-gray-500 py-10">
+                      No events match these filters. Try widening the Event type, Timeframe or Freshness filter.
+                    </td></tr>
+                  )}
+                  {!loading && filteredEvents.length === 0 && events.length === 0 && (
                     <tr><td colSpan={13} className="text-center text-gray-500 py-10">
                       {eventsData?.is_fallback ? `No Fresh Events yet on ${eventsData.date}.` : 'No Fresh Events yet today.'} Try "Run scan now" if the market is open.
                     </td></tr>
@@ -499,6 +563,19 @@ export default function WolvesScanner() {
                 <p className="text-2xl font-black text-gray-300">{rankCounts.c}</p>
                 <p className="text-xs text-gray-600">Single-timeframe continuation</p>
               </div>
+            </div>
+
+            {/* Sort mode toggle */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs text-gray-500 font-bold uppercase">Sort:</span>
+              {(['score', 'rank', 'latest'] as const).map(m => (
+                <button key={m} onClick={() => setWatchlistSortMode(m)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                    watchlistSortMode === m ? 'bg-emerald-500 text-gray-900 border-emerald-500' : 'bg-gray-900 text-gray-400 border-gray-700 hover:text-white'
+                  }`}>
+                  {m === 'score' ? 'Decision Score' : m === 'rank' ? 'Rank' : 'Latest First'}
+                </button>
+              ))}
             </div>
 
             {/* Rank filter */}

@@ -457,7 +457,7 @@ function UserMenu({ classicNav, onToggleClassicNav }: { classicNav: boolean, onT
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-xs font-medium rounded-lg transition-all">
         <User size={12} className="text-emerald-400"/>
-        <span className="max-w-[100px] truncate">{displayName}</span>
+        <span className="hidden sm:inline max-w-[100px] truncate">{displayName}</span>
         <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`}/>
       </button>
 
@@ -612,7 +612,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
           always render in full; on a narrow window the nav just wraps to a
           second line instead of hiding or cutting anything off. */}
       <nav className="sticky top-0 z-50 border-b border-gray-800/50 bg-[#07070e]/90 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 min-h-14 flex items-center gap-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 min-h-14 flex flex-wrap items-center gap-x-3 md:gap-x-8">
           <Link href="/" className="flex items-center gap-3 shrink-0">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center">
               <span className="text-xs font-black text-white">GN</span>
@@ -625,7 +625,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
               overflow-x-auto had to go (it was clipping the dropdown panels
               that live inside this row). py-2 gives the wrapped second line
               breathing room against the row above it. */}
-          <div className="flex items-center gap-6 flex-wrap py-2">
+          <div className="flex items-center gap-4 md:gap-6 flex-wrap py-1 md:py-2 order-3 w-full md:order-none md:w-auto">
             {/* Oct 14 2026: new consolidated entry point (see lib/widgetRegistry.ts
                 and app/dashboard/page.tsx) -- deliberately placed first/most
                 prominent. Every link below still works exactly as before;
@@ -666,7 +666,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
             {classicNav && <MegaMenu groups={NAV_GROUPS} active={active} />}
           </div>
 
-          <div className="ml-auto flex items-center gap-2 shrink-0">
+          <div className="ml-auto flex items-center gap-2 shrink-0 order-2 md:order-none">
             <TrialCountdown />
             <VixGauge />
             <BellBadge />
@@ -674,7 +674,7 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
               onClick={() => setFeedbackOpen(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-xs font-medium rounded-lg transition-all">
               <MessageSquare size={13} />
-              Feedback
+              <span className="hidden sm:inline">Feedback</span>
             </button>
             <UserMenu classicNav={classicNav} onToggleClassicNav={toggleClassicNav} />
           </div>

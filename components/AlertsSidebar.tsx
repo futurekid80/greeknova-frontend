@@ -19,7 +19,7 @@ export default function AlertsSidebar() {
     <>
       <button
         onClick={toggle}
-        className="fixed top-20 right-4 z-[90] w-11 h-11 rounded-full bg-gray-900 border border-gray-700 hover:border-gray-500 flex items-center justify-center shadow-lg transition-all"
+        className="fixed bottom-5 right-4 sm:bottom-auto sm:top-20 z-[90] w-11 h-11 rounded-full bg-gray-900 border border-gray-700 hover:border-gray-500 flex items-center justify-center shadow-lg transition-all"
         aria-label="Toggle alerts sidebar"
       >
         <Bell size={18} className={enabled && marketOpen ? 'text-emerald-400' : 'text-gray-400'} />

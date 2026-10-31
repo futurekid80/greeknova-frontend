@@ -4,6 +4,8 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: #07070e; color: #e2e8f0; -webkit-font-smoothing: antialiased; }
+/* Phones: the off-canvas Alerts panel must not create sideways scroll. clip (not hidden) keeps the sticky navbar working. */
+body { overflow-x: clip; }
 ::selection { background: rgba(52,211,153,0.2); color:#fff; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

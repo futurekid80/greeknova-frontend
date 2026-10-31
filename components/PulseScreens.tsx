@@ -133,9 +133,9 @@ function Heatmap({ stocks, onClick }: { stocks: any[]; onClick?: (s: string) => 
             {inner.map(r => (
               <g key={r.it.symbol} style={{ cursor: 'pointer' }} onClick={() => onClick?.(r.it.symbol)}>
                 <rect x={r.x} y={r.y} width={Math.max(0, r.w - 1.5)} height={Math.max(0, r.h - 1.5)} fill={r.it.col} rx="2" />
-                {r.w > 46 && r.h > 24 && (
+                {r.w > 30 && r.h > 24 && (
                   <>
-                    <text x={r.x + 4} y={r.y + 12} fontSize="10" fontWeight="700" fill="#fff">{r.it.symbol.length > Math.floor(r.w / 6.5) ? r.it.symbol.slice(0, Math.max(3, Math.floor(r.w / 6.5))) : r.it.symbol}</text>
+                    <text x={r.x + 4} y={r.y + 12} fontSize="10" fontWeight="700" fill="#fff">{r.it.symbol.length > Math.floor((r.w - 6) / 7.4) ? r.it.symbol.slice(0, Math.max(2, Math.floor((r.w - 6) / 7.4))) : r.it.symbol}</text>
                     <text x={r.x + 4} y={r.y + 23} fontSize="9" fill="rgba(255,255,255,0.8)">{r.it.label}</text>
                   </>
                 )}

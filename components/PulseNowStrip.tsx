@@ -129,7 +129,7 @@ export default function PulseNowStrip({ stocks, onSymbolClick, loading, day }: P
                 return (
                   <button key={a.id || i} onClick={() => a.symbol && click(a.symbol)} className={`w-full flex items-center justify-between gap-2 rounded-lg border ${m.border} ${m.bg} px-2.5 py-1.5 text-xs text-left`}>
                     <span className="font-bold text-white truncate">{a.symbol}</span>
-                    <span className={`${m.color} font-semibold truncate`}>{m.icon} {m.label}</span>
+                    <span className={`${m.color} font-semibold truncate`}>{m.icon} {m.label !== 'Alert' ? m.label : String(a.signal || 'alert').replace(/_/g, ' ').toLowerCase().replace(/^./, (c: string) => c.toUpperCase())}</span>
                     <span className="text-gray-500 whitespace-nowrap">{t}</span>
                   </button>
                 )

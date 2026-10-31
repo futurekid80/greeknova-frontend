@@ -217,6 +217,29 @@ export default function StrikeStealthBuildup() {
 
   const hits = showAll ? filteredHits : filteredHits.slice(0, PAGE_SIZE)
 
+  // (Oct 31 2026): per-symbol Bias. Bullish signs = Call Buying + Put Writing;
+  // bearish signs = Put Buying + Call Writing ("Quiet" hits are ignored).
+  // CONFIRMED = both bullish kinds (or both bearish kinds) present on the same
+  // symbol. A symbol with signs on both sides is a range/mixed read, not a bias.
+  type BiasRow = { symbol: string; cb: number; pw: number; pb: number; cw: number; bull: number; bear: number }
+  const biasMap = new Map<string, BiasRow>()
+  for (const h of allHits) {
+    if (h.activity !== 'BUYING' && h.activity !== 'WRITING') continue
+    const r = biasMap.get(h.symbol) ?? { symbol: h.symbol, cb: 0, pw: 0, pb: 0, cw: 0, bull: 0, bear: 0 }
+    if (h.activity === 'BUYING') { if (h.option_type === 'CE') r.cb++; else r.pb++ }
+    else { if (h.option_type === 'PE') r.pw++; else r.cw++ }
+    r.bull = r.cb + r.pw
+    r.bear = r.pb + r.cw
+    biasMap.set(h.symbol, r)
+  }
+  const biasAll = Array.from(biasMap.values())
+  const biasRows = biasAll
+    .filter(r => (r.bull > 0) !== (r.bear > 0))
+    .map(r => ({ ...r, dir: r.bull > 0 ? 'BULLISH' as const : 'BEARISH' as const,
+      confirmed: r.bull > 0 ? (r.cb > 0 && r.pw > 0) : (r.pb > 0 && r.cw > 0) }))
+    .sort((a, b) => Number(b.confirmed) - Number(a.confirmed) || Math.max(b.bull, b.bear) - Math.max(a.bull, a.bear))
+  const mixedCount = biasAll.filter(r => r.bull > 0 && r.bear > 0).length
+
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/strike-stealth" />
@@ -378,6 +401,32 @@ export default function StrikeStealthBuildup() {
               className="bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-1.5 w-40 focus:outline-none focus:border-cyan-700 placeholder:text-gray-600" />
           </div>
         </div>
+
+        {biasRows.length > 0 && (
+          <div className="mb-5 p-4 rounded-xl border border-gray-800 bg-gray-900/30">
+            <p className="text-xs font-bold text-gray-300 mb-1">🧭 Bias by symbol</p>
+            <p className="text-[11px] text-gray-500 mb-3">
+              Bullish = Call Buying + Put Writing · Bearish = Put Buying + Call Writing. ✓ Confirmed = both kinds agree on the same symbol.
+              Tap a symbol to see its strikes. {mixedCount > 0 ? `${mixedCount} symbol${mixedCount > 1 ? 's' : ''} with signs on both sides (range/mixed) not shown.` : ''}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {biasRows.slice(0, 24).map(r => (
+                <button key={r.symbol} onClick={() => setSearch(r.symbol)}
+                  className={`text-left text-[11px] border rounded-lg px-2.5 py-1.5 ${
+                    r.dir === 'BULLISH' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/20' : 'text-rose-300 border-rose-700/50 bg-rose-950/20'
+                  }`}>
+                  <span className="font-bold text-white">{r.symbol}</span>{' '}
+                  {r.dir === 'BULLISH' ? '▲ Bullish' : '▼ Bearish'}{r.confirmed ? ' ✓' : ''}
+                  <span className="text-gray-400">
+                    {' · '}{r.dir === 'BULLISH'
+                      ? [r.cb ? `${r.cb} Call Buying` : '', r.pw ? `${r.pw} Put Writing` : ''].filter(Boolean).join(' + ')
+                      : [r.pb ? `${r.pb} Put Buying` : '', r.cw ? `${r.cw} Call Writing` : ''].filter(Boolean).join(' + ')}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading && !data && <p className="text-gray-500 text-sm">Loading…</p>}
         {data?.error && <p className="text-red-400 text-sm">{data.error}</p>}

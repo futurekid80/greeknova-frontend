@@ -435,7 +435,7 @@ export default function StrikeStealthBuildup() {
         {!loading && filteredHits.length === 0 && !data?.error && (
           <p className="text-gray-500 text-sm">
             {allHits.length === 0
-              ? 'No stealth buildup hits in this snapshot window.'
+              ? (view === 'saved' ? 'Nothing saved yet — the background scan starts saving hits at the next market open (9:15 IST on a trading day). Use Live scan to see current hits.' : 'No stealth buildup hits in this snapshot window.')
               : 'No hits match the current filters — try widening them.'}
           </p>
         )}

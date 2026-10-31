@@ -90,6 +90,15 @@ function fmtExpiry(expiry: string | null) {
   } catch { return expiry }
 }
 
+function fmtDateTime(ts?: string) {
+  if (!ts) return '—'
+  try {
+    return new Date(ts).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+    })
+  } catch { return ts }
+}
+
 function fmtTime(ts?: string) {
   if (!ts) return '—'
   try {
@@ -259,7 +268,7 @@ export default function StrikeStealthBuildup() {
 
         {view === 'live' && data?.ts_new && (
           <p className="text-[11px] text-gray-500 mb-4">
-            {data.window_label ?? 'Window'}: {fmtTime(data.ts_old)} → {fmtTime(data.ts_new)} IST ·{' '}
+            {data.window_label ?? 'Window'}: {data.window === 'eod' ? fmtDateTime(data.ts_old) : fmtTime(data.ts_old)} → {fmtTime(data.ts_new)} IST ·{' '}
             {data.total ?? 0} hits, {data.confluence_count ?? 0} with Confluence
           </p>
         )}

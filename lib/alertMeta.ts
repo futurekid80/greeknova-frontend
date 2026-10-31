@@ -1,4 +1,5 @@
 export const SIGNAL_META: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
+  PCR_CROSSOVER:  { color: 'text-cyan-400',   bg: 'bg-cyan-950/40',   border: 'border-cyan-800/50',   icon: '🔀', label: 'PCR Crossover' },
   OI_SPIKE:       { color: 'text-orange-400', bg: 'bg-orange-950/40', border: 'border-orange-800/50', icon: '🔥', label: 'OI Spike' },
   FRESH_BUILD:    { color: 'text-emerald-400',bg: 'bg-emerald-950/40',border: 'border-emerald-800/50',icon: '🌱', label: 'Fresh Build' },
   LONG_BUILDUP:   { color: 'text-emerald-400',bg: 'bg-emerald-950/40',border: 'border-emerald-800/50',icon: '🐂', label: 'Long Buildup' },

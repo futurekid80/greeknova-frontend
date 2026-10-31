@@ -5,6 +5,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import { RefreshCw, Clock } from 'lucide-react'
 import { chartColors } from '@/lib/chartColors'
+import AlertToggle from '@/components/AlertToggle'
+import { useAlerts } from '@/contexts/AlertsContext'
 
 interface PCRPoint { time: string; pcr: number; vol_pcr?: number; ce_oi: number; pe_oi: number; ce_vol?: number; pe_vol?: number }
 interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number; expiry: string | null }
@@ -96,6 +98,8 @@ function getPcrSummary(points: PCRPoint[], pcrTrend: string, volPcrTrend: string
 
 export default function PCRTrend() {
   const [symbol, setSymbol] = useState('NIFTY')
+  // Oct 31 2026 (Pawan): opt-in PCR crossover alert toggle (shared push prefs).
+  const { enabledSignals, toggleSignal } = useAlerts()
   const [data, setData] = useState<PCRData | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState('')
@@ -191,6 +195,11 @@ export default function PCRTrend() {
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>Refresh
             </button>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <span className="text-xs text-gray-600 mr-1">🔔 Alert me when Vol PCR crosses OI PCR (opt-in, all indices):</span>
+          <AlertToggle signals={['PCR_CROSSOVER']} label="PCR Crossover" enabledSignals={enabledSignals} onToggle={toggleSignal} />
         </div>
 
         {/* Index selector */}

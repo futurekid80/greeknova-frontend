@@ -240,6 +240,15 @@ function OIProfileInner() {
     deltaPE: useOpenBaseline ? (p.pe_oi_chg_open ?? 0) : p.pe_oi_delta,
   })).reverse()
 
+  // Oct 31 2026 (Pawan): % change next to the absolute change, vs the same
+  // baseline. Blank when there's no baseline OI to divide by.
+  const pctOf = (delta: number, base: number) => {
+    if (!base || base <= 0) return ''
+    const v = delta / base * 100
+    const a = Math.abs(v)
+    return `${v > 0 ? '+' : v < 0 ? '-' : ''}${a >= 100 ? a.toFixed(0) : a.toFixed(1)}%`
+  }
+
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
 
@@ -458,6 +467,7 @@ function OIProfileInner() {
                       {hasBaseline && row.deltaCE !== 0 && (
                         <span className={`block text-[9px] font-bold ${row.deltaCE > 0 ? 'text-red-300' : 'text-gray-600'}`}>
                           {row.deltaCE > 0 ? `+${fmtOI(row.deltaCE)}` : fmtOI(row.deltaCE)}
+                          {row.baseCE > 0 && <span className="font-semibold opacity-80"> · {pctOf(row.deltaCE, row.baseCE)}</span>}
                         </span>
                       )}
                     </div>
@@ -508,6 +518,7 @@ function OIProfileInner() {
                       {hasBaseline && row.deltaPE !== 0 && (
                         <span className={`block text-[9px] font-bold ${row.deltaPE > 0 ? 'text-emerald-300' : 'text-gray-600'}`}>
                           {row.deltaPE > 0 ? `+${fmtOI(row.deltaPE)}` : fmtOI(row.deltaPE)}
+                          {row.basePE > 0 && <span className="font-semibold opacity-80"> · {pctOf(row.deltaPE, row.basePE)}</span>}
                         </span>
                       )}
                     </div>

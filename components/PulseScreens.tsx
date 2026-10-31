@@ -170,7 +170,7 @@ function Heatmap({ stocks, onClick, mode, stealth, sectors }: {
           {layout.map(({ g, b, inner }) => (
             <g key={g.key}>
               <rect x={b.x + 1} y={b.y + 1} width={Math.max(0, b.w - 2)} height={Math.max(0, b.h - 2)} fill="rgba(99,102,241,0.04)" stroke="rgba(129,140,248,0.22)" rx="5" />
-              <text x={b.x + 7} y={b.y + 13} fontSize="10" fontWeight="700" fill="#a5b4fc">{g.label.toUpperCase()}{mode === 'signal' ? ` · ${g.items.length}` : ''}</text>
+              {b.w > 44 && (() => { const full = `${g.label.toUpperCase()}${mode === 'signal' ? ` · ${g.items.length}` : ''}`; const fit = Math.floor((b.w - 12) / 6.4); return <text x={b.x + 7} y={b.y + 13} fontSize="10" fontWeight="700" fill="#a5b4fc">{full.length > fit ? full.slice(0, Math.max(3, fit - 1)) + '…' : full}</text> })()}
               {inner.map(r => (
                 <g key={r.it.symbol} style={{ cursor: 'pointer' }} onClick={() => onClick?.(r.it.symbol)}
                   onMouseMove={e => { const bb = (e.currentTarget.ownerSVGElement?.parentElement as HTMLElement).getBoundingClientRect(); setTip({ x: e.clientX - bb.left, y: e.clientY - bb.top, it: r.it }) }}>

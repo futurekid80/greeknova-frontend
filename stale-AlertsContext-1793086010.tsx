@@ -1,0 +1,481 @@
+'use client'
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
+import { supabase, getSessionCached } from '@/lib/supabase'
+import { usePushPreferences } from '@/hooks/usePushPreferences'
+
+export interface Alert {
+  id: number; signal: string; symbol: string; strike?: number
+  optionType?: string; message: string; url: string
+  receivedAt: string; score?: number; bias?: string
+  oiPct?: number; volPct?: number; ltp?: number; direction?: string
+  // Oct 12 2026: how many strikes this alert's strike sat from its symbol's
+  // ATM at the moment it fired (null/undefined for alerts logged before this
+  // shipped, or ones with no strike). Powers the Alerts page's ATM strike-
+  // zone filter -- see services/strike_zones.py on the backend.
+  strikesAway?: number | null
+}
+
+const API = 'https://api.greeknova.com'
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray
+}
+
+function isMarketOpen() {
+  const now = new Date()
+  const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+  const day = ist.getDay()
+  if (day === 0 || day === 6) return false
+  const h = ist.getHours(), m = ist.getMinutes()
+  const total = h * 60 + m
+  return total >= 555 && total <= 930
+}
+
+// (Oct 27 2026 bug fix): alerts come from two sources with INCOMPATIBLE id
+// scales -- server rows (alert_log.id) are a small sequential integer
+// (currently ~300k), while locally-detected alerts from the service worker
+// (OI Spikes, Fresh Builds, UOA Whales -- see public/sw.js) get
+// `id: Date.now() + Math.random()`, a ~1.7-TRILLION epoch-ms value. Sorting
+// the merged list by raw `Number(id)` always put every client-side alert
+// ahead of every server alert, regardless of actual recency -- so as the
+// in-browser Alert Engine kept firing through the day, it silently crowded
+// EVERY server-sourced alert (the only ones that carry `strikesAway`, set
+// server-side in push_notifications.py) out of the top-100 window. Result:
+// the ATM/±1/±2/etc Strike Zone filter -- which requires a non-null
+// strikesAway (see inStrikeZone() in app/alerts/page.tsx) -- always matched
+// zero rows, while "All" (no strikesAway requirement) kept looking normal,
+// masking the bug.
+//
+// Fix: sort by real wall-clock recency instead of raw id. Server alerts'
+// `receivedAt` is a full ISO timestamp (alert_log.created_at) that
+// Date.parse() handles natively. Client-synthesized alerts' `receivedAt` is
+// a locale-formatted, year-less string (e.g. "27 Oct, 12:47 pm") that
+// Date.parse() reliably fails on -- for those we fall back to their `id`,
+// which (despite not being comparable to a server id) IS itself already a
+// real epoch-ms timestamp, so it sorts correctly against other
+// client-side alerts and against parsed server timestamps alike.
+function sortKey(a: Alert): number {
+  const t = Date.parse(a.receivedAt)
+  return Number.isNaN(t) ? Number(a.id) : t
+}
+
+function playTerminalBeep(ctx: AudioContext) {
+  const now = ctx.currentTime
+  const osc1 = ctx.createOscillator()
+  const gain1 = ctx.createGain()
+  osc1.type = 'sine'
+  osc1.frequency.setValueAtTime(880, now)
+  gain1.gain.setValueAtTime(0, now)
+  gain1.gain.linearRampToValueAtTime(0.35, now + 0.01)
+  gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.42)
+  osc1.connect(gain1); gain1.connect(ctx.destination)
+  osc1.start(now); osc1.stop(now + 0.42)
+
+  const osc2 = ctx.createOscillator()
+  const gain2 = ctx.createGain()
+  osc2.type = 'sine'
+  osc2.frequency.setValueAtTime(1108, now)
+  gain2.gain.setValueAtTime(0, now)
+  gain2.gain.linearRampToValueAtTime(0.18, now + 0.015)
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35)
+  osc2.connect(gain2); gain2.connect(ctx.destination)
+  osc2.start(now + 0.01); osc2.stop(now + 0.35)
+}
+
+// Signal types that fire rarely relative to the general feed's volume
+// (currently ~20+/min at busy times) and would otherwise get pushed out
+// of a plain top-100 "/alerts" window within minutes -- these get their
+// own dedicated, never-crowded-out fetch instead.
+const PRIORITY_SIGNALS = ['NEAR_STRIKE_UNWIND']
+
+interface AlertsContextValue {
+  alerts: Alert[]
+  visibleAlerts: Alert[]
+  priorityAlerts: Alert[]
+  enabled: boolean
+  permission: string
+  swReady: boolean
+  marketOpen: boolean
+  lastCheck: string
+  unreadCount: number
+  spikeThreshold: number
+  volThreshold: number
+  strikeZone: string
+  enabledSignals: string[] | null
+  toggleSignal: (signal: string, on: boolean) => Promise<void>
+  saveThresholds: (oi: number, vol: number, zone?: string) => Promise<void>
+  enableAlerts: () => Promise<void>
+  disableAlerts: () => Promise<void>
+  checkNow: () => Promise<void>
+  clearAlerts: () => void
+  markAllRead: () => void
+  playSound: () => void
+}
+
+const AlertsContext = createContext<AlertsContextValue | null>(null)
+
+export function AlertsProvider({ children }: { children: React.ReactNode }) {
+  const [enabled, setEnabled]         = useState(false)
+  const [permission, setPermission]   = useState('default')
+  const [swReady, setSwReady]         = useState(false)
+  const [lastCheck, setLastCheck]     = useState('')
+  // Oct 7 2026: this in-browser "Alert Engine" (system A, runs via the SW's
+  // own 5-min self-scheduling loop -- see sw.js) used to carry its own
+  // separate OI-only threshold in localStorage ('gn_spike_threshold',
+  // default 10%), completely independent of the OI%/Vol%/signal-mute
+  // settings in the "Push alerts when..." box (AlertThresholds component,
+  // backed by usePushPreferences / push_subscriptions in Supabase -- system
+  // B, the real OS-level push). Manish set system B to OI>=50%/Vol>=100%
+  // expecting it to cut the flood, but system A never read those values at
+  // all -- it kept firing on its own stale 10-30% default with no vol or
+  // signal-mute check whatsoever, which is exactly the "still getting
+  // 10-15 alerts every 5 min below my threshold" report. Fix: make system A
+  // read the SAME numbers from system B (one source of truth) instead of
+  // maintaining its own parallel copy.
+  const { spikeThreshold, volThreshold, strikeZone, enabledSignals, toggleSignal, saveThresholds } = usePushPreferences()
+  const [alerts, setAlerts]           = useState<Alert[]>([])
+  const [priorityAlerts, setPriorityAlerts] = useState<Alert[]>([])
+  const [marketOpen, setMarketOpen]   = useState(false)
+  const [lastSeenId, setLastSeenId]   = useState(0)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  // Alerts polling is member-only data -- wait for a real sign-in session before
+  // starting it, so a signed-out visitor or a stale tab left open after logout
+  // doesn't poll forever with nothing to send (Sep 27 2026: this was generating
+  // most of the gate's no-token traffic -- see /admin/gate-stats blocked_clients).
+  const [signedIn, setSignedIn] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    // Oct 15 2026: getSessionCached() can reject on a one-off cross-tab
+    // lock race (see lib/supabase.ts) -- retry once so signedIn doesn't
+    // silently stay false (alerts never start polling) for this mount.
+    getSessionCached().catch(() => getSessionCached()).then(({ data }) => { if (live) setSignedIn(!!data.session) }).catch(() => {})
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedIn(!!session)
+    })
+    return () => { live = false; sub.subscription.unsubscribe() }
+  }, [])
+
+  const getAudioCtx = useCallback((): AudioContext => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
+    if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume()
+    return audioCtxRef.current
+  }, [])
+
+  const playSound = useCallback(() => {
+    try { playTerminalBeep(getAudioCtx()) } catch (e) {}
+  }, [getAudioCtx])
+
+  // Oct 18 2026: a user who already had alerts enabled from a previous
+  // session (gn_alerts_enabled=true in localStorage, restored below without
+  // a click) never gets their AudioContext unlocked this session -- it's
+  // only created/resumed inside enableAlerts() or the Test Sound button,
+  // both direct clicks. Browsers block audio.start() with no prior user
+  // gesture in the page, so the very first real alert fires silently and
+  // support hears "alert sound doesn't work" even though it's enabled.
+  // Fix: unlock on the page's first real interaction, whatever it is.
+  useEffect(() => {
+    const unlock = () => { try { getAudioCtx() } catch {} }
+    document.addEventListener('pointerdown', unlock, { once: true, passive: true })
+    document.addEventListener('keydown', unlock, { once: true })
+    return () => {
+      document.removeEventListener('pointerdown', unlock)
+      document.removeEventListener('keydown', unlock)
+    }
+  }, [getAudioCtx])
+
+  useEffect(() => {
+    if (!signedIn) return
+    let localAlerts: Alert[] = []
+    try {
+      const saved = localStorage.getItem('gn_alerts')
+      if (saved) { localAlerts = JSON.parse(saved); setAlerts(localAlerts) }
+      const seen = localStorage.getItem('gn_alerts_last_seen')
+      if (seen) setLastSeenId(Number(seen))
+    } catch {}
+    setMarketOpen(isMarketOpen())
+    const t = setInterval(() => setMarketOpen(isMarketOpen()), 30000)
+
+    // (Aug 26 2026): the live SW->tab relay only ever reaches a tab that
+    // happens to be open at the exact moment a push fires -- anything
+    // that arrived while no tab was open is permanently missing from
+    // localStorage, even though the native OS notification still showed.
+    // Fetching real history from the backend on load fixes the panel
+    // looking "stuck" on whatever was last relayed live.
+    fetch(`${API}/alerts?limit=100`)
+      .then(r => r.json())
+      .then(data => {
+        const serverAlerts: Alert[] = data.alerts || []
+        if (!serverAlerts.length) return
+        setAlerts(prev => {
+          const byId = new Map(prev.map(a => [a.id, a]))
+          for (const a of serverAlerts) if (!byId.has(a.id)) byId.set(a.id, a)
+          const merged = Array.from(byId.values())
+            .sort((a, b) => sortKey(b) - sortKey(a))
+            .slice(0, 100)
+          try { localStorage.setItem('gn_alerts', JSON.stringify(merged)) } catch {}
+          return merged
+        })
+      })
+      .catch(() => {})
+
+    return () => clearInterval(t)
+  }, [signedIn])
+
+  // Priority signals (currently just NEAR_STRIKE_UNWIND) are fetched on
+  // their own, filtered server-side, so high-volume routine signal types
+  // can never bury them before anyone sees them -- unlike the general
+  // feed's plain top-100 window, this list only ever holds these rarer,
+  // higher-conviction alerts.
+  useEffect(() => {
+    if (!signedIn) return
+    const fetchPriority = () => {
+      fetch(`${API}/alerts?limit=20&signal=${PRIORITY_SIGNALS.join(',')}`)
+        .then(r => r.json())
+        .then(data => setPriorityAlerts(data.alerts || []))
+        .catch(() => {})
+    }
+    fetchPriority()
+    const t = setInterval(fetchPriority, 60 * 1000)
+    return () => clearInterval(t)
+  }, [signedIn])
+
+  useEffect(() => {
+    if ('Notification' in window) setPermission(Notification.permission)
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(async () => {
+        setSwReady(true)
+        const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
+        if (wasEnabled && Notification.permission === 'granted') {
+          setEnabled(true)
+          // spikeThreshold/volThreshold/enabledSignals from usePushPreferences
+          // may still be mid-load (defaults) at this exact instant -- the
+          // sync effect below re-sends the real values to the SW the moment
+          // they finish loading, so this initial ENABLE doesn't need to be
+          // perfect, just get the engine running.
+          navigator.serviceWorker.ready.then(reg => {
+            reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold, volThreshold, enabledSignals, strikeZone } })
+          })
+        }
+      }).catch(() => {})
+
+      const handler = (e: MessageEvent) => {
+        if (e.data.type === 'STATUS') setEnabled(e.data.enabled)
+
+        if (e.data.type === 'NEW_ALERT') {
+          console.log('[AlertsContext] NEW_ALERT received:', e.data)
+          const newAlert: Alert = {
+            id:         e.data.id || Date.now(),
+            signal:     e.data.signal,
+            symbol:     e.data.symbol,
+            strike:     e.data.strike,
+            optionType: e.data.optionType,
+            message:    e.data.message,
+            url:        e.data.url || '/jungle',
+            receivedAt: e.data.receivedAt || new Date().toLocaleTimeString('en-IN'),
+            score:      e.data.score,
+            bias:       e.data.bias,
+            oiPct:      e.data.oiPct,
+            volPct:     e.data.volPct,
+            ltp:        e.data.ltp,
+            direction:  e.data.direction,
+          }
+
+          setAlerts(prev => {
+            if (prev.find(a => a.id === newAlert.id)) return prev
+            const updated = [newAlert, ...prev].slice(0, 100)
+            try { localStorage.setItem('gn_alerts', JSON.stringify(updated)) } catch {}
+            return updated
+          })
+
+          if (PRIORITY_SIGNALS.includes(newAlert.signal)) {
+            setPriorityAlerts(prev => {
+              if (prev.find(a => a.id === newAlert.id)) return prev
+              return [newAlert, ...prev].slice(0, 20)
+            })
+          }
+
+          setLastCheck(new Date().toLocaleTimeString('en-IN'))
+        }
+
+        if (e.data.type === 'PLAY_SOUND') {
+          if (isMarketOpen()) playSound()
+        }
+      }
+
+      navigator.serviceWorker.addEventListener('message', handler)
+
+      // Service workers get suspended by the browser after idling, which kills
+      // any setTimeout-based self-scheduling loop running inside them — that's
+      // what causes alerts to appear "stuck" then arrive in a sudden batch once
+      // the app is reopened. A foreground page timer is much more reliable, so
+      // as long as any tab is open, nudge the worker to check every 2 minutes
+      // instead of relying solely on its own internal timer.
+      const heartbeat = setInterval(() => {
+        const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
+        if (wasEnabled) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.active?.postMessage({ type: 'CHECK_NOW' })
+          }).catch(() => {})
+        }
+      }, 2 * 60 * 1000)
+
+      // BUG FIX (Jul 24 2026): the 2-min heartbeat above lives inside this
+      // page's own JS, which Chrome ALSO throttles when the tab is
+      // backgrounded -- so during long stretches with the tab inactive
+      // (e.g. working in another app), neither the SW's internal timer nor
+      // this heartbeat actually run, and alerts silently stop updating
+      // until a manual reload. Reloading works because it re-sends ENABLE,
+      // which clears dedup state and runs an immediate check. Doing the
+      // same automatically the instant the tab regains focus means no
+      // manual reload is needed to catch up.
+      const onVisible = () => {
+        if (document.visibilityState !== 'visible') return
+        const wasEnabled = localStorage.getItem('gn_alerts_enabled') === 'true'
+        if (wasEnabled) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.active?.postMessage({ type: 'CHECK_NOW' })
+          }).catch(() => {})
+        }
+      }
+      document.addEventListener('visibilitychange', onVisible)
+
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handler)
+        clearInterval(heartbeat)
+        document.removeEventListener('visibilitychange', onVisible)
+      }
+    }
+  }, [playSound])
+
+  async function enableAlerts() {
+    getAudioCtx()
+    const result = await Notification.requestPermission()
+    setPermission(result)
+    if (result !== 'granted') return
+    localStorage.setItem('gn_alerts_enabled', 'true')
+    setEnabled(true)
+    const reg = await navigator.serviceWorker.ready
+    reg.active?.postMessage({ type: 'ENABLE', data: { spikeThreshold, volThreshold, enabledSignals, strikeZone } })
+
+    // Also subscribe this device to real server-sent push — this is what
+    // makes alerts arrive reliably even when the tab is closed/backgrounded,
+    // unlike the local checks above which browsers can suspend.
+    try {
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (vapidKey && 'PushManager' in window) {
+        let sub = await reg.pushManager.getSubscription()
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidKey),
+          })
+        }
+        // Oct 7 2026: a disable->enable cycle unsubscribes the old push
+        // endpoint and gets issued a brand new one, so this isn't just
+        // updating the existing row -- it creates a NEW one. Sending only
+        // spikeThreshold here (as before) meant volThreshold/enabledSignals
+        // silently reset to their column defaults (20%/all-on) every time
+        // someone toggled alerts off and back on, discarding whatever
+        // they'd customized. Send the full current state instead.
+        await fetch(`${API}/push-subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub.toJSON(), spikeThreshold, volThreshold, enabledSignals, strikeZone }),
+        })
+      }
+    } catch (e) {
+      console.error('[Push] Subscribe failed:', e)
+    }
+  }
+
+  async function disableAlerts() {
+    localStorage.setItem('gn_alerts_enabled', 'false')
+    setEnabled(false)
+    const reg = await navigator.serviceWorker.ready
+    reg.active?.postMessage({ type: 'DISABLE' })
+
+    try {
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await fetch(`${API}/push-unsubscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        })
+        await sub.unsubscribe()
+      }
+    } catch (e) {
+      console.error('[Push] Unsubscribe failed:', e)
+    }
+  }
+
+  async function checkNow() {
+    const reg = await navigator.serviceWorker.ready
+    reg.active?.postMessage({ type: 'CHECK_NOW' })
+    setLastCheck(new Date().toLocaleTimeString('en-IN'))
+  }
+
+  function clearAlerts() {
+    setAlerts([])
+    try { localStorage.removeItem('gn_alerts') } catch {}
+  }
+
+  function markAllRead() {
+    const maxId = alerts.reduce((m, a) => Math.max(m, a.id), 0)
+    setLastSeenId(maxId)
+    try { localStorage.setItem('gn_alerts_last_seen', String(maxId)) } catch {}
+  }
+
+  // Whenever the shared push prefs change -- either they finish loading
+  // after mount, or Manish hits Save on the "Push alerts when..." box on
+  // any page -- resync the in-browser engine (SW) to the SAME numbers,
+  // instead of it silently running on whatever it started with. This is
+  // what makes the OI%/Vol%/signal-mute settings actually take effect on
+  // this engine too, not just on real OS push notifications.
+  useEffect(() => {
+    if (!enabled) return
+    navigator.serviceWorker?.ready.then(reg => {
+      reg.active?.postMessage({ type: 'UPDATE_THRESHOLD', data: { spikeThreshold, volThreshold, enabledSignals, strikeZone } })
+    })
+  }, [enabled, spikeThreshold, volThreshold, enabledSignals, strikeZone])
+
+  // Oct 16 2026 ("shows everything, becomes noisy" report): enabledSignals
+  // (the "Alerts: OI Spikes / Fresh Builds / ..." mute toggles on Jungle/UOA)
+  // was only ever being sent to the service-worker push engine -- the bell
+  // sidebar (and its unread badge) rendered the raw `alerts` list straight
+  // from the server/SW relay with no regard for what's muted, so muting a
+  // signal there stopped the OS push notification but the in-app panel kept
+  // showing it anyway. visibleAlerts is what every in-app display should use
+  // instead; `alerts` itself is left untouched since it's still the raw
+  // merge source (and the full /alerts page has its own separate, explicit
+  // signal-type filter dropdown where showing everything is the point).
+  const visibleAlerts = enabledSignals ? alerts.filter(a => enabledSignals.includes(a.signal)) : alerts
+  const unreadCount = visibleAlerts.filter(a => a.id > lastSeenId).length
+
+  return (
+    <AlertsContext.Provider value={{
+      alerts, visibleAlerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck, unreadCount,
+      spikeThreshold, volThreshold, strikeZone, enabledSignals, toggleSignal, saveThresholds,
+      enableAlerts, disableAlerts, checkNow, clearAlerts, markAllRead, playSound,
+    }}>
+      {children}
+    </AlertsContext.Provider>
+  )
+}
+
+export function useAlerts() {
+  const ctx = useContext(AlertsContext)
+  if (!ctx) throw new Error('useAlerts must be used within AlertsProvider')
+  return ctx
+}

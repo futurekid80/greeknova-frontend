@@ -25,6 +25,14 @@ export interface DashHit {
   new_premium: number
   activity?: 'WRITING' | 'BUYING' | 'NEUTRAL'
   activity_label?: string
+  prem_low?: number
+  prem_high?: number
+  prem_range_pct?: number
+  hr_activity?: 'WRITING' | 'BUYING' | 'NEUTRAL'
+  hr_activity_label?: string
+  hr_oi_added?: number
+  hr_share_pct?: number
+  activity_conflict?: boolean
   freshness?: string
 }
 
@@ -260,6 +268,8 @@ export default function StealthDashboard({
                 <b className="text-white">Activity</b> is inferred from the premium: <b>OI up + premium down = Writing</b> (sellers adding),
                 <b> OI up + premium up = Buying</b>, and <b>Quiet</b> = premium almost unchanged. Typical reading: Call Buying + Put Writing
                 leans bullish; Put Buying + Call Writing leans bearish; the <i>Bias by symbol</i> panel above sums this up per stock.
+                In the EOD window the label compares only yesterday's close with now, so a premium that swings and comes back reads Quiet.
+                Check the <i>Day range</i> under the premium, and the amber <b>⚠ Last hour</b> note, which appears when the last hour alone points the other way.
               </li>
               <li>
                 <b className="text-white">Tier</b> (Elite / Strong / Watch) ranks how strong the OI growth is for how quiet the premium stayed — Elite is
@@ -529,7 +539,14 @@ export default function StealthDashboard({
                     <td className="px-2 py-2 text-right font-bold text-white">{h.strike.toLocaleString('en-IN')}</td>
                     <td className="px-2 py-2"><Chip cls={h.option_type === 'CE' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : 'text-rose-300 border-rose-700/50 bg-rose-950/30'}>{h.option_type}</Chip></td>
                     <td className="px-2 py-2"><Chip cls={MONEY_CHIP[m.label]}>{m.label}</Chip><div className="text-[10px] text-gray-500">{m.label === 'ATM' ? 'At Strike' : `${m.label === 'ITM' ? '' : ''}+${m.n}`}</div></td>
-                    <td className="px-2 py-2">{h.activity ? <Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip> : <span className="text-gray-600">—</span>}</td>
+                    <td className="px-2 py-2">{h.activity ? <Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip> : <span className="text-gray-600">—</span>}
+                      {h.activity_conflict && h.hr_activity && (
+                        <div className="mt-1 text-[10px] font-semibold text-amber-300" title={`Whole-day reading and the last hour disagree. ${h.hr_share_pct ?? '?'}% of today's OI build came in the last hour.`}>
+                          ⚠ Last hour: {ACT_ICON[h.hr_activity]} {h.hr_activity_label ?? h.hr_activity}
+                          {h.hr_share_pct != null && <span className="text-gray-500 font-normal"> ({h.hr_share_pct}% of build)</span>}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-right"><span className="font-bold text-emerald-400">↗ +{h.oi_pct}%</span><div className="text-[10px] text-gray-500">was {fmtOI(h.old_oi)}</div></td>
                     <td className="px-2 py-2 text-right"><span className="font-bold text-white">{fmtOI(h.new_oi)}</span><div className="text-[10px] text-gray-500">{h.new_oi.toLocaleString('en-IN')}</div></td>
                     <td className="px-2 py-2 text-right bg-emerald-950/20">
@@ -537,6 +554,9 @@ export default function StealthDashboard({
                         {mv > 0 ? '+' : mv < 0 ? '−' : ''}{Math.abs(mv).toFixed(2)}%
                       </span>
                       {ultra && <div className="text-[9px] font-bold text-emerald-400 mt-0.5">⚡ ULTRA-LOW</div>}
+                      {h.prem_low != null && h.prem_high != null && (
+                        <div className="text-[10px] text-gray-500 mt-0.5" title="Lowest to highest premium traded today">Day range {inr(h.prem_low)}–{inr(h.prem_high)}</div>
+                      )}
                     </td>
                     <td className="px-2 py-2 text-right text-gray-400">{inr(h.old_premium)} → <b className="text-white">{inr(h.new_premium)}</b></td>
                     <td className="px-2 py-2 text-right text-gray-200">{inr(h.cmp)}</td>

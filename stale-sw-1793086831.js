@@ -1,0 +1,410 @@
+// ── GreekNova Service Worker ──────────────────────────────────────────────────
+// BUMP THIS VERSION every time you change this file.
+const SW_VERSION = 'v2.1.0'
+
+const API = 'https://greeknova-backend-production.up.railway.app'
+const CHECK_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
+
+self.addEventListener('install', (e) => {
+  console.log(`[SW ${SW_VERSION}] Installing`)
+  self.skipWaiting()
+})
+
+// Keep SW alive with periodic fetch events
+self.addEventListener('periodicsync', (e) => {
+  if (e.tag === 'gn-alerts') {
+    e.waitUntil(runChecks())
+  }
+})
+
+self.addEventListener('activate', (e) => {
+  console.log(`[SW ${SW_VERSION}] Activated`)
+  e.waitUntil(self.clients.claim())
+})
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let spikeThreshold = 10
+// Oct 7 2026: volThreshold/enabledSignals now mirror the same "Push alerts
+// when..." OI%/Vol% box and per-signal mute toggles that already govern real
+// OS push (see push_notifications.py's broadcast_alert) -- this in-browser
+// engine used to ignore both entirely, firing on a hardcoded vol_threshold=50
+// and with zero signal-mute enforcement regardless of what was toggled off
+// on the Jungle/UOA pages. null enabledSignals means "no mute list saved
+// yet / everything on", matching the backend's own null-means-all-on default.
+let volThreshold    = 20
+let enabledSignals  = null
+let enabled        = false
+let schedulerTimer = null
+let previousKeys   = new Set()  // dedup alerts
+let authToken      = null       // sign-in token handed over by the page
+function authHeaders() {
+  return authToken ? { Authorization: `Bearer ${authToken}` } : {}
+}
+
+// ── Market hours check (IST) ──────────────────────────────────────────────────
+function isMarketOpen() {
+  const now = new Date()
+  const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+  const day = ist.getDay()
+  if (day === 0 || day === 6) return false  // weekend
+  const h = ist.getHours()
+  const m = ist.getMinutes()
+  const total = h * 60 + m
+  return total >= 555 && total <= 930  // 9:15 AM to 3:30 PM IST
+}
+
+// ── Self-scheduling loop ──────────────────────────────────────────────────────
+// SW keeps itself alive by extending its lifetime with waitUntil
+// This fires even when all tabs are on other pages
+function scheduleNext() {
+  if (!enabled) return
+
+  schedulerTimer = setTimeout(() => {
+    if (!enabled) return
+
+    // Extend SW lifetime by doing a fetch
+    const keepAlivePromise = fetch(`${API}/health`).catch(() => {})
+
+    Promise.all([keepAlivePromise, runChecks()]).then(() => {
+      scheduleNext()
+    }).catch(e => {
+      console.error('[SW] Check failed:', e)
+      scheduleNext()
+    })
+    // BUG FIX (Jul 24 2026): this used to end with
+    // `event?.waitUntil?.(checkPromise)` -- but `event` was never defined
+    // in this scope (waitUntil only exists on real dispatched events like
+    // push/install/periodicsync, not inside a plain setTimeout callback).
+    // That line threw an uncaught ReferenceError on every single cycle,
+    // silently failing the one thing it was meant to do: extend the SW's
+    // lifetime so the browser wouldn't kill it mid-check. Removed -- the
+    // Promise chain above still runs to completion on its own regardless.
+  }, CHECK_INTERVAL_MS)
+}
+
+// ── Real Web Push handler ────────────────────────────────────────────────────
+// The server now sends push events directly (services/push_checker.py on the
+// backend), so this fires reliably even when no tab is open — unlike the
+// local self-scheduling checks above, which the browser can suspend.
+self.addEventListener('push', (event) => {
+  let payload = {}
+  try { payload = event.data ? event.data.json() : {} } catch (e) {}
+
+  const title = payload.title || 'GreekNova Alert'
+  const body  = payload.body  || ''
+  const url   = payload.url   || '/alerts'
+  const alert = payload.alert || {}
+
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag: `push_${alert.symbol || ''}_${Date.now()}`,
+        requireInteraction: false,
+        data: { url },
+      }),
+      self.clients.matchAll({ type: 'window' }).then(clients => {
+        // BUG FIX (Jul 17): real server-pushed alerts never triggered our
+        // custom sound — only the OLD client-side polling checks did, via
+        // this same PLAY_SOUND postMessage. The OS's own default notification
+        // sound was never reliably firing for GreekNova specifically (Chrome
+        // played sound fine for other sites on the same Mac), so real pushes
+        // were silently arriving without any audio. This only plays sound
+        // when a tab is actually open to receive the message — same
+        // limitation the old polling checks always had.
+        clients.forEach(c => c.postMessage({ type: 'PLAY_SOUND' }))
+        clients.forEach(c => c.postMessage({
+          type: 'NEW_ALERT',
+          id: Date.now() + Math.random(),
+          url,
+          receivedAt: new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
+          ...alert,
+        }))
+      }),
+    ])
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url || '/alerts'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window' }).then(clients => {
+      for (const c of clients) {
+        if (c.url.includes(self.location.origin) && 'focus' in c) return c.focus()
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url)
+    })
+  )
+})
+
+// ── Keep-alive ping ───────────────────────────────────────────────────────────
+self.addEventListener('fetch', (e) => {
+  if (e.request.url.includes('/sw-keepalive')) {
+    e.respondWith(
+      new Response(JSON.stringify({ alive: true, enabled, version: SW_VERSION }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    )
+  }
+})
+
+// ── Message handler ───────────────────────────────────────────────────────────
+self.addEventListener('message', async (event) => {
+  const { type, data } = event.data || {}
+
+  if (type === 'TOKEN') {
+    authToken = data?.token || null
+  }
+
+  if (type === 'ENABLE') {
+    enabled = true
+    spikeThreshold = data?.spikeThreshold ?? 10
+    volThreshold = data?.volThreshold ?? 20
+    enabledSignals = data?.enabledSignals ?? null
+    console.log(`[SW ${SW_VERSION}] Enabled | oi>=${spikeThreshold} vol>=${volThreshold} signals=${enabledSignals ? enabledSignals.join(',') : 'all'}`)
+    // Clear old dedup keys on enable
+    previousKeys.clear()
+    // Run immediate check + start self-scheduling
+    if (schedulerTimer) clearTimeout(schedulerTimer)
+    event.waitUntil(runChecks().then(() => scheduleNext()))
+  }
+
+  if (type === 'DISABLE') {
+    enabled = false
+    if (schedulerTimer) {
+      clearTimeout(schedulerTimer)
+      schedulerTimer = null
+    }
+    console.log(`[SW ${SW_VERSION}] Disabled`)
+  }
+
+  if (type === 'UPDATE_THRESHOLD') {
+    spikeThreshold = data?.spikeThreshold ?? 10
+    volThreshold = data?.volThreshold ?? 20
+    enabledSignals = data?.enabledSignals ?? null
+    previousKeys.clear()  // Clear dedup so alerts refire at new threshold
+    console.log(`[SW ${SW_VERSION}] Thresholds → oi>=${spikeThreshold} vol>=${volThreshold} signals=${enabledSignals ? enabledSignals.join(',') : 'all'}`)
+  }
+
+  if (type === 'CHECK_NOW') {
+    if (enabled) {
+      event.waitUntil(runChecks())
+    }
+  }
+
+  // Previously ignored — the page pings this every few minutes specifically
+  // to keep the worker from being suspended. Now it also triggers a real
+  // check, giving the alert engine a second, independent heartbeat on top
+  // of its own internal timer (which the browser can silently kill).
+  if (type === 'KEEPALIVE') {
+    if (enabled) {
+      event.waitUntil(runChecks())
+    }
+  }
+
+  if (type === 'GET_STATUS') {
+    event.source?.postMessage({
+      type: 'STATUS',
+      data: { enabled, spikeThreshold, volThreshold, enabledSignals, version: SW_VERSION },
+    })
+  }
+})
+
+// ── Main check runner ─────────────────────────────────────────────────────────
+async function runChecks() {
+  if (!enabled) return
+
+  // ── MARKET HOURS GUARD ────────────────────────────────────────────────────
+  if (!isMarketOpen()) {
+    console.log('[SW] Market closed — skipping checks')
+    notifyClients({ type: 'MARKET_CLOSED' })
+    return
+  }
+
+  console.log(`[SW ${SW_VERSION}] Running checks at ${new Date().toLocaleTimeString('en-IN')}`)
+
+  try { await checkOptionsJungle() } catch (e) { console.error('[SW] Jungle check failed:', e) }
+  try { await checkUOAWhales()     } catch (e) { console.error('[SW] UOA check failed:', e)    }
+}
+
+// ── Notify all open tabs ──────────────────────────────────────────────────────
+function notifyClients(data) {
+  self.clients.matchAll({ type: 'window' }).then(clients => {
+    clients.forEach(c => c.postMessage(data))
+  })
+}
+
+function playSound() {
+  notifyClients({ type: 'PLAY_SOUND' })
+}
+
+// ── Broadcast alert to feed ───────────────────────────────────────────────────
+function broadcastAlert(alert) {
+  self.clients.matchAll({ type: 'window' }).then(clients => {
+    clients.forEach(c => c.postMessage({ type: 'NEW_ALERT', ...alert }))
+  })
+}
+
+// ── Options Jungle alerts (OI spikes + Vol fresh builds) ──────────────────────
+async function checkOptionsJungle() {
+  const res = await fetch(
+    `${API}/options-jungle?oi_threshold=${spikeThreshold}&vol_threshold=${volThreshold}`,
+    { headers: authHeaders() }
+  )
+  const json = await res.json()
+
+  // OI Spikes
+  if (!enabledSignals || enabledSignals.includes('OI_SPIKE')) {
+  for (const spike of (json.oi_spikes || [])) {
+    const key = `oi_${spike.tradingsymbol}_${json.ts_new}`
+    if (previousKeys.has(key)) continue
+    previousKeys.add(key)
+
+    const isBuild = spike.direction === 'BUILD'
+    const icon    = isBuild ? '🔥' : '📉'
+    const expStr  = spike.expiry ? ` (${spike.expiry.slice(5).replace('-','/')})` : ''
+    const title   = `${icon} OI ${spike.direction} — ${spike.symbol} ${spike.strike} ${spike.option_type}${expStr}`
+    // (Oct 27 2026, Vinod feedback): dropped the repeated "in 5 min" -- mirrors services/push_checker.py's server-side version of this same message.
+    const body    = `OI ${spike.oi_pct > 0 ? '+' : ''}${spike.oi_pct}% | OI: ${fmtOI(spike.new_oi)} | LTP: ₹${spike.last_price}${spike.interpretation ? ' | ' + spike.interpretation.replace(/_/g,' ') : ''}`
+
+    playSound()
+
+    await self.registration.showNotification(title, {
+      body,
+      icon: '/favicon.ico',
+      tag: key,
+      requireInteraction: false,
+      data: { url: '/jungle' },
+    })
+
+    broadcastAlert({
+      id:         Date.now() + Math.random(),
+      signal:     'OI_SPIKE',
+      symbol:     spike.symbol,
+      strike:     spike.strike,
+      optionType: spike.option_type,
+      direction:  spike.direction,
+      message:    body,
+      url:        '/jungle',
+      receivedAt: new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
+      oiPct:      spike.oi_pct,
+      ltp:        spike.last_price,
+    })
+  }
+  }
+
+  // Volume Fresh Builds only (FRESH_BUILD = vol spike + OI building)
+  if (!enabledSignals || enabledSignals.includes('FRESH_BUILD')) {
+  for (const spike of (json.vol_spikes || [])) {
+    if (spike.vol_signal !== 'FRESH_BUILD') continue
+    const key = `vol_${spike.tradingsymbol}_${json.ts_new}`
+    if (previousKeys.has(key)) continue
+    previousKeys.add(key)
+
+    const expStr = spike.expiry ? ` (${spike.expiry.slice(5).replace('-','/')})` : ''
+    const title = `🌱 Fresh Build — ${spike.symbol} ${spike.strike} ${spike.option_type}${expStr}`
+    const body  = `Vol +${spike.vol_pct}% | OI +${spike.oi_pct}% | LTP: ₹${spike.last_price}`
+
+    playSound()
+
+    await self.registration.showNotification(title, {
+      body,
+      icon: '/favicon.ico',
+      tag: key,
+      requireInteraction: false,
+      data: { url: '/jungle' },
+    })
+
+    broadcastAlert({
+      id:         Date.now() + Math.random(),
+      signal:     'FRESH_BUILD',
+      symbol:     spike.symbol,
+      strike:     spike.strike,
+      optionType: spike.option_type,
+      message:    body,
+      url:        '/jungle',
+      receivedAt: new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
+      volPct:     spike.vol_pct,
+      oiPct:      spike.oi_pct,
+      ltp:        spike.last_price,
+    })
+  }
+  }
+}
+
+// ── UOA Whale alerts ──────────────────────────────────────────────────────────
+async function checkUOAWhales() {
+  const res  = await fetch(`${API}/uoa`, { headers: authHeaders() })
+  const json = await res.json()
+
+  for (const sig of (json.signals || [])) {
+    // Only alert on high conviction (score 4+) or two-way activity
+    if (sig.score < 4) continue
+    // Oct 7 2026: UOA signals used to ignore the per-signal mute list
+    // entirely -- "disabling all parameters for UOA" on the page toggles
+    // only ever updated enabled_signals server-side (for real OS push), this
+    // in-browser engine never checked it. Now it does, same as Jungle above.
+    if (enabledSignals && !enabledSignals.includes(sig.signal_type)) continue
+
+    const key = `uoa_${sig.tradingsymbol}_${json.timestamp}`
+    if (previousKeys.has(key)) continue
+    previousKeys.add(key)
+
+    const signalLabel = sig.signal_type.replace(/_/g, ' ')
+    const title = `🐋 ${signalLabel} — ${sig.symbol} ${sig.strike} ${sig.option_type}`
+    const body  = `Score ${sig.score}/5 | OI 30m: ${sig.oi_chg_30min > 0 ? '+' : ''}${sig.oi_chg_30min}% | LTP from open: ${sig.ltp_chg_from_open > 0 ? '+' : ''}${sig.ltp_chg_from_open}% | ${sig.bias} bias`
+
+    playSound()
+
+    await self.registration.showNotification(title, {
+      body,
+      icon: '/favicon.ico',
+      tag: key,
+      requireInteraction: false,
+      data: { url: '/uoa' },
+    })
+
+    broadcastAlert({
+      id:          Date.now() + Math.random(),
+      signal:      sig.signal_type,
+      symbol:      sig.symbol,
+      strike:      sig.strike,
+      optionType:  sig.option_type,
+      message:     body,
+      url:         '/uoa',
+      receivedAt:  new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
+      score:       sig.score,
+      bias:        sig.bias,
+      ltp:         sig.ltp,
+    })
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtOI(n) {
+  if (Math.abs(n) >= 10000000) return `${(n/10000000).toFixed(2)}Cr`
+  if (Math.abs(n) >= 100000)   return `${(n/100000).toFixed(1)}L`
+  // (Oct 27 2026, Vinod feedback): below 1L this used to fall through to a
+  // plain comma-grouped number (e.g. "47,175") -- mirrors the same K-tier
+  // fix made server-side in services/push_checker.py's _fmt_oi().
+  if (Math.abs(n) >= 1000)     return `${(n/1000).toFixed(0)}K`
+  return n.toLocaleString()
+}
+
+// ── Notification click → open page ───────────────────────────────────────────
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window' }).then(clients => {
+      const url = e.notification.data?.url || '/'
+      if (clients.length > 0) {
+        clients[0].focus()
+        clients[0].navigate(url)
+      } else {
+        self.clients.openWindow(url)
+      }
+    })
+  )
+})

@@ -104,6 +104,8 @@ function OIProfileInner() {
   const [expiry, setExpiry]     = useState('')
   const [strikeZone, setStrikeZone] = useState('all')
   const [view, setView]         = useState<'profile'|'timeline'|'migration'>('profile')
+  // Oct 31 2026 (Vinod): choose the change baseline on the plain OI Profile.
+  const [baseline, setBaseline] = useState<'prev'|'open'>('prev')
   const [showVacuum, setShowVacuum] = useState(true)
   const [showValueArea, setShowValueArea] = useState(true)
   const [autoEnabled, setAutoEnabled] = useState(false)
@@ -225,7 +227,7 @@ function OIProfileInner() {
   // Timeline view shows change-since-today's-open instead of change-since-
   // yesterday's-close -- same row layout, different baseline/delta source
   // (Task #38, Oct 12 2026).
-  const useOpenBaseline = view === 'timeline'
+  const useOpenBaseline = view === 'timeline' || baseline === 'open'
   const hasBaseline = useOpenBaseline ? !!data?.has_open_oi : !!data?.has_prev_oi
   const baselineLabel = useOpenBaseline ? "today's open (09:15)" : "yesterday's close"
   const displayProfile = [...profile].map(p => ({
@@ -346,6 +348,17 @@ function OIProfileInner() {
                 </button>
               ))}
             </div>
+            {view === 'profile' && (
+              <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1" title="Which baseline the small +/- OI change numbers are measured from">
+                <span className="text-[11px] text-gray-500 px-1.5">Change since:</span>
+                {([['prev', "Prev close"], ['open', "Today's open"]] as const).map(([k, label]) => (
+                  <button key={k} onClick={() => setBaseline(k)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${baseline===k ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             {(view === 'profile' || view === 'timeline') && (
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowVacuum(v => !v)}

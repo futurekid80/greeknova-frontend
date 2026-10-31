@@ -113,14 +113,15 @@ function fmtTime(ts?: string) {
 // own EOD analysis. Pure client-side, no backend round-trip: builds a CSV
 // Blob from the hits array already in hand and triggers a normal browser
 // download via a throwaway anchor tag.
-function downloadHitsCSV(hits: StealthHit[], window: string, zone: string) {
+function downloadHitsCSV(hits: StealthHit[], window: string, zone: string, view: string = 'live') {
   if (hits.length === 0) return
   const cols: (keyof StealthHit)[] = [
     'symbol', 'strike', 'option_type', 'expiry', 'strikes_away', 'atm_strike',
-    'tier', 'is_confluence', 'oi_pct', 'old_oi', 'new_oi',
+    'tier', 'activity_label', 'is_confluence', 'oi_pct', 'old_oi', 'new_oi',
     'premium_pct', 'old_premium', 'new_premium', 'cmp',
+    'freshness', 'first_seen', 'last_seen', 'times_seen', 'peak_oi_pct',
   ]
-  const header = ['Symbol', 'Strike', 'Type', 'Expiry', 'StrikesAway', 'ATMStrike', 'Tier', 'Confluence', 'OI%', 'OldOI', 'NewOI', 'Premium%', 'OldPremium', 'NewPremium', 'CMP']
+  const header = ['Symbol', 'Strike', 'Type', 'Expiry', 'StrikesAway', 'ATMStrike', 'Tier', 'Activity', 'Confluence', 'OI%', 'OldOI', 'NewOI', 'Premium%', 'OldPremium', 'NewPremium', 'CMP', 'Freshness', 'FirstSeen', 'LastSeen', 'TimesSeen', 'PeakOI%']
   const escapeCsv = (v: unknown) => {
     const s = v === null || v === undefined ? '' : String(v)
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -132,7 +133,7 @@ function downloadHitsCSV(hits: StealthHit[], window: string, zone: string) {
   const a = document.createElement('a')
   const today = new Date().toISOString().slice(0, 10)
   a.href = url
-  a.download = `strike-stealth_${window}_zone${zone}_${today}.csv`
+  a.download = `strike-stealth_${view}_${window}_zone${zone}_${today}.csv`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
@@ -250,7 +251,7 @@ export default function StrikeStealthBuildup() {
             <Zap size={20} className="text-amber-400" /> Option Strike Stealth Buildup
           </h1>
           <div className="flex items-center gap-2">
-            <button onClick={() => downloadHitsCSV(filteredHits, timeWindow, zone)}
+            <button onClick={() => downloadHitsCSV(filteredHits, timeWindow, zone, view)}
               disabled={filteredHits.length === 0}
               className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5 disabled:opacity-40 disabled:hover:text-gray-400">
               <Download size={12} /> Download CSV

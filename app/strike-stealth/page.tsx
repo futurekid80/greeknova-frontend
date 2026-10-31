@@ -27,6 +27,14 @@ interface StealthHit {
   premium_pct: number
   old_premium: number
   new_premium: number
+  // Oct 31 2026: Writing vs Buying label + fields from the saved-hits log
+  activity?: 'WRITING' | 'BUYING' | 'NEUTRAL'
+  activity_label?: string
+  freshness?: 'Fresh Now' | 'Still Active' | 'Seen Earlier Today'
+  first_seen?: string
+  last_seen?: string
+  times_seen?: number
+  peak_oi_pct?: number
 }
 
 interface ScanResult {
@@ -45,8 +53,20 @@ interface ScanResult {
 const WINDOW_OPTIONS: { value: string; label: string }[] = [
   { value: '5min', label: '5-min' },
   { value: 'hourly', label: 'Hourly' },
-  { value: 'eod', label: 'EOD / since open' },
+  { value: 'eod', label: 'EOD / vs prev close' },
 ]
+
+const ACTIVITY_STYLE: Record<string, string> = {
+  WRITING: 'text-rose-300 border-rose-700/50 bg-rose-950/30',
+  BUYING:  'text-teal-300 border-teal-700/50 bg-teal-950/30',
+  NEUTRAL: 'text-gray-300 border-gray-600 bg-gray-800/40',
+}
+
+const FRESH_STYLE: Record<string, string> = {
+  'Fresh Now':          'text-lime-300 border-lime-700/60 bg-lime-950/30',
+  'Still Active':       'text-cyan-300 border-cyan-700/60 bg-cyan-950/30',
+  'Seen Earlier Today': 'text-gray-400 border-gray-700 bg-gray-800/40',
+}
 
 const TIER_STYLE: Record<string, string> = {
   ELITE:  'text-amber-400 border-amber-700/50 bg-amber-950/20',
@@ -134,9 +154,33 @@ export default function StrikeStealthBuildup() {
   // same way Positional Intelligence's Elite Setups are used). SERVER-SIDE,
   // changes the whole scan, not a client-side filter.
   const [timeWindow, setTimeWindow] = useState('5min')
+  // (Oct 31 2026): 'live' = the on-demand scan (as before); 'saved' = every hit
+  // the background job caught today (Fresh Now / Still Active / Seen Earlier Today).
+  const [view, setView] = useState<'live' | 'saved'>('live')
+  const [savedDate, setSavedDate] = useState<string | null>(null)
+  const [writingFilter, setWritingFilter] = useState<'all' | 'WRITING' | 'BUYING'>('all')
+  const [freshFilter, setFreshFilter] = useState<'all' | 'Fresh Now' | 'Still Active' | 'Seen Earlier Today'>('all')
 
-  const load = useCallback((z: string, w: string) => {
+  const load = useCallback((z: string, w: string, v: 'live' | 'saved') => {
     setLoading(true)
+    if (v === 'saved') {
+      fetch(`${API}/option-stealth-buildup/saved?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
+        .then(r => r.json())
+        .then(j => {
+          setSavedDate(j.date ?? null)
+          const hits: StealthHit[] = (j.events || []).map((e: any) => ({
+            ...e,
+            tier: e.best_tier || e.tier,
+            tier_label: ((e.best_tier || e.tier) as string).charAt(0) + ((e.best_tier || e.tier) as string).slice(1).toLowerCase(),
+            oi_pct: Number(e.oi_pct), premium_pct: Number(e.premium_pct),
+            old_premium: Number(e.old_premium), new_premium: Number(e.new_premium),
+          }))
+          setData({ date: j.date, total: hits.length, confluence_count: hits.filter(h => h.is_confluence).length, hits, window: j.window, window_label: j.window_label })
+        })
+        .catch(() => setData({ error: 'Failed to load' }))
+        .finally(() => setLoading(false))
+      return
+    }
     fetch(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
       .then(r => r.json())
       .then(setData)
@@ -144,10 +188,10 @@ export default function StrikeStealthBuildup() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load(zone, timeWindow) }, [load, zone, timeWindow])
+  useEffect(() => { load(zone, timeWindow, view) }, [load, zone, timeWindow, view])
   useEffect(() => {
     setShowAll(false)
-  }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone, timeWindow])
+  }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone, timeWindow, view, writingFilter, freshFilter])
 
   const allHits = data?.hits || []
   const expiryOptions = Array.from(new Set(allHits.map(h => h.expiry).filter((e): e is string => !!e))).sort()
@@ -155,6 +199,8 @@ export default function StrikeStealthBuildup() {
   const filteredHits = allHits
     .filter(h => tierFilter === 'all' || h.tier === tierFilter)
     .filter(h => !confluenceOnly || h.is_confluence)
+    .filter(h => writingFilter === 'all' || h.activity === writingFilter)
+    .filter(h => view !== 'saved' || freshFilter === 'all' || h.freshness === freshFilter)
     .filter(h => instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol)))
     .filter(h => optionTypeFilter === 'all' || h.option_type === optionTypeFilter)
     .filter(h => expiryFilter === 'all' || h.expiry === expiryFilter)
@@ -177,7 +223,7 @@ export default function StrikeStealthBuildup() {
               className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5 disabled:opacity-40 disabled:hover:text-gray-400">
               <Download size={12} /> Download CSV
             </button>
-            <button onClick={() => load(zone, timeWindow)}
+            <button onClick={() => load(zone, timeWindow, view)}
               className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
             </button>
@@ -186,13 +232,32 @@ export default function StrikeStealthBuildup() {
         <p className="text-xs text-gray-500 mb-4">
           OI piling up hard at a single strike (within the zone picked below) while that strike&apos;s own premium
           barely moves — size going on without moving the tape, measured over whichever window you pick: 5-min for
-          an instant pulse, Hourly for intraday monitoring, or EOD/since-open for a next-day trade read, the same
+          an instant pulse, Hourly for intraday monitoring, or EOD (measured against yesterday&apos;s close) for a next-day trade read, the same
           way you&apos;d use Positional Intelligence&apos;s Elite Setups. 🔗 Confluence marks a symbol that also has
           a live FUT-level Stealth Buildup right now (always within ATM±5, regardless of the zone picked below) —
           the strongest version of this signal.
         </p>
 
-        {data?.ts_new && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-gray-400 mr-1">📋 View:</span>
+          {([['live', 'Live scan'], ['saved', 'Saved today']] as const).map(([v, label]) => (
+            <button key={v} onClick={() => setView(v)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                view === v
+                  ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+              }`}>
+              {label}
+            </button>
+          ))}
+          {view === 'saved' && (
+            <span className="text-[11px] text-gray-500 ml-1">
+              Every hit caught by the 5-minute background scan{savedDate ? ` on ${savedDate}` : ''} — nothing is lost if you weren&apos;t watching.
+            </span>
+          )}
+        </div>
+
+        {view === 'live' && data?.ts_new && (
           <p className="text-[11px] text-gray-500 mb-4">
             {data.window_label ?? 'Window'}: {fmtTime(data.ts_old)} → {fmtTime(data.ts_new)} IST ·{' '}
             {data.total ?? 0} hits, {data.confluence_count ?? 0} with Confluence
@@ -215,6 +280,34 @@ export default function StrikeStealthBuildup() {
 
         <div className="mb-4">
           <StrikeZoneFilter value={zone} onChange={setZone} label="🎯 Strike zone:" />
+        </div>
+
+        {view === 'saved' && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {(['all', 'Fresh Now', 'Still Active', 'Seen Earlier Today'] as const).map(f => (
+              <button key={f} onClick={() => setFreshFilter(f)}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                  freshFilter === f
+                    ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
+                    : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+                }`}>
+                {f === 'all' ? 'Any freshness' : f}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 mb-4">
+          {(['all', 'WRITING', 'BUYING'] as const).map(a => (
+            <button key={a} onClick={() => setWritingFilter(a)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                writingFilter === a
+                  ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+              }`}>
+              {a === 'all' ? 'Writing + Buying' : a === 'WRITING' ? 'Writing only' : 'Buying only'}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-2 mb-4">
@@ -310,6 +403,16 @@ export default function StrikeStealthBuildup() {
                         {h.strikes_away === 0 ? 'ATM' : `${h.strikes_away > 0 ? '+' : ''}${h.strikes_away} from ATM`}
                       </span>
                     )}
+                    {h.activity_label && (
+                      <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${ACTIVITY_STYLE[h.activity ?? 'NEUTRAL']}`}>
+                        {h.activity_label}
+                      </span>
+                    )}
+                    {h.freshness && (
+                      <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${FRESH_STYLE[h.freshness]}`}>
+                        {h.freshness}
+                      </span>
+                    )}
                     {h.is_confluence && (
                       <span className="text-[10px] font-bold text-fuchsia-400 border border-fuchsia-700/50 bg-fuchsia-950/30 rounded px-1.5 py-0.5">
                         🔗 Confluence
@@ -320,6 +423,11 @@ export default function StrikeStealthBuildup() {
                     OI +{h.oi_pct}% ({fmtOI(h.old_oi)} → {fmtOI(h.new_oi)}) · Premium {h.premium_pct >= 0 ? '+' : ''}{h.premium_pct}%
                     (₹{h.old_premium} → ₹{h.new_premium}) · CMP ₹{h.cmp}
                   </p>
+                  {h.first_seen && (
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      First seen {fmtTime(h.first_seen)} · last {fmtTime(h.last_seen)} · caught {h.times_seen ?? 1}× · peak OI +{h.peak_oi_pct}%
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

@@ -1031,6 +1031,18 @@ export default function MarketPulse() {
   const [loading, setLoading]         = useState(true)
   // Oct 31 2026: new dashboard-format feed is previewable with ?v=new while Manish reviews it.
   const [newFeed, setNewFeed]         = useState(false)
+  // Customisable Pulse blocks (new layout only): hidden block ids, remembered per browser.
+  const [hiddenBlocks, setHiddenBlocks] = useState<string[]>([])
+  const [showCustomise, setShowCustomise] = useState(false)
+  useEffect(() => {
+    try { const raw = localStorage.getItem('gn_pulse_hidden'); if (raw) setHiddenBlocks(JSON.parse(raw)) } catch {}
+  }, [])
+  const toggleBlock = (id: string) => setHiddenBlocks(prev => {
+    const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    try { localStorage.setItem('gn_pulse_hidden', JSON.stringify(next)) } catch {}
+    return next
+  })
+  const vis = (id: string) => !newFeed || !hiddenBlocks.includes(id)
   useEffect(() => {
     try { setNewFeed(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
   }, [])
@@ -1424,13 +1436,34 @@ export default function MarketPulse() {
           </div>
         )}
         
-        {/* What's happening right now (preview) */}
-        {newFeed && <PulseNowStrip stocks={feedStocks} loading={loading} day={pulseMeta?.date || null} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
+        {/* Customise (preview) */}
+        {newFeed && (
+          <div className="mb-3 flex flex-col items-end">
+            <button onClick={() => setShowCustomise(v => !v)}
+              className="text-xs text-gray-300 border border-gray-700 rounded-lg px-3 py-1.5 hover:text-white">⚙ Customise this page{hiddenBlocks.length ? ` · ${hiddenBlocks.length} hidden` : ''}</button>
+            {showCustomise && (
+              <div className="mt-2 w-full sm:w-auto rounded-xl border border-gray-700 bg-gray-900/60 p-3">
+                <p className="text-[11px] text-gray-500 mb-2">Choose which sections to show. Saved on this browser.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                  {([['now', "What's happening right now"], ['screens', 'Screens (Scans & Heatmap)'], ['sectors', 'Sector performance'], ['spotlight', 'Spotlight'], ['leaders', 'Activity leaders'], ['breakout', 'Volume + OI breakout'], ['breadth', 'Market breadth']] as const).map(([id, label]) => (
+                    <label key={id} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                      <input type="checkbox" checked={!hiddenBlocks.includes(id)} onChange={() => toggleBlock(id)} className="accent-indigo-500" />{label}
+                    </label>
+                  ))}
+                </div>
+                {hiddenBlocks.length > 0 && <button onClick={() => { setHiddenBlocks([]); try { localStorage.removeItem('gn_pulse_hidden') } catch {} }} className="mt-2 text-[11px] text-indigo-300 hover:text-indigo-200">Show everything again</button>}
+              </div>
+            )}
+          </div>
+        )}
 
-        {newFeed && feedStocks.length > 0 && <PulseScreens stocks={feedStocks} sectors={SECTOR_MAP} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
+        {/* What's happening right now (preview) */}
+        {newFeed && vis('now') && <PulseNowStrip stocks={feedStocks} loading={loading} day={pulseMeta?.date || null} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
+
+        {newFeed && vis('screens') && feedStocks.length > 0 && <PulseScreens stocks={feedStocks} sectors={SECTOR_MAP} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
 
         {/* Sector Performance */}
-{feedStocks.length > 0 && (() => {
+{vis('sectors') && feedStocks.length > 0 && (() => {
   const sectorPerf = getSectorPerf(feedStocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(s.symbol)))
   const hasData = sectorPerf.some(s => s.avg !== 0)
   
@@ -1494,10 +1527,10 @@ export default function MarketPulse() {
 })()}
 
         {/* Spotlight */}
-        {feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}
+        {vis('spotlight') && feedStocks.length > 0 && <Spotlight stocks={feedStocks} cprData={cprData}/>}
 
         {/* Activity Leaders */}
-        {feedStocks.length > 0 && (
+        {vis('leaders') && feedStocks.length > 0 && (
           <ActivityLeaders
             stocks={feedStocks}
             uoaSignals={uoaSignals}
@@ -1506,10 +1539,10 @@ export default function MarketPulse() {
         )}
 
         {/* Vol + OI Breakout */}
-        <VolOIBreakout onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym) }}/>
+        {vis('breakout') && <VolOIBreakout onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym) }}/>}
 
         {/* Market Breadth */}
-        {breadth.total > 0 && (
+        {vis('breadth') && breadth.total > 0 && (
           <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-6">
             <div className="flex items-center justify-between mb-2">
               <div>

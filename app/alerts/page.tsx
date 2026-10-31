@@ -7,6 +7,7 @@ import AlertThresholds from '@/components/AlertThresholds'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import { SIGNAL_META, DEFAULT_META } from '@/lib/alertMeta'
 import { formatReceivedAt } from '@/lib/formatTime'
+import AlertToggle from '@/components/AlertToggle'
 
 // Oct 12 2026 (mentee feedback via Manish): same ATM/±1/±2/±5/±10/All filter
 // as Jungle/UOA/OI Profile, mirroring services/strike_zones.py's in_zone()
@@ -40,6 +41,7 @@ export default function Alerts() {
     alerts, priorityAlerts, enabled, permission, swReady, marketOpen, lastCheck,
     spikeThreshold, volThreshold, strikeZone: pushStrikeZone, saveThresholds,
     enableAlerts, disableAlerts, checkNow, clearAlerts, playSound,
+    enabledSignals, toggleSignal,
   } = useAlerts()
 
   // Oct 7 2026: there used to be TWO separate threshold systems on this page
@@ -104,6 +106,19 @@ export default function Alerts() {
 
   // Oct 31 2026 (Vinod): full-day CSV (all signals, no 200-row cap) for the
   // day shown in the date picker, to analyse in Excel after the close.
+  // Oct 31 2026 (Pawan/Vinod, alert noise): collapse same stock+signal+strike
+  // repeats within 30 min into one row with a x N badge. Default on, remembered
+  // per browser; the server log and the CSV keep every alert.
+  const [hideRepeats, setHideRepeats] = useState(true)
+  useEffect(() => {
+    try { if (localStorage.getItem('gn_hide_repeats') === '0') setHideRepeats(false) } catch {}
+  }, [])
+  const toggleHideRepeats = () => {
+    setHideRepeats(v => {
+      try { localStorage.setItem('gn_hide_repeats', v ? '0' : '1') } catch {}
+      return !v
+    })
+  }
   const [csvBusy, setCsvBusy] = useState(false)
   const downloadDayCsv = async () => {
     setCsvBusy(true)
@@ -248,6 +263,31 @@ export default function Alerts() {
     .filter(a => !watchlistOnly || watchlist.includes(a.symbol))
     .filter(a => passesStrikeZone(a, strikeZone))
     .sort((a, b) => sortOrder === 'newest' ? sortKey(b) - sortKey(a) : sortKey(a) - sortKey(b))
+
+  // Collapse repeats (newest of each 30-min cluster is shown; count kept).
+  const repeatCounts = new Map<number, number>()
+  let shown = filtered
+  if (hideRepeats) {
+    const chrono = [...filtered].sort((x, y) => sortKey(x) - sortKey(y))
+    const last = new Map<string, { idx: number; t: number }>()
+    const kept: typeof filtered = []
+    for (const al of chrono) {
+      const k = `${al.symbol}|${al.signal}|${al.strike ?? ''}|${al.optionType ?? ''}`
+      const t = sortKey(al)
+      const prev = last.get(k)
+      if (prev && t - prev.t <= 30 * 60 * 1000) {
+        const was = kept[prev.idx]
+        repeatCounts.set(al.id, (repeatCounts.get(was.id) || 1) + 1)
+        repeatCounts.delete(was.id)
+        kept[prev.idx] = al
+        last.set(k, { idx: prev.idx, t })
+      } else {
+        last.set(k, { idx: kept.length, t })
+        kept.push(al)
+      }
+    }
+    shown = kept.sort((x, y) => sortOrder === 'newest' ? sortKey(y) - sortKey(x) : sortKey(x) - sortKey(y))
+  }
 
   const statusText = () => {
     if (!swReady) return 'Loading service worker...'
@@ -427,7 +467,7 @@ export default function Alerts() {
             Alert Feed
             {baseAlerts.length > 0 && (
               <>
-                <span className="text-sm font-normal text-gray-500">({filtered.length} of {baseAlerts.length})</span>
+                <span className="text-sm font-normal text-gray-500">({shown.length}{hideRepeats && shown.length !== filtered.length ? ` (${filtered.length} before collapsing repeats)` : ''} of {baseAlerts.length})</span>
                 {searchIsSymbol && (
                   <span className="text-xs font-normal text-cyan-400 ml-1">
                     {symbolDayLoading ? 'Searching full day…' : `· full day for "${search.toUpperCase()}"${viewingPast ? '' : ' incl. alerts no longer in the live list'}`}
@@ -454,6 +494,54 @@ export default function Alerts() {
             OI % changes below are measured over a 5-min rolling window (Near-Strike Unwind alerts use ~20min instead, noted per alert).
           </p>
         )}
+
+        <details className="mb-4 bg-gray-900/40 border border-gray-800 rounded-xl px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-gray-300">
+            ⚙️ Choose which alerts you get <span className="text-xs text-gray-500 font-normal">(applies to this device — tap to mute what you don&apos;t need)</span>
+          </summary>
+          <div className="mt-3 flex flex-col gap-3">
+            <div>
+              <p className="text-[11px] text-gray-500 mb-1.5">On by default</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  [['OI_SPIKE'], 'OI Spikes'], [['FRESH_BUILD'], 'Fresh Builds'],
+                  [['LONG_BUILDUP'], 'Long Buildup'], [['SHORT_BUILDUP'], 'Short Buildup'],
+                  [['CALL_WRITING'], 'Call Writing'], [['PUT_WRITING'], 'Put Writing'],
+                  [['SHORT_COVERING'], 'Short Covering'], [['LONG_UNWINDING'], 'Long Unwinding'],
+                  [['BUYER_DOMINATED'], 'Buyer Dominated'], [['SELLER_DOMINATED'], 'Seller Dominated'],
+                  [['FAR_OTM_ACTIVITY'], 'Far OTM Activity'], [['VOLUME_SURGE'], 'Volume Surge'],
+                  [['NEAR_STRIKE_UNWIND'], 'Near-Strike Unwind'],
+                ] as [string[], string][]).map(([sigs, label]) => (
+                  <AlertToggle key={label} signals={sigs} label={label} enabledSignals={enabledSignals} onToggle={toggleSignal} />
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-500 mb-1.5">Opt-in (off until you turn them on)</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  [['EMA_BULLISH_CROSS', 'EMA_BEARISH_CROSS'], '9/21 EMA Cross'],
+                  [['PDH_CROSS', 'PDL_CROSS'], 'Prev Day High/Low Cross'],
+                  [['PWH_CROSS', 'PWL_CROSS'], 'Prev Week High/Low Cross'],
+                  [['PCR_CROSSOVER'], 'PCR Crossover'],
+                ] as [string[], string][]).map(([sigs, label]) => (
+                  <AlertToggle key={label} signals={sigs} label={label} enabledSignals={enabledSignals} onToggle={toggleSignal} />
+                ))}
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-600">
+              Repeat alerts for the same stock, signal and strike are held back for 30 minutes (unless the OI move grows by half again). OI% / Vol% minimums and strike zone are set in the box above.
+            </p>
+          </div>
+        </details>
+
+        <div className="mb-3">
+          <button onClick={toggleHideRepeats}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium ${hideRepeats ? 'bg-cyan-950/40 text-cyan-300 border-cyan-800/50' : 'bg-gray-900/40 text-gray-500 border-gray-800'}`}
+            title="Show one row per stock+signal+strike per 30 minutes, with a × count">
+            {hideRepeats ? '✓ Repeats collapsed' : 'Repeats shown'}
+          </button>
+        </div>
 
         {baseAlerts.length > 0 && (
           <div className="mb-4">
@@ -548,7 +636,7 @@ export default function Alerts() {
               </div>
             )}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : shown.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border border-gray-800/50 rounded-2xl">
             <p className="text-gray-500 text-sm">No alerts match current filters</p>
             <button onClick={() => { setSearch(''); setTypeFilter('all'); setStrikeZone('all') }}
@@ -558,7 +646,7 @@ export default function Alerts() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map(alert => {
+            {shown.map(alert => {
               const m = SIGNAL_META[alert.signal] || DEFAULT_META
               return (
                 <div key={alert.id}
@@ -599,6 +687,9 @@ export default function Alerts() {
                     <p className="text-xs text-gray-500 mb-1">{formatReceivedAt(alert.receivedAt)}</p>
                       {alert.spot != null && (
                         <p className="text-[11px] text-cyan-300 mb-1">Spot {Number(alert.spot).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</p>
+                      )}
+                      {(repeatCounts.get(alert.id) || 0) > 1 && (
+                        <p className="text-[11px] text-amber-300 mb-1" title="Same stock, signal and strike fired this many times within 30 minutes">× {repeatCounts.get(alert.id)} in 30 min</p>
                       )}
                     <a href={alert.url}
                       className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors justify-end">

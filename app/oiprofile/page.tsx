@@ -249,6 +249,8 @@ function OIProfileInner() {
     return `${v > 0 ? '+' : v < 0 ? '-' : ''}${a >= 100 ? a.toFixed(0) : a.toFixed(1)}%`
   }
 
+  // Pawan: a single strike's OI moving by 500%+ is a strong directional tilt.
+  const isBig = (delta: number, base: number) => base > 0 && Math.abs(delta / base * 100) >= 500
   const mins = Math.floor(countdown/60)
   const secs = countdown % 60
 
@@ -467,7 +469,7 @@ function OIProfileInner() {
                       {hasBaseline && row.deltaCE !== 0 && (
                         <span className={`block text-[9px] font-bold ${row.deltaCE > 0 ? 'text-red-300' : 'text-gray-600'}`}>
                           {row.deltaCE > 0 ? `+${fmtOI(row.deltaCE)}` : fmtOI(row.deltaCE)}
-                          {row.baseCE > 0 && <span className="font-semibold opacity-80"> · {pctOf(row.deltaCE, row.baseCE)}</span>}
+                          {row.baseCE > 0 && <span className={isBig(row.deltaCE, row.baseCE) ? 'font-black text-amber-300' : 'font-semibold opacity-80'} title={isBig(row.deltaCE, row.baseCE) ? 'OI changed by 500%+ at this strike' : undefined}> · {isBig(row.deltaCE, row.baseCE) ? '🔥 ' : ''}{pctOf(row.deltaCE, row.baseCE)}</span>}
                         </span>
                       )}
                     </div>
@@ -518,7 +520,7 @@ function OIProfileInner() {
                       {hasBaseline && row.deltaPE !== 0 && (
                         <span className={`block text-[9px] font-bold ${row.deltaPE > 0 ? 'text-emerald-300' : 'text-gray-600'}`}>
                           {row.deltaPE > 0 ? `+${fmtOI(row.deltaPE)}` : fmtOI(row.deltaPE)}
-                          {row.basePE > 0 && <span className="font-semibold opacity-80"> · {pctOf(row.deltaPE, row.basePE)}</span>}
+                          {row.basePE > 0 && <span className={isBig(row.deltaPE, row.basePE) ? 'font-black text-amber-300' : 'font-semibold opacity-80'} title={isBig(row.deltaPE, row.basePE) ? 'OI changed by 500%+ at this strike' : undefined}> · {isBig(row.deltaPE, row.basePE) ? '🔥 ' : ''}{pctOf(row.deltaPE, row.basePE)}</span>}
                         </span>
                       )}
                     </div>

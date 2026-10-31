@@ -790,7 +790,7 @@ function ExtendedView({ stocks }: { stocks: PulseStock[] }) {
 }
 
 // ── Stock Command Centre ──────────────────────────────────────────────────────
-function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () => void }) {
+function StockCommandCentre({ symbol, onClose, showFull }: { symbol: string; onClose: () => void; showFull?: boolean }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => {
@@ -822,6 +822,7 @@ function StockCommandCentre({ symbol, onClose }: { symbol: string; onClose: () =
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-black text-white">{symbol}</h2>
           <a href={`/oiprofile?symbol=${symbol}`} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800/50 px-2 py-1 rounded-lg">OI Profile →</a>
+          {showFull && <a href={`/stock/${encodeURIComponent(symbol)}?v=new`} className="text-xs text-indigo-300 hover:text-indigo-200 border border-indigo-800/50 px-2 py-1 rounded-lg">Open full dashboard →</a>}
         </div>
         <button onClick={onClose} className="text-gray-600 hover:text-white p-1"><X size={16}/></button>
       </div>
@@ -1373,7 +1374,7 @@ export default function MarketPulse() {
         </div>
 
         {/* Stock command centre */}
-        {searchedSymbol && <StockCommandCentre symbol={searchedSymbol} onClose={() => { setSearchedSymbol(null); setSearchQuery('') }}/>}
+        {searchedSymbol && <StockCommandCentre symbol={searchedSymbol} showFull={newFeed} onClose={() => { setSearchedSymbol(null); setSearchQuery('') }}/>}
 
         {/* Index cards */}
         {loading && analyses.length === 0 ? (

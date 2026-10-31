@@ -2,6 +2,7 @@
 import Navbar from '@/components/Navbar'
 import SymbolResult from '@/components/SymbolResult'
 import { useEffect, useState } from 'react'
+import StockDashboard from '@/components/StockDashboard'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import { RefreshCw, ArrowLeft } from 'lucide-react'
 
@@ -28,7 +29,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   )
 }
 
-export default function StockDeepDive({ params }: { params: { symbol: string } }) {
+function OldStockDeepDive({ params }: { params: { symbol: string } }) {
   const symbol = params.symbol.toUpperCase()
   const [data, setData] = useState<StockData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -296,4 +297,17 @@ export default function StockDeepDive({ params }: { params: { symbol: string } }
       </div>
     </div>
   )
+}
+
+
+// Oct 31 2026: new dashboard-format stock page is previewable with ?v=new while
+// Manish reviews it; everyone else keeps the original page.
+export default function StockDeepDive({ params }: { params: { symbol: string } }) {
+  const [mode, setMode] = useState<'pending' | 'new' | 'old'>('pending')
+  useEffect(() => {
+    try { setMode(new URLSearchParams(window.location.search).get('v') === 'new' ? 'new' : 'old') } catch { setMode('old') }
+  }, [])
+  if (mode === 'pending') return <div className="min-h-screen bg-[#07070e]" />
+  if (mode === 'new') return <StockDashboard symbol={params.symbol} />
+  return <OldStockDeepDive params={params} />
 }

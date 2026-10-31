@@ -112,7 +112,7 @@ function CallbackHandler() {
           router.push('/login?error=kite_failed')
           return
         }
-        const { token_hash, is_new_trial } = await res.json()
+        const { token_hash, is_new_trial, data_session_refreshed } = await res.json()
         const { error } = await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })
         if (error) {
           console.error('verifyOtp failed', error)
@@ -131,6 +131,12 @@ function CallbackHandler() {
         if (is_new_trial) {
           setAskPhone(true)
           return
+        }
+        if (data_session_refreshed) {
+          // Oct 31 2026: only the data account sees this -- confirms the
+          // server's market-data session was refreshed by this login.
+          setStatus('Data session refreshed ✓ Taking you in…')
+          await new Promise(r => setTimeout(r, 1800))
         }
         goToApp(dest)
       } catch (err) {

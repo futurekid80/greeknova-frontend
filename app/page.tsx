@@ -254,11 +254,15 @@ function IndexCard({ a, cpr, cmp, iv }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: 
 function Spotlight({ stocks, cprData }: { stocks: PulseStock[]; cprData: CPRRow[] }) {
   const stocksOnly = stocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(s.symbol))
   const isMarketData = stocksOnly.some(s => (s.oi_chg_pct||0) !== 0)
+  // Only real directional signals qualify -- a flat-price OI jump (or a brand-new contract
+  // starting from a tiny base) is Stealth territory, not a headline buildup.
+  const buildPool = stocksOnly.filter(s => s.signal === 'LONG_BUILDUP' || s.signal === 'SHORT_BUILDUP')
+  const unwindPool = stocksOnly.filter(s => s.signal === 'SHORT_COVERING' || s.signal === 'LONG_UNWINDING')
   const topOIBuilder  = isMarketData
-    ? [...stocksOnly].sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))[0]
+    ? [...(buildPool.length ? buildPool : stocksOnly)].sort((a,b) => (b.oi_chg_pct||0) - (a.oi_chg_pct||0))[0]
     : [...stocksOnly].filter(s => s.cpr_position === 'ABOVE_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
   const topOIUnwinder = isMarketData
-    ? [...stocksOnly].sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))[0]
+    ? [...(unwindPool.length ? unwindPool : stocksOnly)].sort((a,b) => (a.oi_chg_pct||0) - (b.oi_chg_pct||0))[0]
     : [...stocksOnly].filter(s => s.cpr_position === 'BELOW_CPR').sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]
   const usedSymbols = new Set([topOIBuilder?.symbol, topOIUnwinder?.symbol])
   const narrowestCPR = [...cprData.filter(c => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(c.symbol) && !usedSymbols.has(c.symbol))].sort((a,b) => (a.width_pct||1) - (b.width_pct||1))[0]

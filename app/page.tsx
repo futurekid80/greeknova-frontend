@@ -6,6 +6,7 @@ import { supabase, getSessionCached } from '@/lib/supabase'
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X, Zap, Eye, Moon, ChevronDown, ChevronUp, Flame, BarChart2, Volume2 } from 'lucide-react'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 import PulseFeedDashboard from '@/components/PulseFeedDashboard'
+import PulseNowStrip from '@/components/PulseNowStrip'
 
 import { ALL_SYMBOLS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
@@ -1418,6 +1419,9 @@ export default function MarketPulse() {
           </div>
         )}
         
+        {/* What's happening right now (preview) */}
+        {newFeed && <PulseNowStrip stocks={feedStocks} loading={loading} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
+
         {/* Sector Performance */}
 {feedStocks.length > 0 && (() => {
   const sectorPerf = getSectorPerf(feedStocks.filter(s => !['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX'].includes(s.symbol)))

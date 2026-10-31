@@ -45,13 +45,14 @@ interface F {
   volSurge: boolean
   warZone: boolean
   confluence: boolean
+  stealth: boolean       // only stocks with Stealth strikes
   sector: string
   search: string
 }
 
 const BASE: F = {
   minOi: 0, minPx: 0, maxWidth: null, near52: null, signal: 'ALL', cpr: 'ALL', oiDir: 'ALL',
-  volSurge: false, warZone: false, confluence: false, sector: 'all', search: '',
+  volSurge: false, warZone: false, confluence: false, stealth: false, sector: 'all', search: '',
 }
 
 const PRESETS: { id: string; label: string; f: Partial<F> }[] = [
@@ -118,13 +119,15 @@ function Slider({ label, value, steps, fmt, onIdx, active = true, icon }: {
 }
 
 export default function PulseFeedDashboard({
-  stocks, cprData, sectors, onSymbolClick, loading,
+  stocks, cprData, sectors, onSymbolClick, loading, asOf, sectorFilter,
 }: {
   stocks: any[]
   cprData: any[]
   sectors: Record<string, string[]>
   onSymbolClick?: (sym: string) => void
   loading?: boolean
+  asOf?: { date?: string; live?: boolean; snapshots?: number }
+  sectorFilter?: string | null
 }) {
   const [f, setF] = useState<F>({ ...BASE })
   const [preset, setPreset] = useState<string>('all')
@@ -148,6 +151,58 @@ export default function PulseFeedDashboard({
     setF({ ...BASE, ...p.f }); setPreset(id); setPage(1)
   }
   const reset = () => { setF({ ...BASE }); setPreset('all'); setPage(1) }
+
+  // Sector strip on the Pulse page drives this screen's sector filter.
+  useEffect(() => {
+    if (sectorFilter === undefined) return
+    const next = sectorFilter ?? 'all'
+    if (next === f.sector) return   // nothing to change (e.g. first render)
+    setF(prev => ({ ...prev, sector: next })); setPreset(''); setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectorFilter])
+
+  // Stealth strikes per stock (saved EOD events -- cheap, filled by the 5-min job).
+  // Bias uses the same rule as Strike Stealth: Call Buying + Put Writing = bullish,
+  // Put Buying + Call Writing = bearish. Silently absent if nothing is saved yet.
+  const [stealth, setStealth] = useState<Record<string, { n: number; bull: number; bear: number }>>({})
+  const [stealthDate, setStealthDate] = useState('')
+  useEffect(() => {
+    let off = false
+    fetch('https://api.greeknova.com/option-stealth-buildup/saved?window=eod&zone=5')
+      .then(r => r.json())
+      .then(j => {
+        if (off) return
+        const m: Record<string, { n: number; bull: number; bear: number }> = {}
+        for (const e of (j?.events || [])) {
+          const r = m[e.symbol] ?? { n: 0, bull: 0, bear: 0 }
+          r.n++
+          const a = e.activity, t = e.option_type
+          if ((t === 'CE' && a === 'BUYING') || (t === 'PE' && a === 'WRITING')) r.bull++
+          else if ((t === 'PE' && a === 'BUYING') || (t === 'CE' && a === 'WRITING')) r.bear++
+          m[e.symbol] = r
+        }
+        setStealth(m); setStealthDate(j?.date || '')
+      })
+      .catch(() => {})
+    return () => { off = true }
+  }, [])
+  const showStealth = Object.keys(stealth).length > 0
+  const stealthChip = (sym: string) => {
+    const x = stealth[sym]
+    if (!x) return <span className="text-gray-700">—</span>
+    const bias = x.bull > x.bear ? 'Bullish' : x.bear > x.bull ? 'Bearish' : 'Mixed'
+    const cls = bias === 'Bullish' ? 'text-emerald-300 border-emerald-700/60 bg-emerald-950/30'
+      : bias === 'Bearish' ? 'text-rose-300 border-rose-700/60 bg-rose-950/30' : 'text-gray-300 border-gray-700 bg-gray-900/30'
+    return (
+      <a href="/strike-stealth" title={`${x.n} Stealth strike${x.n > 1 ? 's' : ''} (EOD window${stealthDate ? ', ' + stealthDate : ''}) · Bullish signs ${x.bull}, bearish signs ${x.bear}. Click to open Strike Stealth.`}>
+        <Chip cls={cls}>🎯 {x.n} · {bias}</Chip>
+      </a>
+    )
+  }
+  const fmtDay = (d?: string) => {
+    if (!d) return ''
+    try { return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) } catch { return d }
+  }
 
   const sectorOf = useMemo(() => {
     const m: Record<string, string> = {}
@@ -189,12 +244,13 @@ export default function PulseFeedDashboard({
       if (f.volSurge && !s.vol_surge) return false
       if (f.warZone && !isWar(s)) return false
       if (f.confluence && !s.confluence) return false
+      if (f.stealth && !stealth[s.symbol]) return false
       if (f.sector !== 'all' && sectorOf[s.symbol] !== f.sector) return false
       if (q && !s.symbol.toLowerCase().includes(q)) return false
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, f, sectorOf])
+  }, [all, f, sectorOf, stealth])
 
   const sorted = useMemo(() => {
     const a = [...rows]
@@ -243,12 +299,13 @@ export default function PulseFeedDashboard({
   const open = (sym: string) => { if (onSymbolClick) onSymbolClick(sym); else upd({ search: sym }) }
 
   const downloadCsv = () => {
-    const head = ['Symbol', 'Sector', 'CMP', 'PriceChg%', 'OIChg%', 'Signal', 'CPRPosition', 'CPRWidth%', 'VolRatio', 'VolSurge', '52WHigh', 'From52WHigh%', 'WarZone', 'Confluence']
+    const head = ['Symbol', 'Sector', 'CMP', 'PriceChg%', 'OIChg%', 'Signal', 'CPRPosition', 'CPRWidth%', 'VolRatio', 'VolSurge', '52WHigh', 'From52WHigh%', 'WarZone', 'Confluence', 'StealthStrikes', 'StealthBias']
     const esc = (v: any) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
     const lines = [head.join(',')].concat(sorted.map(s => [
       s.symbol, sectorOf[s.symbol] || '', s.cmp, s.price_chg_pct, s.oi_chg_pct, s.label || s.signal, s.cpr_position || '',
       s.width_pct ?? '', s.vol_ratio ?? '', s.vol_surge ? 'Y' : '', s.week52_high ?? '', s.pct_from_52w_high ?? '',
       isWar(s) ? 'Y' : '', s.confluence ? 'Y' : '',
+      stealth[s.symbol]?.n ?? '', stealth[s.symbol] ? (stealth[s.symbol].bull > stealth[s.symbol].bear ? 'Bullish' : stealth[s.symbol].bear > stealth[s.symbol].bull ? 'Bearish' : 'Mixed') : '',
     ].map(esc).join(',')))
     try {
       const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -301,6 +358,15 @@ export default function PulseFeedDashboard({
           </div>
         )}
       </div>
+
+      {asOf?.date && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-800 bg-gray-900/30 px-3 py-2 text-xs text-gray-400">
+          <span className={`font-bold ${asOf.live ? 'text-emerald-400' : 'text-amber-300'}`}>{asOf.live ? '🟢 Live' : '🕒 Market closed'}</span>
+          <span>Data of <b className="text-white">{fmtDay(asOf.date)}</b>{asOf.live && asOf.snapshots ? ` · ${asOf.snapshots} snapshots so far today` : ' · final snapshot of that session'}</span>
+          <span className="text-gray-600">·</span>
+          <span>OI change and price change are measured against the previous close</span>
+        </div>
+      )}
 
       {/* Presets */}
       <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3">
@@ -361,7 +427,7 @@ export default function PulseFeedDashboard({
 
         <div className="flex items-center justify-between flex-wrap gap-2">
           <button onClick={() => setMoreOpen(v => !v)} className="text-xs text-indigo-300 hover:text-indigo-200">
-            {moreOpen ? '▾' : '▸'} More Filters (OI direction, volume, War Zone, Confluence)
+            {moreOpen ? '▾' : '▸'} More Filters (OI direction, volume, War Zone, Confluence, Stealth)
           </button>
           <span className="text-xs text-gray-400">Showing <b className="text-white">{n}</b> of {all.length} stocks</span>
         </div>
@@ -373,6 +439,7 @@ export default function PulseFeedDashboard({
             <button onClick={() => upd({ volSurge: !f.volSurge })} className={pill(f.volSurge, '!py-1')}>🔊 Volume surge</button>
             <button onClick={() => upd({ warZone: !f.warZone })} className={pill(f.warZone, '!py-1')}>⚡ War Zone only</button>
             <button onClick={() => upd({ confluence: !f.confluence })} className={pill(f.confluence, '!py-1')}>🔗 Confluence only</button>
+            {showStealth && <button onClick={() => upd({ stealth: !f.stealth })} className={pill(f.stealth, '!py-1')}>🎯 Has Stealth strikes</button>}
           </div>
         )}
       </div>
@@ -519,7 +586,7 @@ export default function PulseFeedDashboard({
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-xs min-w-[920px]">
             <thead>
               <tr className="text-[10px] uppercase tracking-wide text-gray-500 text-left border-b border-gray-800">
@@ -531,6 +598,7 @@ export default function PulseFeedDashboard({
                 <th className="px-2 py-2 text-right">52W High</th>
                 <th className="px-2 py-2">CPR</th>
                 <th className="px-2 py-2">Zone</th>
+                {showStealth && <th className="px-2 py-2">Stealth</th>}
               </tr>
             </thead>
             <tbody>
@@ -589,11 +657,12 @@ export default function PulseFeedDashboard({
                         : narrow ? <Chip cls="text-amber-400 border-amber-800/40 bg-amber-950/30">👀 Watch</Chip>
                         : <span className="text-gray-700">—</span>}
                     </td>
+                    {showStealth && <td className="px-2 py-2">{stealthChip(s.symbol)}</td>}
                   </tr>
                 )
               })}
               {pageRows.length === 0 && (
-                <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-500">
+                <tr><td colSpan={showStealth ? 9 : 8} className="px-3 py-8 text-center text-gray-500">
                   {loading && all.length === 0 ? 'Loading…'
                     : all.length === 0 ? 'No data available'
                     : `None of the ${all.length} stocks match these filters — try a different preset or Reset Filters.`}
@@ -601,6 +670,47 @@ export default function PulseFeedDashboard({
               )}
             </tbody>
           </table>
+        </div>
+        {/* Phone layout: stacked cards instead of the wide table */}
+        <div className="md:hidden divide-y divide-gray-800/60">
+          {pageRows.map(s => {
+            const isIdx = INDEXES.includes(s.symbol)
+            const war = isWar(s)
+            const narrow = !isIdx && (s.width_pct ?? 1) < 0.3
+            return (
+              <div key={s.symbol} className="px-3 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <button onClick={() => open(s.symbol)} className="text-left min-w-0">
+                    <span className="font-bold text-white">{s.symbol}</span>
+                    {isIdx && <span className="ml-1.5 text-[10px] text-gray-500 bg-gray-800 px-1 rounded">IDX</span>}
+                    {s.confluence && <span className="ml-1">🔗</span>}
+                    {sectorOf[s.symbol] && <div className="text-[10px] text-gray-500">{sectorOf[s.symbol]}</div>}
+                  </button>
+                  <div className="text-right shrink-0">
+                    <div className="font-bold text-amber-400 text-sm">{inr(s.cmp)}</div>
+                    {!!s.price_chg_pct && <div className={`text-[11px] ${s.price_chg_pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{sgn(s.price_chg_pct, 2)}</div>}
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {s.label && <Chip cls={SIG_CHIP[s.signal] || 'text-gray-400 border-gray-700 bg-gray-900/30'}>{s.label}</Chip>}
+                  {war ? <Chip cls="text-orange-300 border-orange-700/60 bg-orange-950/50">⚡ War Zone</Chip>
+                    : narrow ? <Chip cls="text-amber-400 border-amber-800/40 bg-amber-950/30">👀 Watch</Chip> : null}
+                  {showStealth && stealth[s.symbol] && stealthChip(s.symbol)}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-gray-400">
+                  <div>OI: {s.oi_chg_pct ? <b className={s.oi_chg_pct > 0 ? 'text-emerald-400' : 'text-rose-400'}>{sgn(s.oi_chg_pct)}</b> : '—'}</div>
+                  <div>Volume: {s.vol_ratio ? <b className={s.vol_surge ? 'text-fuchsia-300' : 'text-gray-300'}>{s.vol_surge ? '🔊 ' : ''}{s.vol_ratio.toFixed(1)}×</b> : '—'}</div>
+                  <div>CPR: <b className={cprCol[s.cpr_position || ''] || 'text-gray-500'}>{cprShort[s.cpr_position || ''] || '—'}</b>{s.width_pct != null ? ` · ${s.width_pct.toFixed(2)}%` : ''}</div>
+                  <div>52W: {s.week52_high ? <b className={s.at_52w_high ? 'text-fuchsia-400' : 'text-gray-300'}>{s.at_52w_high ? '🔥 at high' : s.pct_from_52w_high != null ? `${Math.abs(s.pct_from_52w_high).toFixed(1)}% away` : inr(s.week52_high)}</b> : '—'}</div>
+                </div>
+              </div>
+            )
+          })}
+          {pageRows.length === 0 && (
+            <div className="px-3 py-8 text-center text-gray-500 text-xs">
+              {loading && all.length === 0 ? 'Loading…' : all.length === 0 ? 'No data available' : `None of the ${all.length} stocks match these filters — try a different preset or Reset Filters.`}
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-between p-3 text-xs text-gray-500">
           <span>Showing {n === 0 ? 0 : (cur - 1) * pageSize + 1} to {Math.min(cur * pageSize, n)} of {n} matching stocks</span>

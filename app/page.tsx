@@ -976,6 +976,7 @@ export default function MarketPulse() {
   // real cached value inside a useEffect below (client-only, after mount),
   // so hydration always starts from a matching empty state.
   const [pulseStocks, setPulseStocks] = useState<PulseStock[]>([])
+  const [pulseMeta, setPulseMeta] = useState<{ date?: string; live?: boolean; snapshots?: number }>({})
   // Oct 16 2026: "sectors are 0" -- /oi-pulse occasionally comes back empty
   // or slow (same root cause as the fetchWithTimeout fix above), and when
   // that happens the page silently falls back to the CPR-only feed, which
@@ -1182,6 +1183,7 @@ export default function MarketPulse() {
       } catch {}
       const cprMap = Object.fromEntries(cprRows.map((c: CPRRow) => [c.symbol, c]))
       const pulseItems = pulseJson?.items || []
+      if (pulseJson) setPulseMeta({ date: pulseJson.active_date, live: !!pulseJson.is_live, snapshots: pulseJson.snapshots })
       const enrichedPulse: PulseStock[] = pulseItems.map((p: any) => ({
         symbol: p.symbol, cmp: p.ltp || p.cmp || 0,
         oi_chg_pct: p.oi_chg_pct || 0, price_chg_pct: p.price_chg_pct || 0,
@@ -1434,7 +1436,7 @@ export default function MarketPulse() {
       <div className="flex flex-wrap gap-2">
         {sectorPerf.map(({ sector, avg, count }) => (
           <button key={sector}
-            onClick={() => setActiveSector(activeSector === sector ? null : sector)}
+            onClick={() => { const next = activeSector === sector ? null : sector; setActiveSector(next); if (newFeed && next) setTimeout(() => { try { document.getElementById('pulse-feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch {} }, 80) }}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all
               ${activeSector === sector
                 ? 'ring-1 ring-white/30 scale-105'
@@ -1452,7 +1454,7 @@ export default function MarketPulse() {
       </div>
 
       {/* Drill-down panel */}
-      {activeSector && sectorStocks.length > 0 && (
+      {activeSector && !newFeed && sectorStocks.length > 0 && (
         <div className="mt-3 bg-gray-900/30 border border-gray-700/50 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-bold text-white">{activeSector} — {sectorStocks.length} stocks</p>
@@ -1566,7 +1568,7 @@ export default function MarketPulse() {
         )}
 
         {/* Market Pulse Feed */}
-        <div className="bg-gray-900/20 border border-gray-800 rounded-2xl p-5">
+        <div id="pulse-feed" className="bg-gray-900/20 border border-gray-800 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-lg font-black text-white">Market Pulse Feed</h2>
@@ -1581,7 +1583,7 @@ export default function MarketPulse() {
           </div>
           {feedStocks.length > 0
             ? (newFeed
-                ? <PulseFeedDashboard stocks={feedStocks} cprData={cprData} sectors={SECTOR_MAP} loading={loading}
+                ? <PulseFeedDashboard stocks={feedStocks} cprData={cprData} sectors={SECTOR_MAP} loading={loading} asOf={pulseMeta} sectorFilter={activeSector}
                     onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>
                 : <MarketPulseFeed stocks={feedStocks} cprData={cprData}/>)
             : <div className="text-center py-12 text-gray-600 text-sm">{loading ? 'Loading…' : 'No data available'}</div>

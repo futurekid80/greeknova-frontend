@@ -220,13 +220,16 @@ export default function PulseFeedDashboard({
   const war = rows.filter(isWar).length
   const up = rows.filter(s => (s.price_chg_pct || 0) > 0).length
   const down = rows.filter(s => (s.price_chg_pct || 0) < 0).length
-  const topLong = [...rows].filter(s => s.signal === 'LONG_BUILDUP').sort((a, b) => (b.oi_chg_pct || 0) - (a.oi_chg_pct || 0)).slice(0, 5)
-  const topShort = [...rows].filter(s => s.signal === 'SHORT_BUILDUP').sort((a, b) => (b.oi_chg_pct || 0) - (a.oi_chg_pct || 0)).slice(0, 5)
+  const topLong = [...rows].filter(s => s.signal === 'LONG_BUILDUP' && !INDEXES.includes(s.symbol)).sort((a, b) => (b.oi_chg_pct || 0) - (a.oi_chg_pct || 0)).slice(0, 5)
+  const topShort = [...rows].filter(s => s.signal === 'SHORT_BUILDUP' && !INDEXES.includes(s.symbol)).sort((a, b) => (b.oi_chg_pct || 0) - (a.oi_chg_pct || 0)).slice(0, 5)
 
   // Scatter: x = price %, y = OI % (four signal quadrants)
   const W = 640, H = 320, L = 46, R = 14, T = 16, B = 40
   const XM = 6
-  const yRaw = rows.reduce((m, s) => Math.max(m, Math.abs(s.oi_chg_pct || 0)), 0)
+  // Scale to the typical range (95th percentile) so a few extreme outliers don't flatten
+  // everyone else; outliers are drawn at the chart edge.
+  const absOi = rows.map(s => Math.abs(s.oi_chg_pct || 0)).sort((a, b) => a - b)
+  const yRaw = absOi.length ? absOi[Math.min(absOi.length - 1, Math.floor(absOi.length * 0.95))] : 0
   const YM = Math.max(10, Math.min(60, Math.ceil(yRaw / 5) * 5))
   const px = (v: number) => L + ((Math.max(-XM, Math.min(XM, v)) + XM) / (2 * XM)) * (W - L - R)
   const py = (v: number) => T + ((YM - Math.max(-YM, Math.min(YM, v))) / (2 * YM)) * (H - T - B)

@@ -25,7 +25,11 @@ const nextConfig = {
     ]
   },
   async rewrites() {
-    return [
+    // beforeFiles: public/sw.js is a static file, and plain (afterFiles)
+    // rewrites only run if no static file matched -- so without this the
+    // real worker would still be served on the old address.
+    return {
+      beforeFiles: [
       {
         // On the OLD origin only, serve a self-removing worker in place of
         // the real one so existing installs unregister themselves and stop
@@ -34,7 +38,8 @@ const nextConfig = {
         has: [{ type: 'host', value: OLD_HOST }],
         destination: '/sw-moved.js',
       },
-    ]
+      ],
+    }
   },
   async headers() {
     return [

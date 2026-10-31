@@ -6,10 +6,17 @@ import { supabase } from '@/lib/supabase'
 
 const API = 'https://api.greeknova.com'
 
-// Oct 2026: this exact path (/auth/callback, on the greeknova-frontend.vercel.app
-// domain) is the Redirect URL actually registered with Zerodha for GreekNova's
-// Kite Connect app -- confirmed live, don't move this page without updating
-// that registration too (developers.kite.trade -> this app's settings).
+// Oct 2026: this exact path (/auth/callback) is the Redirect URL registered
+// with Zerodha for GreekNova's Kite Connect app. As of Oct 31 2026 that is
+// https://app.greeknova.com/auth/callback (confirmed in the Kite console) --
+// don't move this page without updating that registration too
+// (developers.kite.trade -> this app's settings).
+//
+// Oct 31 2026: the final catch used to say only "Something went wrong." with
+// no hint why -- a user whose browser could not reach the server at all
+// (VPN, ad-blocker, restrictive network) just saw that and nothing to try.
+// It now says what likely happened and what to do, retries once if the very
+// first request never got a response, and logs the real error to the console.
 //
 // This replaces an earlier, never-finished version of this page that posted
 // to a backend route that doesn't exist (/api/auth/kite-callback) and relied
@@ -82,11 +89,22 @@ function CallbackHandler() {
       }
 
       try {
-        const res = await fetch(`${API}/auth/kite-login`, {
+        const doLogin = () => fetch(`${API}/auth/kite-login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ request_token: requestToken }),
         })
+        let res: Response
+        try {
+          res = await doLogin()
+        } catch (firstErr) {
+          // No response at all (the request never reached us) -- safe to try
+          // once more, the single-use Zerodha token has not been spent yet.
+          console.error('kite-login first attempt failed', firstErr)
+          setStatus('Connection hiccup, retrying…')
+          await new Promise(r => setTimeout(r, 1500))
+          res = await doLogin()
+        }
         if (!res.ok) {
           const j = await res.json().catch(() => ({}))
           setStatus(j.detail || 'Zerodha login could not be verified.')
@@ -97,8 +115,9 @@ function CallbackHandler() {
         const { token_hash, is_new_trial } = await res.json()
         const { error } = await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })
         if (error) {
-          setStatus('Could not start your session.')
-          await new Promise(r => setTimeout(r, 1500))
+          console.error('verifyOtp failed', error)
+          setStatus('Could not start your session. Please try signing in again.')
+          await new Promise(r => setTimeout(r, 2500))
           router.push('/login?error=kite_failed')
           return
         }
@@ -114,10 +133,13 @@ function CallbackHandler() {
           return
         }
         goToApp(dest)
-      } catch {
-        setStatus('Something went wrong.')
-        await new Promise(r => setTimeout(r, 1500))
-        router.push('/login?error=kite_failed')
+      } catch (err) {
+        console.error('kite callback failed', err)
+        setStatus(
+          "We couldn't reach GreekNova's servers. Please check your internet connection and turn off any VPN or ad-blocker for this site, then try signing in again."
+        )
+        await new Promise(r => setTimeout(r, 6000))
+        router.push('/login?error=kite_failed&reason=network')
       }
     }
     run()

@@ -3,6 +3,7 @@ import './globals.css'
 import DisclaimerModal from '@/components/DisclaimerModal'
 import AlertsSidebar from '@/components/AlertsSidebar'
 import InstallPrompt from '@/components/InstallPrompt'
+import MovedNotice from '@/components/MovedNotice'
 import { AlertsProvider } from '@/contexts/AlertsContext'
 import { useEffect, useState } from 'react'
 import '@/lib/authFetch'
@@ -81,6 +82,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AlertsProvider>
           <DisclaimerModal />
+          <MovedNotice />
           <HolidayBanner />
           <AlertsSidebar />
           {children}

@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Zap, Search, Download } from 'lucide-react'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
+import StealthDashboard from '@/components/StealthDashboard'
 
 const API = 'https://api.greeknova.com'
 
@@ -168,6 +169,15 @@ export default function StrikeStealthBuildup() {
   // the background job caught today (Fresh Now / Still Active / Seen Earlier Today).
   const [view, setView] = useState<'live' | 'saved'>('live')
   const [savedDate, setSavedDate] = useState<string | null>(null)
+  // Oct 31 2026: Dashboard (Manish's Sheets-template layout) vs the original List.
+  const [layout, setLayout] = useState<'dashboard' | 'list'>('dashboard')
+  useEffect(() => {
+    try { if (localStorage.getItem('gn_stealth_layout') === 'list') setLayout('list') } catch {}
+  }, [])
+  const pickLayout = (l: 'dashboard' | 'list') => {
+    setLayout(l)
+    try { localStorage.setItem('gn_stealth_layout', l) } catch {}
+  }
   const [writingFilter, setWritingFilter] = useState<'all' | 'WRITING' | 'BUYING'>('all')
   const [freshFilter, setFreshFilter] = useState<'all' | 'Fresh Now' | 'Still Active' | 'Seen Earlier Today'>('all')
 
@@ -290,6 +300,20 @@ export default function StrikeStealthBuildup() {
           )}
         </div>
 
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-gray-400 mr-1">🖼️ Layout:</span>
+          {([['dashboard', 'Dashboard'], ['list', 'List']] as const).map(([l, label]) => (
+            <button key={l} onClick={() => pickLayout(l)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                layout === l
+                  ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
         {view === 'live' && data?.ts_new && (
           <p className="text-[11px] text-gray-500 mb-4">
             {data.window_label ?? 'Window'}: {data.window === 'eod' ? fmtDateTime(data.ts_old) : fmtTime(data.ts_old)} → {fmtTime(data.ts_new)} IST ·{' '}
@@ -330,6 +354,20 @@ export default function StrikeStealthBuildup() {
           </div>
         )}
 
+        {layout === 'dashboard' && (
+          <StealthDashboard
+            hits={allHits.filter(h => view !== 'saved' || freshFilter === 'all' || h.freshness === freshFilter) as any}
+            loading={loading}
+            error={data?.error}
+            emptyHint={view === 'saved'
+              ? 'Nothing saved yet — the background scan starts saving hits at the next market open (9:15 IST on a trading day). Use Live scan to see current hits.'
+              : 'No hits in this window right now.'}
+            onDownload={(rows) => downloadHitsCSV(rows as any, timeWindow, zone, view)}
+          />
+        )}
+
+        {layout === 'list' && (
+          <>
         <div className="flex items-center gap-2 mb-4">
           {(['all', 'WRITING', 'BUYING'] as const).map(a => (
             <button key={a} onClick={() => setWritingFilter(a)}
@@ -498,6 +536,9 @@ export default function StrikeStealthBuildup() {
             className="mt-3 w-full text-center text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg py-2">
             Show {filteredHits.length - PAGE_SIZE} more
           </button>
+        )}
+
+          </>
         )}
 
         <div className="mt-6 p-4 rounded-xl border border-gray-800 bg-gray-900/30">

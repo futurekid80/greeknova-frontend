@@ -372,7 +372,8 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
               </div>
             ) : <p className="text-xs text-gray-500 py-6 text-center">{loading ? 'Loading…' : 'No Stealth strikes saved for this stock yet. They appear as the market runs.'}</p>}
           </Card>
-          <Card title="Option activity" sub="Notable strikes picked up for this stock">
+          <Card title="Option activity" sub="Notable strikes picked up for this stock (latest session)"
+            right={<a href="/alerts" className="text-[11px] text-indigo-300 hover:text-indigo-200 whitespace-nowrap">Full history on Alerts →</a>}>
             {jungle.length ? (
               <div className="space-y-1.5">
                 {jungle.slice(0, 8).map((j: any, i: number) => {

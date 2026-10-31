@@ -287,8 +287,10 @@ export default function PulseFeedDashboard({
   const absOi = rows.map(s => Math.abs(s.oi_chg_pct || 0)).sort((a, b) => a - b)
   const yRaw = absOi.length ? absOi[Math.min(absOi.length - 1, Math.floor(absOi.length * 0.95))] : 0
   const YM = Math.max(10, Math.min(60, Math.ceil(yRaw / 10) * 10))
-  const px = (v: number) => L + ((Math.max(-XM, Math.min(XM, v)) + XM) / (2 * XM)) * (W - L - R)
-  const py = (v: number) => T + ((YM - Math.max(-YM, Math.min(YM, v))) / (2 * YM)) * (H - T - B)
+  // Inner margin so dots at (or beyond) the range edge stay fully inside the plot box.
+  const IN = 10
+  const px = (v: number) => L + IN + ((Math.max(-XM, Math.min(XM, v)) + XM) / (2 * XM)) * (W - L - R - 2 * IN)
+  const py = (v: number) => T + IN + ((YM - Math.max(-YM, Math.min(YM, v))) / (2 * YM)) * (H - T - B - 2 * IN)
   const midX = px(0), midY = py(0)
   const xTicks = [-6, -4, -2, 0, 2, 4, 6]
   const yTicks = [-YM, -YM / 2, 0, YM / 2, YM].map(t => Math.round(t))

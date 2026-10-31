@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase, getSessionCached } from '@/lib/supabase'
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X, Zap, Eye, Moon, ChevronDown, ChevronUp, Flame, BarChart2, Volume2 } from 'lucide-react'
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
+import PulseFeedDashboard from '@/components/PulseFeedDashboard'
 
 import { ALL_SYMBOLS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
@@ -1020,6 +1021,11 @@ export default function MarketPulse() {
     } catch {}
   }
   const [loading, setLoading]         = useState(true)
+  // Oct 31 2026: new dashboard-format feed is previewable with ?v=new while Manish reviews it.
+  const [newFeed, setNewFeed]         = useState(false)
+  useEffect(() => {
+    try { setNewFeed(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
+  }, [])
   const [lastUpdate, setLastUpdate]   = useState('')
   const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -1574,7 +1580,10 @@ export default function MarketPulse() {
             )}
           </div>
           {feedStocks.length > 0
-            ? <MarketPulseFeed stocks={feedStocks} cprData={cprData}/>
+            ? (newFeed
+                ? <PulseFeedDashboard stocks={feedStocks} cprData={cprData} sectors={SECTOR_MAP} loading={loading}
+                    onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>
+                : <MarketPulseFeed stocks={feedStocks} cprData={cprData}/>)
             : <div className="text-center py-12 text-gray-600 text-sm">{loading ? 'Loading…' : 'No data available'}</div>
           }
           {feedStocks.length > 0 && <ExtendedView stocks={feedStocks}/>}

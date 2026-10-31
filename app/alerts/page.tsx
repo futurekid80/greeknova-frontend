@@ -101,6 +101,39 @@ export default function Alerts() {
   // which one actually happened.
   const [dateFetchFailed, setDateFetchFailed] = useState(false)
   const [dateRetryTick, setDateRetryTick] = useState(0)
+
+  // Oct 31 2026 (Vinod): full-day CSV (all signals, no 200-row cap) for the
+  // day shown in the date picker, to analyse in Excel after the close.
+  const [csvBusy, setCsvBusy] = useState(false)
+  const downloadDayCsv = async () => {
+    setCsvBusy(true)
+    try {
+      const day = selectedDate || todayIso
+      const res = await fetch(`https://api.greeknova.com/alerts/day?date=${day}`)
+      const j = await res.json()
+      const rows: any[] = j.alerts || []
+      const esc = (v: any) => {
+        const t = v == null ? '' : String(v)
+        return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+      }
+      const head = ['Time(IST)','Symbol','Signal','Strike','Type','Spot','OptionLTP','OI%','Vol%','Score','Bias','Direction','StrikesFromATM','Message']
+      const lines = [head.join(',')]
+      for (const r of rows) {
+        const t = new Date(r.receivedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false })
+        lines.push([t, r.symbol, r.signal, r.strike, r.optionType, r.spot, r.ltp, r.oiPct, r.volPct, r.score, r.bias, r.direction, r.strikesAway, r.message].map(esc).join(','))
+      }
+      const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `greeknova-alerts-${day}.csv`
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    } catch (e) {
+      console.error('alerts csv failed', e)
+    } finally {
+      setCsvBusy(false)
+    }
+  }
   useEffect(() => {
     if (!viewingPast) { setDateAlerts([]); setDateFetchFailed(false); return }
     setDateLoading(true)
@@ -348,6 +381,9 @@ export default function Alerts() {
                     </div>
                     <div className="text-right flex-shrink-0 ml-4">
                       <p className="text-xs text-gray-500 mb-1">{formatReceivedAt(alert.receivedAt)}</p>
+                      {alert.spot != null && (
+                        <p className="text-[11px] text-cyan-300 mb-1">Spot {Number(alert.spot).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</p>
+                      )}
                       <a href={alert.url}
                         className="flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 transition-colors justify-end">
                         View <ExternalLink size={10}/>
@@ -375,6 +411,14 @@ export default function Alerts() {
                 {dateLoading ? 'Loading that day…' : `Past day — static snapshot, not live`}
               </span>
             )}
+            <button
+              onClick={downloadDayCsv}
+              disabled={csvBusy}
+              className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-800 bg-gray-900 text-cyan-300 hover:border-cyan-700 disabled:opacity-50"
+              title="Download every alert logged for the selected day (all signals) as a CSV for Excel"
+            >
+              {csvBusy ? 'Preparing…' : '⬇ Download day CSV'}
+            </button>
           </div>
         </div>
 
@@ -553,6 +597,9 @@ export default function Alerts() {
 
                   <div className="text-right flex-shrink-0 ml-4">
                     <p className="text-xs text-gray-500 mb-1">{formatReceivedAt(alert.receivedAt)}</p>
+                      {alert.spot != null && (
+                        <p className="text-[11px] text-cyan-300 mb-1">Spot {Number(alert.spot).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</p>
+                      )}
                     <a href={alert.url}
                       className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors justify-end">
                       View <ExternalLink size={10}/>

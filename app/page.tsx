@@ -7,6 +7,7 @@ import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Database, Search, X,
 import { useAutoRefresh } from "@/lib/useAutoRefresh"
 import PulseFeedDashboard from '@/components/PulseFeedDashboard'
 import PulseNowStrip from '@/components/PulseNowStrip'
+import PulseScreens from '@/components/PulseScreens'
 
 import { ALL_SYMBOLS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
@@ -1425,6 +1426,8 @@ export default function MarketPulse() {
         
         {/* What's happening right now (preview) */}
         {newFeed && <PulseNowStrip stocks={feedStocks} loading={loading} day={pulseMeta?.date || null} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
+
+        {newFeed && feedStocks.length > 0 && <PulseScreens stocks={feedStocks} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
 
         {/* Sector Performance */}
 {feedStocks.length > 0 && (() => {

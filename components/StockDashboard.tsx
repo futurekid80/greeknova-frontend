@@ -164,11 +164,12 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
           <div className="ml-auto flex items-center gap-2">
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-              <input list="gn-symbols" value={query} onChange={e => setQuery(e.target.value.toUpperCase())}
+              <input list="gn-symbols" value={query} onChange={e => { const v = e.target.value.toUpperCase(); setQuery(v); const ne = (e.nativeEvent as any)?.inputType; if (ne === 'insertReplacementText' || (!ne && (ALL_SYMBOLS as string[]).includes(v))) go(v) }}
                 onKeyDown={e => { if (e.key === 'Enter') go(query) }} placeholder="Open another stock…"
                 className="bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 w-44 focus:outline-none focus:border-indigo-600 placeholder-gray-600" />
               <datalist id="gn-symbols">{(ALL_SYMBOLS as string[]).map(s => <option key={s} value={s} />)}</datalist>
             </div>
+            <button onClick={() => go(query)} className="text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg px-3 py-2">Go</button>
             <button onClick={load} disabled={loading} className="flex items-center gap-1.5 text-xs text-gray-300 border border-gray-700 rounded-lg px-3 py-2 hover:text-white disabled:opacity-50">
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
             </button>

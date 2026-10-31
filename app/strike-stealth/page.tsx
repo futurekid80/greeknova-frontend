@@ -361,7 +361,7 @@ export default function StrikeStealthBuildup() {
             error={data?.error}
             emptyHint={view === 'saved'
               ? 'Nothing saved yet — the background scan starts saving hits at the next market open (9:15 IST on a trading day). Use Live scan to see current hits.'
-              : 'No hits in this window right now.'}
+              : `No hits in the ${(data?.window_label ?? 'selected').toLowerCase()} window right now. The 5-min and Hourly windows only show fresh activity while the market is open — pick "EOD / vs prev close" above to see the whole day's picture.`}
             onDownload={(rows) => downloadHitsCSV(rows as any, timeWindow, zone, view)}
           />
         )}

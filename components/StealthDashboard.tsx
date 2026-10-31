@@ -302,8 +302,17 @@ export default function StealthDashboard({
       </div>
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
-      {loading && hits.length === 0 && <p className="text-gray-500 text-sm">Loading…</p>}
-      {!loading && hits.length === 0 && !error && <p className="text-gray-500 text-sm">{emptyHint || 'No hits to show yet.'}</p>}
+      {loading && (
+        <div className="flex items-center gap-2 rounded-lg border border-indigo-800/50 bg-indigo-950/30 px-3 py-2 text-xs text-indigo-200">
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-indigo-300 border-t-transparent animate-spin" />
+          Scanning the market… the EOD window can take up to ~40 seconds. Results appear here automatically.
+        </div>
+      )}
+      {!loading && hits.length === 0 && !error && (
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+          {emptyHint || 'No hits to show yet.'}
+        </div>
+      )}
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -476,7 +485,11 @@ export default function StealthDashboard({
                 )
               })}
               {pageRows.length === 0 && (
-                <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-500">No contracts match these filters — try a different preset or Reset Filters.</td></tr>
+                <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-500">
+                  {loading ? 'Scanning the market… (EOD can take up to ~40 seconds)'
+                    : hits.length === 0 ? (emptyHint || 'No hits to show yet.')
+                    : `None of the ${hits.length} scanned contracts match these filters — try a different preset or Reset Filters.`}
+                </td></tr>
               )}
             </tbody>
           </table>

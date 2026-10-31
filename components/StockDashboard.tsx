@@ -77,6 +77,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
   const [alerts, setAlerts] = useState<any[]>([])
   const [stealth, setStealth] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [intelLoading, setIntelLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [howOpen, setHowOpen] = useState(true)
   useEffect(() => { try { if (localStorage.getItem('gn_stock_howto') === '0') setHowOpen(false) } catch {} }, [])
@@ -86,18 +87,25 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
     try { const r = await fetch(API + path); if (!r.ok) return null; return await r.json() } catch { return null }
   }
 
+  // Each feed fills its own panels as soon as it arrives -- the Stock Intel feed
+  // (futures, max pain, CPR, delivery, option activity) is the slow one and must
+  // not hold the rest of the page back.
   const load = async () => {
-    setLoading(true)
-    const [o, i, h, p, s] = await Promise.all([
-      getJson(`/stock-oi/${enc}`), getJson(`/stock-intel/${enc}`), getJson(`/oi-history/${enc}`),
-      getJson(`/pcr-trend/${enc}`), getJson(`/option-stealth-buildup/saved?window=eod&zone=5`),
+    setLoading(true); setIntelLoading(true)
+    getJson(`/stock-intel/${enc}`).then(i => { setIntel(i); setIntelLoading(false) })
+    const quick = Promise.all([
+      getJson(`/stock-oi/${enc}`).then(o => setOi(o)),
+      getJson(`/pcr-trend/${enc}`).then(p => setPcrPts(p?.points || [])),
+      getJson(`/option-stealth-buildup/saved?window=eod&zone=5`).then(s => setStealth((s?.events || []).filter((e: any) => e.symbol === symbol))),
+      getJson(`/oi-history/${enc}`).then(async h => {
+        setHist(h)
+        const day = h?.date_a
+        const a = await getJson(`/alerts?symbol=${enc}&limit=30${day ? `&date=${day}` : ''}`)
+        setAlerts(a?.alerts || [])
+      }),
     ])
-    setOi(o); setIntel(i); setHist(h); setPcrPts(p?.points || [])
-    setStealth((s?.events || []).filter((e: any) => e.symbol === symbol))
+    await quick
     setLoading(false)
-    const day = i?.last_trading_day
-    const a = await getJson(`/alerts?symbol=${enc}&limit=30${day ? `&date=${day}` : ''}`)
-    setAlerts(a?.alerts || [])
   }
   useEffect(() => { load() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [symbol])
 
@@ -137,7 +145,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
   if (cpr) glance.push(`CPR is ${cpr.width_pct < 0.3 ? 'narrow' : cpr.width_pct < 0.6 ? 'moderate' : 'wide'} (${Number(cpr.width_pct).toFixed(2)}%) and ${String(cpr.cpr_trend || '').toLowerCase()}; price is ${cprPos?.toLowerCase()}.`)
   if (delLatest != null && delAvg != null) glance.push(`Delivery was ${delLatest}% against a ${deliv.length}-day average of ${delAvg.toFixed(1)}%.`)
 
-  const noData = !loading && !oi && !intel
+  const noData = !loading && !intelLoading && !oi && !intel
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -244,7 +252,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
               <ul className="space-y-2.5 text-xs text-gray-300 leading-relaxed">
                 {glance.map((g, i) => <li key={i} className="flex gap-2"><span className="text-indigo-400">▸</span><span>{g}</span></li>)}
               </ul>
-            ) : <p className="text-xs text-gray-500">{loading ? 'Loading…' : 'Not enough data yet.'}</p>}
+            ) : <p className="text-xs text-gray-500">{loading || intelLoading ? 'Loading…' : 'Not enough data yet.'}</p>}
             <p className="text-[10px] text-gray-600 mt-3">A description of positioning, not a prediction or a trade call.</p>
           </Card>
         </div>
@@ -320,7 +328,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
                     </tbody>
                   </table>
                 </div>
-              ) : <p className="text-xs text-gray-500 py-6 text-center">{loading ? 'Loading…' : 'No futures history.'}</p>}
+              ) : <p className="text-xs text-gray-500 py-6 text-center">{intelLoading ? 'Loading… (this one can take a few seconds)' : 'No futures history.'}</p>}
             </Card>
           </div>
           <Card title="Delivery %" sub="Share of traded quantity actually taken for delivery">
@@ -334,7 +342,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
                   </div>
                 ))}
               </div>
-            ) : <p className="text-xs text-gray-500 py-6 text-center">{isIdx ? 'Not applicable for indices.' : loading ? 'Loading…' : 'No delivery data.'}</p>}
+            ) : <p className="text-xs text-gray-500 py-6 text-center">{isIdx ? 'Not applicable for indices.' : intelLoading ? 'Loading…' : 'No delivery data.'}</p>}
           </Card>
         </div>
 
@@ -377,7 +385,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
                   )
                 })}
               </div>
-            ) : <p className="text-xs text-gray-500 py-6 text-center">{loading ? 'Loading…' : 'No notable option activity.'}</p>}
+            ) : <p className="text-xs text-gray-500 py-6 text-center">{intelLoading ? 'Loading…' : 'No notable option activity.'}</p>}
           </Card>
         </div>
 

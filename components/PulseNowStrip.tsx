@@ -13,6 +13,7 @@ interface Props {
   stocks: any[]
   onSymbolClick?: (sym: string) => void
   loading?: boolean
+  day?: string | null
 }
 
 function Card({ title, sub, right, children }: { title: string; sub?: string; right?: React.ReactNode; children: React.ReactNode }) {
@@ -32,7 +33,7 @@ function Card({ title, sub, right, children }: { title: string; sub?: string; ri
 
 const Empty = ({ text }: { text: string }) => <p className="text-xs text-gray-500 py-5 text-center">{text}</p>
 
-export default function PulseNowStrip({ stocks, onSymbolClick, loading }: Props) {
+export default function PulseNowStrip({ stocks, onSymbolClick, loading, day }: Props) {
   const [stealth, setStealth] = useState<any[] | null>(null)
   const [alerts, setAlerts] = useState<any[] | null>(null)
 
@@ -40,9 +41,17 @@ export default function PulseNowStrip({ stocks, onSymbolClick, loading }: Props)
     let dead = false
     const get = async (p: string) => { try { const r = await fetch(API + p); return r.ok ? await r.json() : null } catch { return null } }
     get('/option-stealth-buildup/saved?window=eod&zone=5').then(s => { if (!dead) setStealth(s?.events || []) })
-    get('/alerts?limit=8').then(a => { if (!dead) setAlerts(a?.alerts || []) })
     return () => { dead = true }
   }, [])
+
+  // Alerts for the active trading day (the last session when the market is closed).
+  useEffect(() => {
+    let dead = false
+    fetch(`${API}/alerts?limit=8${day ? `&date=${day}` : ''}`)
+      .then(r => (r.ok ? r.json() : null)).catch(() => null)
+      .then(a => { if (!dead) setAlerts(a?.alerts || []) })
+    return () => { dead = true }
+  }, [day])
 
   const eq = useMemo(() => (stocks || []).filter(s => !INDICES.includes(s.symbol)), [stocks])
 

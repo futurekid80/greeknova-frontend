@@ -1420,7 +1420,7 @@ export default function MarketPulse() {
         )}
         
         {/* What's happening right now (preview) */}
-        {newFeed && <PulseNowStrip stocks={feedStocks} loading={loading} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
+        {newFeed && <PulseNowStrip stocks={feedStocks} loading={loading} day={pulseMeta?.date || null} onSymbolClick={(sym) => { setSearchedSymbol(sym); setSearchQuery(sym); try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {} }}/>}
 
         {/* Sector Performance */}
 {feedStocks.length > 0 && (() => {

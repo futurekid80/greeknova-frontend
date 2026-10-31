@@ -4,7 +4,7 @@
 // presets, sliders, KPI tiles, OI-vs-premium scatter with the absorption
 // corridor, top-stock list and a sortable table. Pure client-side over the hits
 // the page already fetched (live scan or saved-today), nothing new on the server.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, RotateCcw, Search } from 'lucide-react'
 
 export interface DashHit {
@@ -138,6 +138,14 @@ export default function StealthDashboard({
   const [f, setF] = useState<F>({ ...BASE, ...PRESETS[1].f })
   const [preset, setPreset] = useState<string>('all')
   const [moreOpen, setMoreOpen] = useState(false)
+  const [howOpen, setHowOpen] = useState(true)
+  useEffect(() => {
+    try { if (localStorage.getItem('gn_stealth_howto') === '0') setHowOpen(false) } catch {}
+  }, [])
+  const toggleHow = () => setHowOpen(v => {
+    try { localStorage.setItem('gn_stealth_howto', v ? '0' : '1') } catch {}
+    return !v
+  })
   const [sort, setSort] = useState<'move' | 'pct' | 'oi'>('move')
   const [pageSize, setPageSize] = useState(25)
   const [page, setPage] = useState(1)
@@ -215,6 +223,58 @@ export default function StealthDashboard({
 
   return (
     <div className="space-y-4">
+      {/* How to use */}
+      <div className="rounded-xl border border-indigo-800/50 bg-indigo-950/20">
+        <button onClick={toggleHow} className="w-full flex items-center justify-between px-4 py-3 text-left">
+          <span className="text-sm font-bold text-indigo-200">📖 How to use this screen</span>
+          <span className="text-xs text-indigo-300">{howOpen ? 'Hide ▴' : 'Show ▾'}</span>
+        </button>
+        {howOpen && (
+          <div className="px-4 pb-4 text-xs text-gray-300 space-y-3 leading-relaxed">
+            <p>
+              <b className="text-white">What this finds:</b> option strikes where <b>Open Interest (OI) is building up fast</b> while the
+              option&apos;s own <b>premium barely moves</b> — large positions going on without moving the price. Treat it as a
+              watch-list of where size is being placed, not as a trade call.
+            </p>
+            <ol className="list-decimal pl-5 space-y-1.5">
+              <li>
+                <b className="text-white">Pick the time window</b> (buttons above): <b>5-min</b> = what just happened, <b>Hourly</b> = the last
+                hour, <b>EOD / vs prev close</b> = the whole day compared with yesterday&apos;s close (best for next-day planning, and the only
+                one with data on weekends). <b>Saved today</b> keeps every hit the background scan caught, even if you weren&apos;t watching.
+              </li>
+              <li>
+                <b className="text-white">Start with a preset</b> (e.g. <i>All Absorption</i>), or set your own with the sliders: minimum new OI,
+                minimum OI% increase, and how small the premium move must be (≤2% / 5% / 10% / 15%). <i>Reset Filters</i> clears everything.
+              </li>
+              <li>
+                <b className="text-white">Read the chart:</b> across = premium % move, up = OI % increase. Dots inside the <b>green corridor</b> are
+                the stealth ones (high OI growth, quiet premium). Bigger dot = bigger OI. A dashed ring = &quot;quiet&quot; (premium moved under
+                0.5%). Click a dot, or a stock in <i>Top Qualifying Stocks</i>, to isolate that stock.
+              </li>
+              <li>
+                <b className="text-white">Read the table:</b> <b>Moneyness</b> shows ATM / OTM / ITM and how many strikes from ATM (OTM +2 = two
+                strikes out of the money). <b>OI% Increase</b> shows the jump and what it was before. <b>Premium % Move</b> is the option&apos;s
+                price change. <b>Old → New Prem</b> are the actual premiums, and <b>CMP</b> is the stock/index price.
+              </li>
+              <li>
+                <b className="text-white">Activity</b> is inferred from the premium: <b>OI up + premium down = Writing</b> (sellers adding),
+                <b> OI up + premium up = Buying</b>, and <b>Quiet</b> = premium almost unchanged. Typical reading: Call Buying + Put Writing
+                leans bullish; Put Buying + Call Writing leans bearish; the <i>Bias by symbol</i> panel above sums this up per stock.
+              </li>
+              <li>
+                <b className="text-white">Tier</b> (Elite / Strong / Watch) ranks how strong the OI growth is for how quiet the premium stayed — Elite is
+                the strongest. 🔗 means the same stock also has a futures-level stealth buildup (the strongest version of this signal).
+              </li>
+            </ol>
+            <p className="text-gray-400">
+              <b className="text-gray-300">Keep in mind:</b> premium also moves with the stock price, volatility and time decay, so Writing/Buying is a
+              best-guess pattern, not proof. Expiry-day numbers are noisier. Use <i>CSV</i> to take the filtered list into Excel.
+              Educational analytics only — not investment advice.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Presets */}
       <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3">
         <div className="flex flex-wrap items-center gap-2">

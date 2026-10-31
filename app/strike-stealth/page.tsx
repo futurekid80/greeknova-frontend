@@ -354,6 +354,32 @@ export default function StrikeStealthBuildup() {
           </div>
         )}
 
+        {biasRows.length > 0 && (
+          <div className="mb-5 p-4 rounded-xl border border-gray-800 bg-gray-900/30">
+            <p className="text-xs font-bold text-gray-300 mb-1">🧭 Bias by symbol</p>
+            <p className="text-[11px] text-gray-500 mb-3">
+              Bullish = Call Buying + Put Writing · Bearish = Put Buying + Call Writing. ✓ Confirmed = both kinds agree on the same symbol.
+              Tap a symbol to see its strikes. {mixedCount > 0 ? `${mixedCount} symbol${mixedCount > 1 ? 's' : ''} with signs on both sides (range/mixed) not shown.` : ''}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {biasRows.slice(0, 24).map(r => (
+                <button key={r.symbol} onClick={() => setSearch(r.symbol)}
+                  className={`text-left text-[11px] border rounded-lg px-2.5 py-1.5 ${
+                    r.dir === 'BULLISH' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/20' : 'text-rose-300 border-rose-700/50 bg-rose-950/20'
+                  }`}>
+                  <span className="font-bold text-white">{r.symbol}</span>{' '}
+                  {r.dir === 'BULLISH' ? '▲ Bullish' : '▼ Bearish'}{r.confirmed ? ' ✓' : ''}
+                  <span className="text-gray-400">
+                    {' · '}{r.dir === 'BULLISH'
+                      ? [r.cb ? `${r.cb} Call Buying` : '', r.pw ? `${r.pw} Put Writing` : ''].filter(Boolean).join(' + ')
+                      : [r.pb ? `${r.pb} Put Buying` : '', r.cw ? `${r.cw} Call Writing` : ''].filter(Boolean).join(' + ')}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {layout === 'dashboard' && (
           <StealthDashboard
             hits={allHits.filter(h => view !== 'saved' || freshFilter === 'all' || h.freshness === freshFilter) as any}
@@ -440,32 +466,6 @@ export default function StrikeStealthBuildup() {
               className="bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-1.5 w-40 focus:outline-none focus:border-cyan-700 placeholder:text-gray-600" />
           </div>
         </div>
-
-        {biasRows.length > 0 && (
-          <div className="mb-5 p-4 rounded-xl border border-gray-800 bg-gray-900/30">
-            <p className="text-xs font-bold text-gray-300 mb-1">🧭 Bias by symbol</p>
-            <p className="text-[11px] text-gray-500 mb-3">
-              Bullish = Call Buying + Put Writing · Bearish = Put Buying + Call Writing. ✓ Confirmed = both kinds agree on the same symbol.
-              Tap a symbol to see its strikes. {mixedCount > 0 ? `${mixedCount} symbol${mixedCount > 1 ? 's' : ''} with signs on both sides (range/mixed) not shown.` : ''}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {biasRows.slice(0, 24).map(r => (
-                <button key={r.symbol} onClick={() => setSearch(r.symbol)}
-                  className={`text-left text-[11px] border rounded-lg px-2.5 py-1.5 ${
-                    r.dir === 'BULLISH' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/20' : 'text-rose-300 border-rose-700/50 bg-rose-950/20'
-                  }`}>
-                  <span className="font-bold text-white">{r.symbol}</span>{' '}
-                  {r.dir === 'BULLISH' ? '▲ Bullish' : '▼ Bearish'}{r.confirmed ? ' ✓' : ''}
-                  <span className="text-gray-400">
-                    {' · '}{r.dir === 'BULLISH'
-                      ? [r.cb ? `${r.cb} Call Buying` : '', r.pw ? `${r.pw} Put Writing` : ''].filter(Boolean).join(' + ')
-                      : [r.pb ? `${r.pb} Put Buying` : '', r.cw ? `${r.cw} Call Writing` : ''].filter(Boolean).join(' + ')}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {loading && !data && <p className="text-gray-500 text-sm">Loading…</p>}
         {data?.error && <p className="text-red-400 text-sm">{data.error}</p>}

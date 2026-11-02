@@ -183,6 +183,9 @@ export default function StrikeStealthBuildup() {
 
   // Nov 2 2026: silent=true is the background auto-refresh (no spinner flash, keeps the table in place).
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
+  // Nov 2 2026: "Best of the day" -- for the saved EOD view, show only Elite/Strong hits with at least
+  // Rs 25 lakh of premium money added (OI added x premium). Today that is ~140 rows instead of ~600.
+  const [bestOfDay, setBestOfDay] = useState(true)
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
     if (!silent) setLoading(true)
     if (v === 'saved') {
@@ -231,7 +234,11 @@ export default function StrikeStealthBuildup() {
     setShowAll(false)
   }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone, timeWindow, view, writingFilter, freshFilter])
 
-  const allHits = data?.hits || []
+  const rawHits = data?.hits || []
+  const bestOn = bestOfDay && view === 'saved' && timeWindow === 'eod'
+  const allHits = bestOn
+    ? rawHits.filter(h => (h.tier === 'ELITE' || h.tier === 'STRONG') && (h.new_oi - h.old_oi) * h.new_premium >= 2500000)
+    : rawHits
   const expiryOptions = Array.from(new Set(allHits.map(h => h.expiry).filter((e): e is string => !!e))).sort()
 
   const filteredHits = allHits
@@ -417,6 +424,22 @@ export default function StrikeStealthBuildup() {
 
         {layout === 'list' && (
           <>
+        {view === 'saved' && timeWindow === 'eod' && (
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <button onClick={() => setBestOfDay(v => !v)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                bestOfDay ? 'bg-amber-950/50 text-amber-300 border-amber-700' : 'bg-gray-800/40 text-gray-400 border-gray-700 hover:text-white'
+              }`}>
+              {bestOfDay ? '⭐ Best of the day' : 'Showing all hits'}
+            </button>
+            <span className="text-[11px] text-gray-500">
+              {bestOfDay
+                ? `Elite + Strong only, with at least ₹25 lakh of premium added. Hiding ${Math.max(rawHits.length - allHits.length, 0)} smaller or weaker hits — click to show all.`
+                : 'Every hit saved today, including small and weak ones — click for Best of the day.'}
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 mb-4">
           {(['all', 'WRITING', 'BUYING'] as const).map(a => (
             <button key={a} onClick={() => setWritingFilter(a)}

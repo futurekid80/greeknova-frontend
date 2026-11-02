@@ -211,6 +211,25 @@ export default function PulseScreens({ stocks, onSymbolClick, sectors }: Props) 
   }, [])
   const eq = useMemo(() => (stocks || []).filter(s => !INDICES.includes(s.symbol)), [stocks])
 
+  // Nov 2 2026: heatmap filters -- show fewer tiles. All are "and" filters; OI and price use the size of the move (+/-).
+  const [hSig, setHSig] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP' | 'SHORT_COVERING' | 'LONG_UNWINDING'>('all')
+  const [hOi, setHOi] = useState(0)
+  const [hPx, setHPx] = useState(0)
+  const [hVol, setHVol] = useState(false)
+  const [hWar, setHWar] = useState(false)
+  const [hSt, setHSt] = useState(false)
+  const heatStocks = useMemo(() => eq.filter(s =>
+    (hSig === 'all' || s.signal === hSig) &&
+    Math.abs(s.oi_chg_pct || 0) >= hOi &&
+    Math.abs(s.price_chg_pct || 0) >= hPx &&
+    (!hVol || !!s.vol_surge) &&
+    (!hWar || ((s.width_pct ?? 1) < 0.3 && !!s.has_oi_signal)) &&
+    (!hSt || stealth.has(s.symbol))
+  ), [eq, hSig, hOi, hPx, hVol, hWar, hSt, stealth])
+  const heatFiltered = hSig !== 'all' || hOi > 0 || hPx > 0 || hVol || hWar || hSt
+  const resetHeat = () => { setHSig('all'); setHOi(0); setHPx(0); setHVol(false); setHWar(false); setHSt(false) }
+  const chip = (on: boolean) => `text-[11px] px-2.5 py-1 rounded-md border ${on ? 'border-indigo-500 bg-indigo-950/50 text-indigo-200' : 'border-gray-700 text-gray-400 hover:text-white'}`
+
   const top = (arr: any[], key: (s: any) => number, desc: boolean, tone: Row['tone'], fmt: (s: any) => string): Row[] =>
     arr.slice().sort((a, b) => (desc ? key(b) - key(a) : key(a) - key(b))).slice(0, 5).map(s => ({ symbol: s.symbol, v: key(s), txt: fmt(s), tone }))
 
@@ -262,7 +281,31 @@ export default function PulseScreens({ stocks, onSymbolClick, sectors }: Props) 
               ))}
             </div>
           </div>
-          <Heatmap stocks={eq} onClick={onSymbolClick} mode={mode} stealth={stealth} sectors={sectors} />
+          <div className="mb-3 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-gray-500 w-16">Signal</span>
+              {([['all', 'All'], ['LONG_BUILDUP', 'Long buildup'], ['SHORT_BUILDUP', 'Short buildup'], ['SHORT_COVERING', 'Short covering'], ['LONG_UNWINDING', 'Long unwinding']] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setHSig(k)} className={chip(hSig === k)}>{l}</button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-gray-500 w-16">OI move</span>
+              {[0, 2, 5, 10].map(v => <button key={v} onClick={() => setHOi(v)} className={chip(hOi === v)}>{v === 0 ? 'Any' : `±${v}%+`}</button>)}
+              <span className="text-[11px] text-gray-500 w-16 ml-3">Price move</span>
+              {[0, 1, 2, 3].map(v => <button key={v} onClick={() => setHPx(v)} className={chip(hPx === v)}>{v === 0 ? 'Any' : `±${v}%+`}</button>)}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-gray-500 w-16">Only</span>
+              <button onClick={() => setHVol(v => !v)} className={chip(hVol)}>Volume surge</button>
+              <button onClick={() => setHWar(v => !v)} className={chip(hWar)}>⚡ War Zone</button>
+              <button onClick={() => setHSt(v => !v)} className={chip(hSt)}>🎯 Stealth strike</button>
+              <span className="text-[11px] text-gray-500 ml-2">Showing {heatStocks.length} of {eq.length} stocks</span>
+              {heatFiltered && <button onClick={resetHeat} className="text-[11px] text-indigo-300 hover:text-indigo-200 ml-1">Reset</button>}
+            </div>
+          </div>
+          {heatStocks.length === 0
+            ? <p className="text-xs text-gray-500 py-10 text-center">No stocks match these filters. Try loosening one.</p>
+            : <Heatmap stocks={heatStocks} onClick={onSymbolClick} mode={mode} stealth={stealth} sectors={sectors} />}
         </div>
       )}
     </div>

@@ -57,7 +57,7 @@ const BASE: F = {
 
 const PRESETS: { id: string; label: string; f: Partial<F> }[] = [
   { id: 'all',     label: '📊 All F&O stocks', f: {} },
-  { id: 'war',     label: '⚡ War Zone (narrow CPR + OI signal)', f: { warZone: true } },
+  { id: 'war',     label: '⚡ War Zone (narrow CPR + OI signal: bigger range possible, direction unknown)', f: { warZone: true } },
   { id: 'lb',      label: '🟢 Long Buildup (OI ↑ price ↑)', f: { signal: 'LONG_BUILDUP', minOi: 2 } },
   { id: 'sb',      label: '🔴 Short Buildup (OI ↑ price ↓)', f: { signal: 'SHORT_BUILDUP', minOi: 2 } },
   { id: 'sc',      label: '🔵 Short Covering (OI ↓ price ↑)', f: { signal: 'SHORT_COVERING', minOi: 2 } },
@@ -347,8 +347,8 @@ export default function PulseFeedDashboard({
                 Stocks far from the centre are moving the most. Click a dot to open that stock.
               </li>
               <li>
-                <b className="text-white">War Zone</b> = a very narrow CPR (under 0.30% wide) together with an active OI signal. A narrow CPR means
-                the day is expected to trend; the OI signal says positions are being built. 🔗 marks a stock that also has a futures-level stealth buildup.
+                <b className="text-white">War Zone</b> = a very narrow CPR (under 0.30% wide) together with an active OI signal. In our own history a narrow CPR
+                has been followed by a bigger price range than the previous day, but not by a more one-directional day, so read it as a bigger-range day being possible, direction unknown. The OI signal says positions are being built. 🔗 marks a stock that also has a futures-level stealth buildup.
               </li>
               <li>
                 <b className="text-white">Volume</b> shows today’s volume against its normal level. 🔊 means a surge. A signal backed by a volume surge is stronger than the same signal on thin volume.

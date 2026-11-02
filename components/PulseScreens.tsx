@@ -121,7 +121,7 @@ function Heatmap({ stocks, onClick, mode, stealth, sectors }: {
       SIG_PLAIN[s.signal] || 'Neutral',
       `Price ${pct(px, 2)} · OI ${pct(oi, 1)}`,
       s.vol_surge && s.vol_ratio ? `Volume ${Number(s.vol_ratio).toFixed(1)}× usual` : '',
-      war ? 'War Zone: narrow CPR with an OI signal' : '',
+      war ? 'War Zone: narrow CPR with an OI signal. A bigger range is possible, direction unknown' : '',
       st ? 'Stealth strike saved today' : '',
     ].filter(Boolean)
     return {
@@ -229,7 +229,7 @@ export default function PulseScreens({ stocks, onSymbolClick, sectors }: Props) 
       { t: 'Long unwinding', h: 'OI down, price down', rows: top(eq.filter(s => s.signal === 'LONG_UNWINDING'), oi, false, 'amber', s => `OI ${pct(oi(s), 1)}`) },
       { t: 'Near 52W high', h: 'Closest to the 52-week high', rows: top(eq.filter(s => s.pct_from_52w_high != null && s.pct_from_52w_high >= -15), s => Math.abs(s.pct_from_52w_high), false, 'violet', s => (s.at_52w_high || Math.abs(s.pct_from_52w_high) < 0.05 ? 'At high' : `${Math.abs(Number(s.pct_from_52w_high)).toFixed(1)}% below`)) },
       { t: 'Narrowest CPR', h: 'Tightest pivot range', rows: top(eq.filter(s => (s.width_pct || 0) > 0), s => s.width_pct, false, 'violet', s => `${Number(s.width_pct).toFixed(2)}% wide`) },
-      { t: 'War Zone', h: 'OI and CPR lining up', rows: top(eq.filter(s => (s.width_pct ?? 1) < 0.3 && !!s.has_oi_signal), oi, true, 'amber', s => `OI ${pct(oi(s), 1)}`) },
+      { t: 'War Zone', h: 'Narrow CPR + OI move: bigger range possible, direction unknown', rows: top(eq.filter(s => (s.width_pct ?? 1) < 0.3 && !!s.has_oi_signal), oi, true, 'amber', s => `OI ${pct(oi(s), 1)}`) },
     ]
   }, [eq])
 

@@ -384,6 +384,22 @@ export default function StrikeStealthBuildup() {
           </div>
         )}
 
+        {view === 'saved' && timeWindow === 'eod' && (
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <button onClick={() => setBestOfDay(v => !v)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                bestOfDay ? 'bg-amber-950/50 text-amber-300 border-amber-700' : 'bg-gray-800/40 text-gray-400 border-gray-700 hover:text-white'
+              }`}>
+              {bestOfDay ? '⭐ Best of the day' : 'Showing all hits'}
+            </button>
+            <span className="text-[11px] text-gray-500">
+              {bestOfDay
+                ? `Elite + Strong only, with at least ₹25 lakh of premium added. Hiding ${Math.max(rawHits.length - allHits.length, 0)} smaller or weaker hits — click to show all.`
+                : 'Every hit saved today, including small and weak ones — click for Best of the day.'}
+            </span>
+          </div>
+        )}
+
         {biasRows.length > 0 && (
           <div className="mb-5 p-4 rounded-xl border border-gray-800 bg-gray-900/30">
             <p className="text-xs font-bold text-gray-300 mb-1">🧭 Bias by symbol</p>
@@ -424,22 +440,6 @@ export default function StrikeStealthBuildup() {
 
         {layout === 'list' && (
           <>
-        {view === 'saved' && timeWindow === 'eod' && (
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <button onClick={() => setBestOfDay(v => !v)}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                bestOfDay ? 'bg-amber-950/50 text-amber-300 border-amber-700' : 'bg-gray-800/40 text-gray-400 border-gray-700 hover:text-white'
-              }`}>
-              {bestOfDay ? '⭐ Best of the day' : 'Showing all hits'}
-            </button>
-            <span className="text-[11px] text-gray-500">
-              {bestOfDay
-                ? `Elite + Strong only, with at least ₹25 lakh of premium added. Hiding ${Math.max(rawHits.length - allHits.length, 0)} smaller or weaker hits — click to show all.`
-                : 'Every hit saved today, including small and weak ones — click for Best of the day.'}
-            </span>
-          </div>
-        )}
-
         <div className="flex items-center gap-2 mb-4">
           {(['all', 'WRITING', 'BUYING'] as const).map(a => (
             <button key={a} onClick={() => setWritingFilter(a)}

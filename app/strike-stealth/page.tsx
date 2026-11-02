@@ -181,8 +181,10 @@ export default function StrikeStealthBuildup() {
   const [writingFilter, setWritingFilter] = useState<'all' | 'WRITING' | 'BUYING'>('all')
   const [freshFilter, setFreshFilter] = useState<'all' | 'Fresh Now' | 'Still Active' | 'Seen Earlier Today'>('all')
 
-  const load = useCallback((z: string, w: string, v: 'live' | 'saved') => {
-    setLoading(true)
+  // Nov 2 2026: silent=true is the background auto-refresh (no spinner flash, keeps the table in place).
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
+  const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
+    if (!silent) setLoading(true)
     if (v === 'saved') {
       fetch(`${API}/option-stealth-buildup/saved?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
         .then(r => r.json())
@@ -196,19 +198,35 @@ export default function StrikeStealthBuildup() {
             old_premium: Number(e.old_premium), new_premium: Number(e.new_premium),
           }))
           setData({ date: j.date, total: hits.length, confluence_count: hits.filter(h => h.is_confluence).length, hits, window: j.window, window_label: j.window_label })
+          setUpdatedAt(new Date())
         })
-        .catch(() => setData({ error: 'Failed to load' }))
+        .catch(() => { if (!silent) setData({ error: 'Failed to load' }) })
         .finally(() => setLoading(false))
       return
     }
     fetch(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
       .then(r => r.json())
-      .then(setData)
-      .catch(() => setData({ error: 'Failed to load' }))
+      .then(j => { setData(j); setUpdatedAt(new Date()) })
+      .catch(() => { if (!silent) setData({ error: 'Failed to load' }) })
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { load(zone, timeWindow, view) }, [load, zone, timeWindow, view])
+
+  // Auto-refresh every 60s while the market is open and the tab is visible.
+  useEffect(() => {
+    const marketOpenNow = () => {
+      const ist = new Date(Date.now() + (5.5 * 60 + new Date().getTimezoneOffset()) * 60000)
+      const day = ist.getDay(), mins = ist.getHours() * 60 + ist.getMinutes()
+      return day >= 1 && day <= 5 && mins >= 9 * 60 + 15 && mins <= 15 * 60 + 35
+    }
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible' && marketOpenNow()) load(zone, timeWindow, view, true)
+    }, 60000)
+    const onVis = () => { if (document.visibilityState === 'visible' && marketOpenNow()) load(zone, timeWindow, view, true) }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+  }, [load, zone, timeWindow, view])
   useEffect(() => {
     setShowAll(false)
   }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone, timeWindow, view, writingFilter, freshFilter])
@@ -266,6 +284,11 @@ export default function StrikeStealthBuildup() {
               className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5 disabled:opacity-40 disabled:hover:text-gray-400">
               <Download size={12} /> Download CSV
             </button>
+            {updatedAt && (
+              <span className="text-[11px] text-gray-500 whitespace-nowrap hidden sm:inline">
+                Updated {updatedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })} · auto-refresh 1 min in market hours
+              </span>
+            )}
             <button onClick={() => load(zone, timeWindow, view)}
               className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh

@@ -39,7 +39,7 @@ const PULSE_CARD_SYMBOLS = ['NIFTY', 'BANKNIFTY', 'SENSEX']
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
 interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }
 interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
-interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean; vol_ratio?:number; week52_high?:number; pct_from_52w_high?:number; at_52w_high?:boolean }
+interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean; vol_ratio?:number; week52_high?:number; pct_from_52w_high?:number; at_52w_high?:boolean; oi_comb?:number|null }
 
 // ── Sector Performance ────────────────────────────────────────────────────────
 const SECTOR_MAP: Record<string, string[]> = {
@@ -1043,6 +1043,13 @@ export default function MarketPulse() {
     return next
   })
   const vis = (id: string) => !newFeed || !hiddenBlocks.includes(id)
+  // Nov 2 2026: OI basis for the new layout. 'combined' = near + next month futures OI together
+  // (matches how other tools show it, and stays meaningful during the roll week); 'near' = near month only.
+  const [oiBasis, setOiBasis] = useState<'near' | 'combined'>('combined')
+  useEffect(() => {
+    try { const v = localStorage.getItem('gn_oi_basis'); if (v === 'near' || v === 'combined') setOiBasis(v) } catch {}
+  }, [])
+  const chooseOiBasis = (v: 'near' | 'combined') => { setOiBasis(v); try { localStorage.setItem('gn_oi_basis', v) } catch {} }
   useEffect(() => {
     try { setNewFeed(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
   }, [])
@@ -1205,7 +1212,7 @@ export default function MarketPulse() {
       if (pulseJson) setPulseMeta({ date: pulseJson.active_date, live: !!pulseJson.is_live, snapshots: pulseJson.snapshots })
       const enrichedPulse: PulseStock[] = pulseItems.map((p: any) => ({
         symbol: p.symbol, cmp: p.ltp || p.cmp || 0,
-        oi_chg_pct: p.oi_chg_pct || 0, price_chg_pct: p.price_chg_pct || 0,
+        oi_chg_pct: p.oi_chg_pct || 0, oi_comb: p.fut_oi_chg_pct_combined ?? null, price_chg_pct: p.price_chg_pct || 0,
         signal: p.signal || 'NEUTRAL', label: p.label || '—',
         oi_now: p.oi_now, oi_prev: p.oi_prev, vol_surge: p.vol_surge || false, vol_ratio: p.vol_ratio,
         has_oi_signal: (cprMap[p.symbol] as CPRRow)?.has_oi_signal || false,
@@ -1298,7 +1305,9 @@ export default function MarketPulse() {
 
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))
   const warZoneCount = pulseStocks.filter(s => (s.width_pct||1)<0.3 && s.has_oi_signal).length
-  const feedStocks: PulseStock[] = pulseStocks.length > 0 ? pulseStocks : cprData.map(c => ({
+  const feedStocks: PulseStock[] = pulseStocks.length > 0
+    ? (newFeed && oiBasis === 'combined' ? pulseStocks.map(s => (s.oi_comb != null ? { ...s, oi_chg_pct: s.oi_comb } : s)) : pulseStocks)
+    : cprData.map(c => ({
     symbol: c.symbol, cmp: c.last_cmp||c.cmp||0, oi_chg_pct:0, price_chg_pct:0,
     signal:'NEUTRAL', label:'—', has_oi_signal:c.has_oi_signal||false,
     width_pct:c.width_pct, width_pts:c.width_pts, width_emoji:c.width_emoji,
@@ -1439,8 +1448,19 @@ export default function MarketPulse() {
         {/* Customise (preview) */}
         {newFeed && (
           <div className="mb-3 flex flex-col items-end">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-1 text-[11px] text-gray-400">
+              <span>OI basis:</span>
+              {(['combined', 'near'] as const).map(v => (
+                <button key={v} onClick={() => chooseOiBasis(v)}
+                  className={`px-2 py-1 rounded-md border ${oiBasis === v ? 'border-indigo-500 text-indigo-200 bg-indigo-500/10' : 'border-gray-700 text-gray-400 hover:text-white'}`}>
+                  {v === 'combined' ? 'Near + next month' : 'Near month'}
+                </button>
+              ))}
+            </div>
             <button onClick={() => setShowCustomise(v => !v)}
               className="text-xs text-gray-300 border border-gray-700 rounded-lg px-3 py-1.5 hover:text-white">⚙ Customise this page{hiddenBlocks.length ? ` · ${hiddenBlocks.length} hidden` : ''}</button>
+            </div>
             {showCustomise && (
               <div className="mt-2 w-full sm:w-auto rounded-xl border border-gray-700 bg-gray-900/60 p-3">
                 <p className="text-[11px] text-gray-500 mb-2">Choose which sections to show. Saved on this browser.</p>

@@ -262,11 +262,11 @@ export default function StealthDashboard({
               <li>
                 <b className="text-white">Read the table:</b> <b>Moneyness</b> shows ATM / OTM / ITM and how many strikes from ATM (OTM +2 = two
                 strikes out of the money). <b>OI% Increase</b> shows the jump and what it was before. <b>Premium % Move</b> is the option&apos;s
-                price change. <b>Old → New Prem</b> are the actual premiums, and <b>CMP</b> is the stock/index price.
+                price change. <b>Old → New Prem</b> are last traded premiums (Kite&apos;s own option close is a 30-minute average, so its % can differ), and <b>CMP</b> is the stock/index price.
               </li>
               <li>
                 <b className="text-white">Activity</b> is inferred from the premium: <b>OI up + premium down = Writing</b> (sellers adding),
-                <b> OI up + premium up = Buying</b>, and <b>Quiet</b> = premium almost unchanged. Typical reading: Call Buying + Put Writing
+                <b> OI up + premium up = Buying</b>, and <b>Quiet</b> = premium within 1% (a smaller move is noise, not a side). It is a pattern from the premium move, not seen in actual trades: the stock price, volatility and time decay also move premium. Typical reading: Call Buying + Put Writing
                 leans bullish; Put Buying + Call Writing leans bearish; the <i>Bias by symbol</i> panel above sums this up per stock.
                 In the EOD window the label compares only yesterday's close with now, so a premium that swings and comes back reads Quiet.
                 Check the <i>Day range</i> under the premium, and the amber <b>⚠ Last hour</b> note, which appears when the last hour alone points the other way.
@@ -516,9 +516,9 @@ export default function StealthDashboard({
             <thead>
               <tr className="text-[10px] uppercase tracking-wide text-gray-500 text-left border-b border-gray-800">
                 <th className="px-3 py-2">Symbol</th><th className="px-2 py-2 text-right">Strike</th><th className="px-2 py-2">Type</th>
-                <th className="px-2 py-2">Moneyness</th><th className="px-2 py-2">Activity</th><th className="px-2 py-2 text-right">OI% Increase</th>
+                <th className="px-2 py-2">Moneyness</th><th className="px-2 py-2" title="How is this decided? OI must be rising. Premium up 1% or more = Buying; premium down 1% or more = Writing; within 1% = Quiet. It is inferred from the premium move, not seen in actual trades — the stock price, volatility and time decay also move premium.">Activity <span className="text-gray-500 cursor-help">ⓘ</span></th><th className="px-2 py-2 text-right">OI% Increase</th>
                 <th className="px-2 py-2 text-right">New OI</th><th className="px-2 py-2 text-right bg-emerald-950/20">Premium % Move</th>
-                <th className="px-2 py-2 text-right">Old → New Prem</th><th className="px-2 py-2 text-right">CMP</th><th className="px-2 py-2">Tier</th>
+                <th className="px-2 py-2 text-right" title="Last traded prices: the previous session's last reading vs now. Kite's own close for options is an average of the last 30 minutes, so its % change can differ.">Old → New Prem <span className="text-gray-500 cursor-help">ⓘ</span></th><th className="px-2 py-2 text-right">CMP</th><th className="px-2 py-2">Tier</th>
               </tr>
             </thead>
             <tbody>
@@ -539,7 +539,7 @@ export default function StealthDashboard({
                     <td className="px-2 py-2 text-right font-bold text-white">{h.strike.toLocaleString('en-IN')}</td>
                     <td className="px-2 py-2"><Chip cls={h.option_type === 'CE' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : 'text-rose-300 border-rose-700/50 bg-rose-950/30'}>{h.option_type}</Chip></td>
                     <td className="px-2 py-2"><Chip cls={MONEY_CHIP[m.label]}>{m.label}</Chip><div className="text-[10px] text-gray-500">{m.label === 'ATM' ? 'At Strike' : `${m.label === 'ITM' ? '' : ''}+${m.n}`}</div></td>
-                    <td className="px-2 py-2">{h.activity ? <Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip> : <span className="text-gray-600">—</span>}
+                    <td className="px-2 py-2">{h.activity ? <span title="Inferred from the premium move (OI up + premium up 1%+ = Buying, down 1%+ = Writing, otherwise Quiet). A pattern, not seen in actual trades."><Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip></span> : <span className="text-gray-600">—</span>}
                       {h.activity_conflict && h.hr_activity && (
                         <div className="mt-1 text-[10px] font-semibold text-amber-300" title={`Whole-day reading and the last hour disagree. ${h.hr_share_pct ?? '?'}% of today's OI build came in the last hour.`}>
                           ⚠ Last hour: {ACT_ICON[h.hr_activity]} {h.hr_activity_label ?? h.hr_activity}

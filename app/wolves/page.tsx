@@ -162,8 +162,8 @@ export default function WolvesScanner() {
   const [eventFreshnessFilter, setEventFreshnessFilter] = useState<typeof FRESHNESS_OPTIONS[number]>('all')
   const [rankFilter, setRankFilter] = useState<'all' | 'A+' | 'A' | 'B' | 'C'>('all')
   const [countdown, setCountdown] = useState(300)
-  // Nov 3 2026: redesigned view is previewable with ?v=new while Manish reviews it.
-  const [newView, setNewView] = useState(false)
+  // Nov 3 2026: redesigned view is now the default (approved by Manish); ?v=old keeps the old layout.
+  const [newView, setNewView] = useState(true)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
@@ -200,7 +200,7 @@ export default function WolvesScanner() {
   }
 
   useEffect(() => {
-    try { setNewView(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
+    try { setNewView(new URLSearchParams(window.location.search).get('v') !== 'old') } catch {}  // ?v=old shows the previous layout
     fetchData()
     intervalRef.current = setInterval(() => { fetchData(); setCountdown(300) }, 5 * 60 * 1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p - 1)), 1000)

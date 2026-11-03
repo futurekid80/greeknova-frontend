@@ -155,7 +155,11 @@ function Heatmap({ stocks, onClick, mode, stealth, sectors }: {
   const layout = useMemo(() => {
     const tot = groups.reduce((a, b) => a + b.total, 0)
     if (!tot) return []
-    const big = squarify(groups.map(g => ({ symbol: g.key, area: g.total, col: '', label: g.label, war: false, stealth: false, tip: '' })), 0, 0, W, H)
+    // Nov 3 2026: a group with only a few small moves (e.g. Long unwinding / Short covering on a strong-up day) was squeezed into an
+    // unreadable sliver. Give every group at least ~9% of the layout so its name and tiles stay visible (tiles inside are drawn larger than
+    // strictly proportional for those small groups).
+    const floor = tot * 0.09
+    const big = squarify(groups.map(g => ({ symbol: g.key, area: Math.max(g.total, floor), col: '', label: g.label, war: false, stealth: false, tip: '' })), 0, 0, W, H)
     return big.map(b => {
       const g = groups.find(x => x.key === b.it.symbol)!
       const pad = 3, head = 16

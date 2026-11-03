@@ -34,6 +34,7 @@ export interface DashHit {
   hr_share_pct?: number
   activity_conflict?: boolean
   freshness?: string
+  last_seen?: string
 }
 
 interface F {
@@ -536,6 +537,11 @@ export default function StealthDashboard({
                         {h.is_confluence && <span title="Confluence with FUT-level Stealth Buildup" className="ml-1">🔗</span>}
                         {h.freshness === 'Fresh Now' && <span title="Fresh now" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-lime-400 align-middle" />}
                         <div className="text-[10px] text-gray-500">{fmtExp(h.expiry)}</div>
+                        {h.freshness === 'Seen Earlier Today' && h.last_seen && (
+                          <div className="text-[10px] text-amber-500/80" title="This strike no longer qualified on the latest scan. Its figures are frozen as of this time.">
+                            last seen {new Date(h.last_seen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </div>
+                        )}
                       </button>
                     </td>
                     <td className="px-2 py-2 text-right font-bold text-white">{h.strike.toLocaleString('en-IN')}</td>

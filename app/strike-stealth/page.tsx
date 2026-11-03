@@ -186,6 +186,8 @@ export default function StrikeStealthBuildup() {
   // Nov 2 2026: "Best of the day" -- for the saved EOD view, show only Elite/Strong hits with at least
   // Rs 25 lakh of premium money added (OI added x premium). Today that is ~140 rows instead of ~600.
   const [bestOfDay, setBestOfDay] = useState(true)
+  // Nov 3 2026: EOD list defaults to strikes that still qualify on the latest scan; ones frozen from earlier in the day are opt-in.
+  const [showEarlier, setShowEarlier] = useState(false)
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
     if (!silent) setLoading(true)
     if (v === 'saved') {
@@ -232,10 +234,13 @@ export default function StrikeStealthBuildup() {
   }, [load, zone, timeWindow, view])
   useEffect(() => {
     setShowAll(false)
-  }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone, timeWindow, view, writingFilter, freshFilter])
+  }, [tierFilter, confluenceOnly, instrumentFilter, optionTypeFilter, expiryFilter, search, zone, timeWindow, view, writingFilter, freshFilter, showEarlier])
 
   const rawHits = data?.hits || []
   const bestOn = bestOfDay && view === 'saved' && timeWindow === 'eod'
+  const earlierHidden = view === 'saved' && timeWindow === 'eod' && !showEarlier && freshFilter === 'all'
+  const freshOk = (h: { freshness?: string }) => view !== 'saved' ? true : freshFilter !== 'all' ? h.freshness === freshFilter : !(earlierHidden && h.freshness === 'Seen Earlier Today')
+  const earlierCount = view === 'saved' && timeWindow === 'eod' ? rawHits.filter(h => h.freshness === 'Seen Earlier Today').length : 0
   const allHits = bestOn
     ? rawHits.filter(h => (h.tier === 'ELITE' || h.tier === 'STRONG') && (h.new_oi - h.old_oi) * h.new_premium >= 2500000)
     : rawHits
@@ -245,7 +250,7 @@ export default function StrikeStealthBuildup() {
     .filter(h => tierFilter === 'all' || h.tier === tierFilter)
     .filter(h => !confluenceOnly || h.is_confluence)
     .filter(h => writingFilter === 'all' || h.activity === writingFilter)
-    .filter(h => view !== 'saved' || freshFilter === 'all' || h.freshness === freshFilter)
+    .filter(h => freshOk(h))
     .filter(h => instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol)))
     .filter(h => optionTypeFilter === 'all' || h.option_type === optionTypeFilter)
     .filter(h => expiryFilter === 'all' || h.expiry === expiryFilter)
@@ -398,6 +403,13 @@ export default function StrikeStealthBuildup() {
               }`}>
               {bestOfDay ? '⭐ Best of the day' : 'Showing all hits'}
             </button>
+            <button onClick={() => setShowEarlier(v => !v)}
+              title="Strikes that qualified earlier today but no longer pass on the latest scan are frozen at their old prices"
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                showEarlier ? 'bg-cyan-950/60 text-cyan-300 border-cyan-700' : 'bg-gray-800/40 text-gray-400 border-gray-700 hover:text-white'
+              }`}>
+              {showEarlier ? `Including ${earlierCount} seen earlier today` : `Latest scan only · ${earlierCount} earlier hidden`}
+            </button>
             <span className="text-[11px] text-gray-500">
               {bestOfDay
                 ? `Elite + Strong only, with at least ₹25 lakh of premium added. Hiding ${Math.max(rawHits.length - allHits.length, 0)} smaller or weaker hits — click to show all.`
@@ -434,7 +446,7 @@ export default function StrikeStealthBuildup() {
 
         {layout === 'dashboard' && (
           <StealthDashboard
-            hits={allHits.filter(h => view !== 'saved' || freshFilter === 'all' || h.freshness === freshFilter) as any}
+            hits={allHits.filter(h => freshOk(h)) as any}
             loading={loading}
             error={data?.error}
             emptyHint={view === 'saved'

@@ -110,7 +110,9 @@ function tileColor(hue: string, move: number) {
 function Heatmap({ stocks, onClick, mode, stealth, sectors }: {
   stocks: any[]; onClick?: (s: string) => void; mode: 'signal' | 'sector'; stealth: Set<string>; sectors?: Record<string, string[]>
 }) {
-  const W = 1000, H = 520
+  // Height shrinks when few stocks match the filters, so tiles stay compact instead of huge empty boxes
+  const W = 1000
+  const H = Math.round(Math.min(520, Math.max(150, 110 + stocks.length * 20)))
   const [tip, setTip] = useState<{ x: number; y: number; it: Item } | null>(null)
 
   const mk = (s: any): Item => {
@@ -160,7 +162,7 @@ function Heatmap({ stocks, onClick, mode, stealth, sectors }: {
       const inner = squarify(g.items, b.x + pad, b.y + head + pad, b.w - 2 * pad, b.h - head - 2 * pad)
       return { g, b, inner }
     })
-  }, [groups])
+  }, [groups, H])
 
   if (!layout.length) return <p className="text-xs text-gray-500 py-10 text-center">No signals to draw yet.</p>
   return (

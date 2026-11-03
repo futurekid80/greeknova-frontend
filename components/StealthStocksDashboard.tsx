@@ -115,8 +115,8 @@ export default function StealthStocksDashboard({
           <p className="text-[10px] text-gray-500">price barely moved</p>
         </div>
         <div className={tile}>
-          <p className={lab}>OPTIONS LEAN (NET DELTA)</p>
-          <p className="text-sm font-bold mt-2"><span className="text-emerald-400">{bull} put-side</span> <span className="float-right text-rose-400">{bear} call-side</span></p>
+          <p className={lab}>NET DELTA (ATM ±5)</p>
+          <p className="text-sm font-bold mt-2 flex justify-between gap-2"><span className="text-emerald-400">{bull} positive</span><span className="text-rose-400">{bear} negative</span></p>
           <div className="h-1.5 rounded bg-gray-800 mt-2 overflow-hidden flex">
             <div style={{ width: `${bull + bear ? (bull / (bull + bear)) * 100 : 50}%`, background: '#34d399' }} />
             <div style={{ width: `${bull + bear ? (bear / (bull + bear)) * 100 : 50}%`, background: '#fb7185' }} />
@@ -124,7 +124,8 @@ export default function StealthStocksDashboard({
         </div>
         <div className={tile}>
           <p className={lab}>BIGGEST OI RISE</p>
-          <p className="text-lg font-black text-white mt-1 truncate">{top ? `${top.symbol} ${sgn(top.today_oi_chg, 1)}` : '—'}</p>
+          <p className="text-base font-black text-white mt-1 truncate">{top ? top.symbol : '—'}</p>
+          <p className="text-xs font-bold text-emerald-400">{top ? sgn(top.today_oi_chg, 1) : ''}</p>
           <p className="text-[10px] text-gray-500">price {top ? sgn(top.price_chg) : '—'}</p>
         </div>
       </div>

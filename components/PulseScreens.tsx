@@ -124,7 +124,7 @@ function Heatmap({ stocks, onClick, mode, stealth, sectors }: {
       `Price ${pct(px, 2)} · OI ${pct(oi, 1)}`,
       s.vol_surge && s.vol_ratio ? `Volume ${Number(s.vol_ratio).toFixed(1)}× usual` : '',
       war ? 'War Zone: narrow CPR with an OI signal. A bigger range is possible, direction unknown' : '',
-      st ? 'Elite Stealth strike today (₹25 lakh+ of premium added)' : '',
+      st ? 'Elite Stealth strike today (₹1 crore+ of premium added)' : '',
     ].filter(Boolean)
     return {
       symbol: s.symbol,
@@ -213,10 +213,10 @@ export default function PulseScreens({ stocks, onSymbolClick, sectors }: Props) 
     let dead = false
     fetch(`${API}/option-stealth-buildup/saved?window=eod&zone=5`).then(r => (r.ok ? r.json() : null)).catch(() => null)
       .then(d => {
-        // Nov 2 2026: only Elite strikes with at least Rs 25 lakh of premium added get the marker (was: any saved hit,
+        // Nov 2 2026: only Elite strikes with at least Rs 25 lakh (raised to Rs 1 crore on Nov 3 2026) of premium added get the marker (was: any saved hit,
         // which tagged ~160 of 216 stocks and said nothing).
         if (!dead) setStealth(new Set((d?.events || [])
-          .filter((e: any) => (e.best_tier || e.tier) === 'ELITE' && (Number(e.new_oi) - Number(e.old_oi)) * Number(e.new_premium) >= 2500000)
+          .filter((e: any) => (e.best_tier || e.tier) === 'ELITE' && (Number(e.new_oi) - Number(e.old_oi)) * Number(e.new_premium) >= 10000000)
           .map((e: any) => e.symbol)))
       })
     return () => { dead = true }
@@ -285,7 +285,7 @@ export default function PulseScreens({ stocks, onSymbolClick, sectors }: Props) 
       ) : (
         <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <p className="text-[11px] text-gray-500 min-w-0 flex-1">Every F&amp;O stock as a tile. Colour = what OI and price are doing; stronger colour = bigger price move; bigger tile = bigger move. <span className="text-amber-300">Gold outline</span> = War Zone · 🎯 = Elite Stealth strike today (₹25 lakh+ premium added). Hover for a plain reading, click to open.</p>
+            <p className="text-[11px] text-gray-500 min-w-0 flex-1">Every F&amp;O stock as a tile. Colour = what OI and price are doing; stronger colour = bigger price move; bigger tile = bigger move. <span className="text-amber-300">Gold outline</span> = War Zone · 🎯 = Elite Stealth strike today (₹1 crore+ premium added). Hover for a plain reading, click to open.</p>
             <div className="flex gap-1.5">
               {([['signal', 'By signal'], ['sector', 'By sector']] as const).map(([k, l]) => (
                 <button key={k} onClick={() => setMode(k)}

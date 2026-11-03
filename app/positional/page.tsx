@@ -40,6 +40,7 @@ interface PIStock {
 }
 
 interface StealthStock {
+  near_miss?: boolean
   symbol: string
   cmp: number
   tier: string
@@ -84,6 +85,7 @@ interface PIData {
   total_trading_days: number
   active_conviction: PIStock[]
   stealth_buildup: StealthStock[]
+  stealth_all?: StealthStock[]
   vol_breakout: VolStock[]
   series_buildup: PIStock[]
   summary: {
@@ -877,6 +879,12 @@ export default function PositionalIntelligence() {
   const [signalFilter, setSignalFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP'>('all')
   const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days' | 'signal' | 'latest'>('consistency')
   const [historySymbol, setHistorySymbol] = useState<string | null>(null)
+  // Nov 3 2026: ?v=new = wider-net Stealth (all qualifying, uncapped; Elite + Strong by default, Watch behind a switch)
+  const [wideStealth, setWideStealth] = useState(false)
+  const [widerNet, setWiderNet] = useState(false)
+  useEffect(() => {
+    try { setWideStealth(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
+  }, [])
   // Call/put wall + writing-vs-stale, from the same gamma-exposure snapshot
   // the Premium Screen uses -- lets these stealth-buildup cards show whether
   // the OI move lines up with an actively-defended options wall (e.g. LODHA
@@ -962,6 +970,10 @@ export default function PositionalIntelligence() {
   )
 
   if (!data) return null
+
+  const stealthAll = data.stealth_all || []
+  const stealthWatchCount = stealthAll.filter(x => x.tier === 'WATCH').length
+  const stealthShown = widerNet ? stealthAll : stealthAll.filter(x => x.tier === 'ELITE' || x.tier === 'STRONG')
 
   const s = data.summary
 
@@ -1052,15 +1064,35 @@ export default function PositionalIntelligence() {
           <SectionHeader
             emoji="🕵️"
             title="Stealth + Volume Alerts"
-            count={data.stealth_buildup.length + data.vol_breakout.length}
+            count={(wideStealth && data.stealth_all ? stealthShown.length : data.stealth_buildup.length) + data.vol_breakout.length}
             subtitle="Today's stealth accumulation and volume-backed breakout signals"
             color="bg-amber-900/50 text-amber-300"
           />
-          {data.stealth_buildup.length === 0 && data.vol_breakout.length === 0 ? (
+          {(wideStealth && data.stealth_all ? stealthShown.length : data.stealth_buildup.length) === 0 && data.vol_breakout.length === 0 ? (
             <EmptyState message="No stealth or volume alerts today. Available during market hours (9:15 AM – 3:30 PM)." />
           ) : (
             <div className="space-y-4">
-              {data.stealth_buildup.length > 0 && (
+              {wideStealth && data.stealth_all ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Stealth Buildup</p>
+                    <button onClick={() => setWiderNet(v => !v)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${widerNet ? 'bg-sky-950/60 text-sky-300 border-sky-700' : 'bg-gray-800/40 text-gray-400 border-gray-700 hover:text-white'}`}>
+                      {widerNet ? `Wider net on · +${stealthWatchCount} Watch` : `Wider net · +${stealthWatchCount} Watch`}
+                    </button>
+                    <span className="text-[11px] text-gray-500">
+                      {widerNet
+                        ? 'Includes Watch: close to the rule — OI rise a bit smaller, or the stock price moved 1–1.5% instead of 1% or less.'
+                        : 'Elite + Strong: futures OI up 1.5%+ while the stock price moved 1% or less. Every qualifying stock is shown.'}
+                    </span>
+                  </div>
+                  {stealthShown.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {stealthShown.map(s => <StealthCard key={s.symbol} s={s} onSymbolClick={setHistorySymbol} wall={wallMap[s.symbol]} />)}
+                    </div>
+                  ) : <p className="text-xs text-gray-500">No Elite or Strong stealth hits right now.</p>}
+                </>
+              ) : data.stealth_buildup.length > 0 && (
                 <>
                   <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Stealth Buildup</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

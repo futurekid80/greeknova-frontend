@@ -170,6 +170,8 @@ export default function StealthDashboard({
 
   const rows = useMemo(() => {
     const q = f.search.trim().toLowerCase()
+    // exact symbol typed/clicked (e.g. NIFTY) must not also match BANKNIFTY, MIDCPNIFTY
+    const exactSym = !!q && hits.some(h => h.symbol.toLowerCase() === q)
     return hits.filter(h => {
       if (h.new_oi < f.minOI) return false
       if (h.oi_pct < f.minPct) return false
@@ -179,7 +181,7 @@ export default function StealthDashboard({
       if (f.tier !== 'ALL' && h.tier !== f.tier) return false
       if (f.confluence && !h.is_confluence) return false
       if (f.expiry !== 'all' && h.expiry !== f.expiry) return false
-      if (q && !h.symbol.toLowerCase().includes(q)) return false
+      if (q && (exactSym ? h.symbol.toLowerCase() !== q : !h.symbol.toLowerCase().includes(q))) return false
       const m = moneyness(h)
       if (f.money !== 'ALL' && m.label !== f.money) return false
       if (f.dist > 0 && m.n > f.dist) return false

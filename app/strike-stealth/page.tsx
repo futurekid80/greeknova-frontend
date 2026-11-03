@@ -249,7 +249,13 @@ export default function StrikeStealthBuildup() {
     .filter(h => instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol)))
     .filter(h => optionTypeFilter === 'all' || h.option_type === optionTypeFilter)
     .filter(h => expiryFilter === 'all' || h.expiry === expiryFilter)
-    .filter(h => !search.trim() || h.symbol.toLowerCase().includes(search.trim().toLowerCase()))
+    .filter(h => {
+      const q = search.trim().toLowerCase()
+      if (!q) return true
+      // exact symbol (e.g. NIFTY) must not also match BANKNIFTY / MIDCPNIFTY
+      const exact = rawHits.some(x => x.symbol.toLowerCase() === q)
+      return exact ? h.symbol.toLowerCase() === q : h.symbol.toLowerCase().includes(q)
+    })
 
   const hits = showAll ? filteredHits : filteredHits.slice(0, PAGE_SIZE)
 

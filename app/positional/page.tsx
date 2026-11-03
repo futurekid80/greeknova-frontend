@@ -880,11 +880,10 @@ export default function PositionalIntelligence() {
   const [signalFilter, setSignalFilter] = useState<'all' | 'LONG_BUILDUP' | 'SHORT_BUILDUP'>('all')
   const [sortBy, setSortBy]   = useState<'consistency' | 'series_oi' | 'lb_days' | 'signal' | 'latest'>('consistency')
   const [historySymbol, setHistorySymbol] = useState<string | null>(null)
-  // Nov 3 2026: ?v=new = wider-net Stealth (all qualifying, uncapped; Elite + Strong by default, Watch behind a switch)
-  const [wideStealth, setWideStealth] = useState(false)
-  const [widerNet, setWiderNet] = useState(false)
+  // Nov 3 2026: new Stealth dashboard is the default (?v=old = legacy cards); wider-net Stealth (all qualifying, uncapped; Elite + Strong by default, Watch behind a switch)
+  const [wideStealth, setWideStealth] = useState(true)
   useEffect(() => {
-    try { setWideStealth(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
+    try { setWideStealth(new URLSearchParams(window.location.search).get('v') !== 'old') } catch {}
   }, [])
   // Call/put wall + writing-vs-stale, from the same gamma-exposure snapshot
   // the Premium Screen uses -- lets these stealth-buildup cards show whether
@@ -973,8 +972,7 @@ export default function PositionalIntelligence() {
   if (!data) return null
 
   const stealthAll = data.stealth_all || []
-  const stealthWatchCount = stealthAll.filter(x => x.tier === 'WATCH').length
-  const stealthShown = widerNet ? stealthAll : stealthAll.filter(x => x.tier === 'ELITE' || x.tier === 'STRONG')
+  const stealthShown = stealthAll.filter(x => x.tier === 'ELITE' || x.tier === 'STRONG')   // headline count = the default Elite + Strong view
 
   const s = data.summary
 
@@ -1075,10 +1073,7 @@ export default function PositionalIntelligence() {
             <div className="space-y-4">
               {wideStealth && data.stealth_all ? (
                 <StealthStocksDashboard
-                  rows={stealthShown as any}
-                  watchCount={stealthWatchCount}
-                  widerNet={widerNet}
-                  onToggleWider={() => setWiderNet(v => !v)}
+                  rows={stealthAll as any}
                   onSymbolClick={setHistorySymbol}
                   renderWall={(sym) => {
                     const w = wallMap[sym]

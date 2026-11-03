@@ -1,6 +1,6 @@
 'use client'
 import Navbar from '@/components/Navbar'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Zap, Search, Download } from 'lucide-react'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import StealthDashboard from '@/components/StealthDashboard'
@@ -188,12 +188,18 @@ export default function StrikeStealthBuildup() {
   const [bestOfDay, setBestOfDay] = useState(true)
   // Nov 3 2026: EOD list defaults to strikes that still qualify on the latest scan; ones frozen from earlier in the day are opt-in.
   const [showEarlier, setShowEarlier] = useState(false)
+  // Nov 3 2026: only the most recent request may update the page, so a slow reply for an earlier
+  // window / view (5-min, Hourly, Live) can never overwrite the EOD data after you've switched.
+  const reqId = useRef(0)
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
+    const myReq = ++reqId.current
+    const fresh = () => myReq === reqId.current
     if (!silent) setLoading(true)
     if (v === 'saved') {
       fetch(`${API}/option-stealth-buildup/saved?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
         .then(r => r.json())
         .then(j => {
+          if (!fresh()) return
           setSavedDate(j.date ?? null)
           const hits: StealthHit[] = (j.events || []).map((e: any) => ({
             ...e,
@@ -205,15 +211,15 @@ export default function StrikeStealthBuildup() {
           setData({ date: j.date, total: hits.length, confluence_count: hits.filter(h => h.is_confluence).length, hits, window: j.window, window_label: j.window_label })
           setUpdatedAt(new Date())
         })
-        .catch(() => { if (!silent) setData({ error: 'Failed to load' }) })
-        .finally(() => setLoading(false))
+        .catch(() => { if (fresh() && !silent) setData({ error: 'Failed to load' }) })
+        .finally(() => { if (fresh()) setLoading(false) })
       return
     }
     fetch(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
       .then(r => r.json())
-      .then(j => { setData(j); setUpdatedAt(new Date()) })
-      .catch(() => { if (!silent) setData({ error: 'Failed to load' }) })
-      .finally(() => setLoading(false))
+      .then(j => { if (!fresh()) return; setData(j); setUpdatedAt(new Date()) })
+      .catch(() => { if (fresh() && !silent) setData({ error: 'Failed to load' }) })
+      .finally(() => { if (fresh()) setLoading(false) })
   }, [])
 
   useEffect(() => { load(zone, timeWindow, view) }, [load, zone, timeWindow, view])

@@ -265,11 +265,11 @@ export default function StealthDashboard({
               <li>
                 <b className="text-white">Read the table:</b> <b>Moneyness</b> shows ATM / OTM / ITM and how many strikes from ATM (OTM +2 = two
                 strikes out of the money). <b>OI% Increase</b> shows the jump and what it was before. <b>Premium % Move</b> is the option&apos;s
-                price change. <b>Old → New Prem</b> are last traded premiums (Kite&apos;s own option close is a 30-minute average, so its % can differ), and <b>CMP</b> is the stock/index price.
+                price change. <b>Old → New Prem</b>: Old is the exchange&apos;s official close of the previous day (from Kite), New is the latest traded price, and <b>CMP</b> is the stock/index price.
               </li>
               <li>
                 <b className="text-white">Activity</b> is inferred from the premium: <b>OI up + premium down = Writing</b> (sellers adding),
-                <b> OI up + premium up = Buying</b>, and <b>Quiet</b> = premium within 1% (a smaller move is noise, not a side). It is a pattern from the premium move, not seen in actual trades: the stock price, volatility and time decay also move premium. Typical reading: Call Buying + Put Writing
+                <b> OI up + premium up = Buying</b>, and <b>Quiet</b> = premium within 1% (a smaller move is noise, not a side). In the EOD window the label is judged on implied volatility (IV) so the stock&apos;s own move and a day of time decay don&apos;t count: <b>IV down since yesterday&apos;s close = Writing, IV up = Buying, within about 3% = Quiet</b> (if IV can&apos;t be worked out it falls back to the premium rule above). It is still a pattern, not seen in actual trades. Typical reading: Call Buying + Put Writing
                 leans bullish; Put Buying + Call Writing leans bearish; the <i>Bias by symbol</i> panel above sums this up per stock.
                 In the EOD window the label compares only yesterday's close with now, so a premium that swings and comes back reads Quiet.
                 Check the <i>Day range</i> under the premium, and the amber <b>⚠ Last hour</b> note, which appears when the last hour alone points the other way.
@@ -519,7 +519,7 @@ export default function StealthDashboard({
             <thead>
               <tr className="text-[10px] uppercase tracking-wide text-gray-500 text-left border-b border-gray-800">
                 <th className="px-3 py-2">Symbol</th><th className="px-2 py-2 text-right">Strike</th><th className="px-2 py-2">Type</th>
-                <th className="px-2 py-2">Moneyness</th><th className="px-2 py-2" title="How is this decided? OI must be rising. Premium up 1% or more = Buying; premium down 1% or more = Writing; within 1% = Quiet. It is inferred from the premium move, not seen in actual trades — the stock price, volatility and time decay also move premium.">Activity <span className="text-gray-500 cursor-help">ⓘ</span></th><th className="px-2 py-2 text-right">OI% Increase</th>
+                <th className="px-2 py-2">Moneyness</th><th className="px-2 py-2" title="How is this decided? OI must be rising. EOD window: judged on implied volatility versus yesterday's official close — IV down = Writing, IV up = Buying, within about 3% = Quiet, so the stock's move and time decay don't count. Other windows: premium up 1%+ = Buying, down 1%+ = Writing. Inferred, not seen in actual trades.">Activity <span className="text-gray-500 cursor-help">ⓘ</span></th><th className="px-2 py-2 text-right">OI% Increase</th>
                 <th className="px-2 py-2 text-right">New OI</th><th className="px-2 py-2 text-right bg-emerald-950/20">Premium % Move</th>
                 <th className="px-2 py-2 text-right" title="Last traded prices: the previous session's last reading vs now. Kite's own close for options is an average of the last 30 minutes, so its % change can differ.">Old → New Prem <span className="text-gray-500 cursor-help">ⓘ</span></th><th className="px-2 py-2 text-right">CMP</th><th className="px-2 py-2">Tier</th>
               </tr>

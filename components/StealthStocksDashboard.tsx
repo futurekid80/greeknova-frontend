@@ -44,22 +44,21 @@ export default function StealthStocksDashboard({
 }) {
   const [focus, setFocus] = useState<string | null>(null)
   // Nov 3 2026: which stocks are on the table (rule-based tiers, or anything with futures OI up), then member sliders on top
-  const [universe, setUniverse] = useState<'strong' | 'wider' | 'any'>('strong')
+  const [universe, setUniverse] = useState<'strong' | 'wider'>('strong')
   const watchCount = everyRow.filter(r => r.tier === 'WATCH').length
-  const otherCount = everyRow.filter(r => r.tier === 'OTHER').length
   const allRows = useMemo(
-    () => everyRow.filter(r => universe === 'any' ? true : universe === 'wider' ? r.tier !== 'OTHER' : (r.tier === 'ELITE' || r.tier === 'STRONG')),
+    () => everyRow.filter(r => r.tier !== 'OTHER' && (universe === 'wider' || r.tier === 'ELITE' || r.tier === 'STRONG')),
     [everyRow, universe],
   )
-  const sliderMaxMove = universe === 'any' ? 10 : 1.5     // right end of the price slider = "any"
-  const oiFloor = universe === 'any' ? 0 : 1              // left end of the OI slider = "any"
-  const [maxMove, setMaxMove] = useState(10)
-  const [minOI, setMinOI] = useState(0)
+  const sliderMaxMove = 1.5   // the rule's outer price limit (Watch band)
+  const oiFloor = 1           // the rule's minimum futures OI rise
+  const [maxMove, setMaxMove] = useState(1.5)
+  const [minOI, setMinOI] = useState(1)
   const priceAny = maxMove >= sliderMaxMove
   const oiAny = minOI <= oiFloor
-  const pickUniverse = (u: 'strong' | 'wider' | 'any') => {
+  const pickUniverse = (u: 'strong' | 'wider') => {
     setUniverse(u); setFocus(null)
-    setMaxMove(u === 'any' ? 10 : 1.5); setMinOI(u === 'any' ? 0 : 1)
+    setMaxMove(1.5); setMinOI(1)
   }
   const [sortKey, setSortKey] = useState<SortKey>('tier')
   const [sortDir, setSortDir] = useState<1 | -1>(1)
@@ -73,7 +72,7 @@ export default function StealthStocksDashboard({
     else { setSortKey(k); setSortDir(k === 'tier' || k === 'symbol' ? 1 : -1) }
   }
   const oiSliderMax = Math.max(10, Math.ceil(Math.max(0, ...allRows.map(r => r.today_oi_chg || 0)) / 5) * 5)
-  const xMax = universe === 'any' ? Math.min(10, Math.max(1.6, Math.ceil(Math.max(0, ...allRows.map(r => Math.abs(r.price_chg || 0))) * 2) / 2 + 0.1)) : 1.6
+  const xMax = 1.6
   const xStep = xMax > 6 ? 2 : xMax > 3 ? 1 : 0.5
   const xTicks: number[] = []
   for (let t = -Math.floor(xMax / xStep) * xStep; t <= xMax + 1e-9; t += xStep) xTicks.push(Number(t.toFixed(2)))
@@ -124,7 +123,7 @@ export default function StealthStocksDashboard({
     <div className="space-y-4">
       {/* controls */}
       <div className="flex flex-wrap items-center gap-2">
-        {([['strong', 'Elite + Strong'], ['wider', `Wider net · +${watchCount} Watch`], ['any', `Any stock with OI up · ${everyRow.length}`]] as const).map(([u, label]) => (
+        {([['strong', 'Elite + Strong'], ['wider', `Wider net · +${watchCount} Watch`]] as const).map(([u, label]) => (
           <button key={u} onClick={() => pickUniverse(u)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${universe === u ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700' : 'bg-gray-800/40 text-gray-400 border-gray-700 hover:text-white'}`}>
             {label}
@@ -137,8 +136,7 @@ export default function StealthStocksDashboard({
         )}
         <span className="text-[11px] text-gray-500">
           {universe === 'strong' ? 'Futures OI up 1.5%+ while the stock price moved 1% or less. Every qualifying stock is shown.'
-            : universe === 'wider' ? 'Adds Watch: close to the rule — OI rise a bit smaller, or the stock price moved 1–1.5% instead of 1% or less.'
-            : 'Every stock whose futures OI rose today, whatever the price did. Use the sliders to pick your own price move and OI rise.'}
+            : 'Adds Watch: close to the rule — OI rise a bit smaller, or the stock price moved 1–1.5% instead of 1% or less.'}
         </span>
       </div>
 
@@ -146,19 +144,19 @@ export default function StealthStocksDashboard({
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-x-6 gap-y-3 items-end">
         <label className="block min-w-0">
           <span className="flex justify-between text-[10px] text-gray-500 tracking-wide">
-            <span>STOCK PRICE MOVE · up to</span><b className="text-gray-200 text-xs">{priceAny ? 'any' : `±${maxMove.toFixed(2)}%`}</b>
+            <span>STOCK PRICE MOVE · up to</span><b className="text-gray-200 text-xs">±{maxMove.toFixed(2)}%</b>
           </span>
-          <input type="range" min={0.1} max={sliderMaxMove} step={universe === 'any' ? 0.1 : 0.05} value={Math.min(maxMove, sliderMaxMove)}
+          <input type="range" min={0.1} max={sliderMaxMove} step={0.05} value={Math.min(maxMove, sliderMaxMove)}
             onChange={e => setMaxMove(Number(e.target.value))} className="w-full accent-cyan-400 mt-1" aria-label="Maximum stock price move" />
-          <span className="flex justify-between text-[10px] text-gray-600"><span>quieter</span><span>any</span></span>
+          <span className="flex justify-between text-[10px] text-gray-600"><span>quieter</span><span>rule limit</span></span>
         </label>
         <label className="block min-w-0">
           <span className="flex justify-between text-[10px] text-gray-500 tracking-wide">
-            <span>FUTURES OI RISE · at least</span><b className="text-gray-200 text-xs">{oiAny ? 'any' : `+${minOI}%`}</b>
+            <span>FUTURES OI RISE · at least</span><b className="text-gray-200 text-xs">+{minOI}%</b>
           </span>
           <input type="range" min={oiFloor} max={oiSliderMax} step={1} value={Math.min(minOI, oiSliderMax)}
             onChange={e => setMinOI(Number(e.target.value))} className="w-full accent-emerald-400 mt-1" aria-label="Minimum futures OI rise" />
-          <span className="flex justify-between text-[10px] text-gray-600"><span>any</span><span>bigger</span></span>
+          <span className="flex justify-between text-[10px] text-gray-600"><span>rule minimum</span><span>bigger</span></span>
         </label>
         <div className="flex items-center gap-3 text-[11px] text-gray-400 pb-1">
           <span><b className="text-white">{rows.length}</b> of {allRows.length} stocks</span>
@@ -172,7 +170,7 @@ export default function StealthStocksDashboard({
           <p className={lab}>QUALIFYING</p>
           <p className="text-2xl font-black text-white mt-1">{n} <span className="text-xs font-normal text-gray-500">stocks</span></p>
           <p className="text-[10px] text-gray-500">
-            <span style={{ color: TIERS.ELITE.col }}>{count('ELITE')} elite</span> · <span style={{ color: TIERS.STRONG.col }}>{count('STRONG')} strong</span>{universe !== 'strong' ? <> · <span style={{ color: TIERS.WATCH.col }}>{count('WATCH')} watch</span></> : null}{universe === 'any' ? <> · <span style={{ color: TIERS.OTHER.col }}>{count('OTHER')} outside rule</span></> : null}
+            <span style={{ color: TIERS.ELITE.col }}>{count('ELITE')} elite</span> · <span style={{ color: TIERS.STRONG.col }}>{count('STRONG')} strong</span>{universe !== 'strong' ? <> · <span style={{ color: TIERS.WATCH.col }}>{count('WATCH')} watch</span></> : null}
           </p>
         </div>
         <div className={tile}>
@@ -237,7 +235,7 @@ export default function StealthStocksDashboard({
                 const t = TIERS[r.tier] || TIERS.WATCH
                 const active = focus === r.symbol || hover === r.symbol
                 return (
-                  <circle key={r.symbol} cx={px(r.price_chg)} cy={py(r.today_oi_chg)} r={active ? 8 : universe === 'any' ? 4.5 : 5.5}
+                  <circle key={r.symbol} cx={px(r.price_chg)} cy={py(r.today_oi_chg)} r={active ? 8 : 5.5}
                     fill={t.col} fillOpacity={focus && focus !== r.symbol ? 0.25 : 0.85} stroke="#07070e" strokeWidth="2"
                     style={{ cursor: 'pointer' }}
                     onMouseEnter={() => setHover(r.symbol)} onMouseLeave={() => setHover(null)}
@@ -249,7 +247,7 @@ export default function StealthStocksDashboard({
             </svg>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 mt-1">
-            {['ELITE', 'STRONG', ...(universe !== 'strong' ? ['WATCH'] : []), ...(universe === 'any' ? ['OTHER'] : [])].map(k => (
+            {['ELITE', 'STRONG', ...(universe !== 'strong' ? ['WATCH'] : [])].map(k => (
               <span key={k} className="inline-flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: TIERS[k].col }} />{TIERS[k].label}</span>
             ))}
             <span className="ml-auto text-gray-300 min-h-[1rem]">

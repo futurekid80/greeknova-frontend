@@ -144,19 +144,19 @@ export default function StealthStocksDashboard({
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-x-6 gap-y-3 items-end">
         <label className="block min-w-0">
           <span className="flex justify-between text-[10px] text-gray-500 tracking-wide">
-            <span>STOCK PRICE MOVE · up to</span><b className="text-gray-200 text-xs">±{maxMove.toFixed(2)}%</b>
+            <span>STOCK PRICE MOVE · up to</span><b className="text-gray-200 text-xs">{priceAny ? 'any' : `±${maxMove.toFixed(2)}%`}</b>
           </span>
           <input type="range" min={0.1} max={sliderMaxMove} step={0.05} value={Math.min(maxMove, sliderMaxMove)}
             onChange={e => setMaxMove(Number(e.target.value))} className="w-full accent-cyan-400 mt-1" aria-label="Maximum stock price move" />
-          <span className="flex justify-between text-[10px] text-gray-600"><span>quieter</span><span>rule limit</span></span>
+          <span className="flex justify-between text-[10px] text-gray-600"><span>quieter</span><span>any</span></span>
         </label>
         <label className="block min-w-0">
           <span className="flex justify-between text-[10px] text-gray-500 tracking-wide">
-            <span>FUTURES OI RISE · at least</span><b className="text-gray-200 text-xs">+{minOI}%</b>
+            <span>FUTURES OI RISE · at least</span><b className="text-gray-200 text-xs">{oiAny ? 'any' : `+${minOI}%`}</b>
           </span>
           <input type="range" min={oiFloor} max={oiSliderMax} step={1} value={Math.min(minOI, oiSliderMax)}
             onChange={e => setMinOI(Number(e.target.value))} className="w-full accent-emerald-400 mt-1" aria-label="Minimum futures OI rise" />
-          <span className="flex justify-between text-[10px] text-gray-600"><span>rule minimum</span><span>bigger</span></span>
+          <span className="flex justify-between text-[10px] text-gray-600"><span>any</span><span>bigger</span></span>
         </label>
         <div className="flex items-center gap-3 text-[11px] text-gray-400 pb-1">
           <span><b className="text-white">{rows.length}</b> of {allRows.length} stocks</span>

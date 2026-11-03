@@ -307,7 +307,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
         {/* Futures history + delivery */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
-            <Card title="Futures signal history" sub="Last sessions · what price and futures OI did each day">
+            <Card title="Futures signal history" sub="Last sessions · what price and futures OI did each day. Stealth = futures OI rising while the stock price (cash) moved 1% or less">
               {hist20.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs min-w-[460px]">
@@ -320,7 +320,17 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
                       {hist20.slice(0, 12).map((d: any, i: number) => (
                         <tr key={i} className="border-b border-gray-800/50">
                           <td className="py-1.5 pr-2 text-gray-400">{String(d.date).slice(5)}</td>
-                          <td className="px-2"><Chip cls={SIG_CHIP[d.signal] || SIG_CHIP.NEUTRAL}>{SIG_LABEL[d.signal] || d.signal}</Chip></td>
+                          <td className="px-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Chip cls={SIG_CHIP[d.signal] || SIG_CHIP.NEUTRAL}>{SIG_LABEL[d.signal] || d.signal}</Chip>
+                              {d.stealth && (
+                                <span title={`Stealth ${d.stealth.toLowerCase()}: futures OI rose ${sgn(d.fut_oi_chg || 0, 2)} while the stock price (cash) moved only ${sgn(d.cash_price_chg || 0, 2)}`}
+                                  className="text-[10px] font-bold rounded border px-1.5 py-0.5 text-amber-300 border-amber-700/60 bg-amber-950/40">
+                                  🕵️ Stealth · {d.stealth.charAt(0) + d.stealth.slice(1).toLowerCase()}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className={`px-2 text-right font-semibold ${d.price_chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn(d.price_chg || 0, 2)}</td>
                           <td className={`px-2 text-right ${d.fut_oi_chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn(d.fut_oi_chg || 0, 2)}</td>
                           <td className="px-2 text-right text-gray-400">{d.vol_ratio ? `${Number(d.vol_ratio).toFixed(1)}×` : '—'}</td>

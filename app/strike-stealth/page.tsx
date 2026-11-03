@@ -188,6 +188,14 @@ export default function StrikeStealthBuildup() {
   const [bestOfDay, setBestOfDay] = useState(true)
   // Nov 3 2026: EOD list defaults to strikes that still qualify on the latest scan; ones frozen from earlier in the day are opt-in.
   const [showEarlier, setShowEarlier] = useState(false)
+  // Nov 3 2026: simplified page (?v=new): opens on Saved today / Day / Best of the day / latest scan, advanced filters tucked away.
+  const [simple, setSimple] = useState(false)
+  const [advOpen, setAdvOpen] = useState(false)
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('v') === 'new') { setSimple(true); setView('saved'); setTimeWindow('eod') }
+    } catch {}
+  }, [])
   // Nov 3 2026: only the most recent request may update the page, so a slow reply for an earlier
   // window / view (5-min, Hourly, Live) can never overwrite the EOD data after you've switched.
   const reqId = useRef(0)
@@ -269,6 +277,10 @@ export default function StrikeStealthBuildup() {
     })
 
   const hits = showAll ? filteredHits : filteredHits.slice(0, PAGE_SIZE)
+  const shownForStatus = allHits.filter(h => freshOk(h) && (instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol))))
+  const lastSeenMax = rawHits.reduce((m, h) => (h.last_seen && h.last_seen > m ? h.last_seen : m), '')
+  const lastSeenTxt = lastSeenMax ? new Date(lastSeenMax).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }) : ''
+  const simpleStatus = `${view === 'saved' ? `Latest scan${lastSeenTxt ? ` ${lastSeenTxt} IST` : ''} · ` : ''}${shownForStatus.length} ${bestOn ? 'strong hits' : 'hits'} across ${new Set(shownForStatus.map(h => h.symbol)).size} symbols${bestOn ? ' (Elite/Strong, ₹25 lakh+ added)' : ''}`
 
   // (Oct 31 2026): per-symbol Bias. Bullish signs = Call Buying + Put Writing;
   // bearish signs = Put Buying + Call Writing ("Quiet" hits are ignored).
@@ -292,6 +304,22 @@ export default function StrikeStealthBuildup() {
       confirmed: r.bull > 0 ? (r.cb > 0 && r.pw > 0) : (r.pb > 0 && r.cw > 0) }))
     .sort((a, b) => Number(b.confirmed) - Number(a.confirmed) || Math.max(b.bull, b.bear) - Math.max(a.bull, a.bear))
   const mixedCount = biasAll.filter(r => r.bull > 0 && r.bear > 0).length
+
+  const windowBlock = (
+    <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-gray-400 mr-1">⏱️ Window:</span>
+          {WINDOW_OPTIONS.map(w => (
+            <button key={w.value} onClick={() => setTimeWindow(w.value)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                timeWindow === w.value
+                  ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
+                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+              }`}>
+              {w.label}
+            </button>
+          ))}
+        </div>
+  )
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
@@ -319,6 +347,9 @@ export default function StrikeStealthBuildup() {
             </button>
           </div>
         </div>
+        {simple ? (
+          <p className="text-sm text-gray-400 mb-4">Strikes where big OI was added but the price barely moved — strongest first, as of the latest scan. Educational only, not a recommendation.</p>
+        ) : (
         <p className="text-xs text-gray-500 mb-4">
           OI piling up hard at a single strike (within the zone picked below) while that strike&apos;s own premium
           barely moves — size going on without moving the tape, measured over whichever window you pick: 5-min for
@@ -327,7 +358,31 @@ export default function StrikeStealthBuildup() {
           a live FUT-level Stealth Buildup right now (always within ATM±5, regardless of the zone picked below) —
           the strongest version of this signal.
         </p>
+        )}
 
+        {simple && (
+          <div className="mb-4 rounded-xl border border-gray-800 bg-gray-900/40 p-3">
+            {windowBlock}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="text-xs text-gray-400 mr-1">Show:</span>
+              {([['all', 'All'], ['index', 'Indices'], ['stocks', 'Stocks']] as const).map(([v, label]) => (
+                <button key={v} onClick={() => setInstrumentFilter(v)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                    instrumentFilter === v ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+                  }`}>{label}</button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400">
+              {loading && !data ? 'Loading…' : simpleStatus}
+            </p>
+            <button onClick={() => setAdvOpen(v => !v)} className="mt-2 text-[11px] text-cyan-400 hover:text-cyan-300">
+              {advOpen ? '▾ Hide advanced filters' : '▸ Advanced filters (zone, freshness, tier, layout, earlier-today strikes)'}
+            </button>
+          </div>
+        )}
+
+        {(!simple || advOpen) && (
+          <>
         <div className="flex items-center gap-2 mb-4">
           <span className="text-xs text-gray-400 mr-1">📋 View:</span>
           {([['live', 'Live scan'], ['saved', 'Saved today']] as const).map(([v, label]) => (
@@ -368,19 +423,7 @@ export default function StrikeStealthBuildup() {
           </p>
         )}
 
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs text-gray-400 mr-1">⏱️ Window:</span>
-          {WINDOW_OPTIONS.map(w => (
-            <button key={w.value} onClick={() => setTimeWindow(w.value)}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                timeWindow === w.value
-                  ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
-                  : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
-              }`}>
-              {w.label}
-            </button>
-          ))}
-        </div>
+        {!simple && windowBlock}
 
         <div className="mb-4">
           <StrikeZoneFilter value={zone} onChange={setZone} label="🎯 Strike zone:" />
@@ -422,6 +465,8 @@ export default function StrikeStealthBuildup() {
                 : 'Every hit saved today, including small and weak ones — click for Best of the day.'}
             </span>
           </div>
+        )}
+          </>
         )}
 
         {biasRows.length > 0 && (

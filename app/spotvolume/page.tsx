@@ -2,6 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, TrendingUp, Clock, Zap, Flame, Building2 } from 'lucide-react'
+import SpotVolumeDashboard from '@/components/SpotVolumeDashboard'
 
 const API = 'https://api.greeknova.com'
 
@@ -53,6 +54,10 @@ export default function SpotVolumeScanner() {
   const [filter, setFilter] = useState<'all' | 'breakout' | 'bursting' | 'pausing'>('all')
   const [scanned, setScanned] = useState(0)
   const [generatedAt, setGeneratedAt] = useState<string>('')
+  // Nov 3 2026: redesigned view is previewable with ?v=new while Manish reviews it.
+  const [newView, setNewView] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
+  const [countdown, setCountdown] = useState(300)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -77,10 +82,18 @@ export default function SpotVolumeScanner() {
         setFutMap(map)
       }
     } catch (e) { console.error(e) }
+    setUpdatedAt(new Date())
+    setCountdown(300)
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    try { setNewView(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
+    load()
+    const t = setInterval(load, 5 * 60 * 1000)
+    const c = setInterval(() => setCountdown(p => Math.max(0, p - 1)), 1000)
+    return () => { clearInterval(t); clearInterval(c) }
+  }, [load])
 
   const filtered = rows.filter(r => {
     if (filter === 'all') return true
@@ -91,6 +104,16 @@ export default function SpotVolumeScanner() {
   const burstingCount = rows.filter(r => r.state === 'bursting').length
   const pausingCount = rows.filter(r => r.state === 'pausing').length
   const confirmedCount = rows.filter(r => r.state === 'breakout' && r.confirmed).length
+
+  if (newView) {
+    return (
+      <div className="min-h-screen bg-[#07070e] text-white">
+        <Navbar active="/spotvolume" />
+        <SpotVolumeDashboard rows={rows} towerRows={towerRows} futMap={futMap} scanned={scanned} generatedAt={generatedAt}
+          loading={loading} updatedAt={updatedAt} countdown={countdown} onRefresh={load} />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#07070e] text-white">

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import StealthStocksDashboard from '@/components/StealthStocksDashboard'
 import Navbar from '@/components/Navbar'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://api.greeknova.com'
@@ -1073,25 +1074,24 @@ export default function PositionalIntelligence() {
           ) : (
             <div className="space-y-4">
               {wideStealth && data.stealth_all ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Stealth Buildup</p>
-                    <button onClick={() => setWiderNet(v => !v)}
-                      className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${widerNet ? 'bg-sky-950/60 text-sky-300 border-sky-700' : 'bg-gray-800/40 text-gray-400 border-gray-700 hover:text-white'}`}>
-                      {widerNet ? `Wider net on · +${stealthWatchCount} Watch` : `Wider net · +${stealthWatchCount} Watch`}
-                    </button>
-                    <span className="text-[11px] text-gray-500">
-                      {widerNet
-                        ? 'Includes Watch: close to the rule — OI rise a bit smaller, or the stock price moved 1–1.5% instead of 1% or less.'
-                        : 'Elite + Strong: futures OI up 1.5%+ while the stock price moved 1% or less. Every qualifying stock is shown.'}
-                    </span>
-                  </div>
-                  {stealthShown.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {stealthShown.map(s => <StealthCard key={s.symbol} s={s} onSymbolClick={setHistorySymbol} wall={wallMap[s.symbol]} />)}
-                    </div>
-                  ) : <p className="text-xs text-gray-500">No Elite or Strong stealth hits right now.</p>}
-                </>
+                <StealthStocksDashboard
+                  rows={stealthShown as any}
+                  watchCount={stealthWatchCount}
+                  widerNet={widerNet}
+                  onToggleWider={() => setWiderNet(v => !v)}
+                  onSymbolClick={setHistorySymbol}
+                  renderWall={(sym) => {
+                    const w = wallMap[sym]
+                    if (!w || (!w.putWallStrike && !w.callWallStrike)) return null
+                    return (
+                      <span className="text-[10px] whitespace-nowrap">
+                        {w.putWallStrike ? <span className="text-emerald-400">PE {w.putWallStrike}</span> : null}
+                        {w.putWallStrike && w.callWallStrike ? <span className="text-gray-600"> · </span> : null}
+                        {w.callWallStrike ? <span className="text-rose-400">CE {w.callWallStrike}</span> : null}
+                      </span>
+                    )
+                  }}
+                />
               ) : data.stealth_buildup.length > 0 && (
                 <>
                   <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Stealth Buildup</p>

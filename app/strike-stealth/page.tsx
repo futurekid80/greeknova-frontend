@@ -188,12 +188,13 @@ export default function StrikeStealthBuildup() {
   const [bestOfDay, setBestOfDay] = useState(true)
   // Nov 3 2026: EOD list defaults to strikes that still qualify on the latest scan; ones frozen from earlier in the day are opt-in.
   const [showEarlier, setShowEarlier] = useState(false)
-  // Nov 3 2026: simplified page (?v=new): opens on Saved today / Day / Best of the day / latest scan, advanced filters tucked away.
-  const [simple, setSimple] = useState(false)
+  // Nov 3 2026: simplified page is the default (?v=old for the legacy layout): opens on Saved today / Day / Best of the day / latest scan, advanced filters tucked away.
+  const [simple, setSimple] = useState(true)
   const [advOpen, setAdvOpen] = useState(false)
   useEffect(() => {
     try {
-      if (new URLSearchParams(window.location.search).get('v') === 'new') { setSimple(true); setView('saved'); setTimeWindow('eod') }
+      if (new URLSearchParams(window.location.search).get('v') === 'old') setSimple(false)
+      else { setSimple(true); setView('saved'); setTimeWindow('eod') }
     } catch {}
   }, [])
   // Nov 3 2026: only the most recent request may update the page, so a slow reply for an earlier

@@ -54,8 +54,8 @@ export default function SpotVolumeScanner() {
   const [filter, setFilter] = useState<'all' | 'breakout' | 'bursting' | 'pausing'>('all')
   const [scanned, setScanned] = useState(0)
   const [generatedAt, setGeneratedAt] = useState<string>('')
-  // Nov 3 2026: redesigned view is previewable with ?v=new while Manish reviews it.
-  const [newView, setNewView] = useState(false)
+  // Nov 3 2026: redesigned view is now the default (approved by Manish); ?v=old keeps the old layout.
+  const [newView, setNewView] = useState(true)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [countdown, setCountdown] = useState(300)
 
@@ -88,7 +88,7 @@ export default function SpotVolumeScanner() {
   }, [])
 
   useEffect(() => {
-    try { setNewView(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
+    try { setNewView(new URLSearchParams(window.location.search).get('v') !== 'old') } catch {}  // ?v=old shows the previous layout
     load()
     const t = setInterval(load, 5 * 60 * 1000)
     const c = setInterval(() => setCountdown(p => Math.max(0, p - 1)), 1000)

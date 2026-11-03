@@ -2,6 +2,7 @@
 import Navbar from '@/components/Navbar'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Zap } from 'lucide-react'
+import WolvesDashboard from '@/components/WolvesDashboard'
 
 const API = 'https://api.greeknova.com'
 
@@ -161,6 +162,9 @@ export default function WolvesScanner() {
   const [eventFreshnessFilter, setEventFreshnessFilter] = useState<typeof FRESHNESS_OPTIONS[number]>('all')
   const [rankFilter, setRankFilter] = useState<'all' | 'A+' | 'A' | 'B' | 'C'>('all')
   const [countdown, setCountdown] = useState(300)
+  // Nov 3 2026: redesigned view is previewable with ?v=new while Manish reviews it.
+  const [newView, setNewView] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -175,6 +179,8 @@ export default function WolvesScanner() {
       setData(await wRes.json())
       setEventsData(await eRes.json())
       setWatchlistData(await dRes.json())
+      setUpdatedAt(new Date())
+      setCountdown(300)
     } catch (e) { console.error(e) }
     setLoading(false)
   }, [])
@@ -194,6 +200,7 @@ export default function WolvesScanner() {
   }
 
   useEffect(() => {
+    try { setNewView(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
     fetchData()
     intervalRef.current = setInterval(() => { fetchData(); setCountdown(300) }, 5 * 60 * 1000)
     countdownRef.current = setInterval(() => setCountdown(p => Math.max(0, p - 1)), 1000)
@@ -243,6 +250,20 @@ export default function WolvesScanner() {
     a: watchlist.filter(w => w.rank === 'A').length,
     b: watchlist.filter(w => w.rank === 'B').length,
     c: watchlist.filter(w => w.rank === 'C').length,
+  }
+
+  if (newView) {
+    return (
+      <div className="min-h-screen bg-[#07070e] text-white">
+        <Navbar active="/wolves" />
+        <WolvesDashboard
+          wolves={data?.wolves || []} events={eventsData?.events || []} watchlist={watchlistData?.watchlist || []}
+          dates={{ wolves: data?.date, events: eventsData?.date, watchlist: watchlistData?.date, fallback: !!(data?.is_fallback || eventsData?.is_fallback || watchlistData?.is_fallback) }}
+          loading={loading} updatedAt={updatedAt} countdown={countdown} running={running}
+          onRefresh={fetchData} onRunNow={runNow}
+        />
+      </div>
+    )
   }
 
   return (

@@ -33,8 +33,10 @@ const W = 640, H = 300, ML = 46, MR = 14, MT = 14, MB = 36
 const XMAX = 1.6
 const ylog = (v: number) => Math.log1p(Math.max(v, 0))
 
+type SortKey = 'tier' | 'symbol' | 'oi' | 'next' | 'price' | 'delivery' | 'volume' | 'delta'
+
 export default function StealthStocksDashboard({
-  rows, watchCount, widerNet, onToggleWider, onSymbolClick, renderWall,
+  rows: allRows, watchCount, widerNet, onToggleWider, onSymbolClick, renderWall,
 }: {
   rows: StealthRow[]
   watchCount: number
@@ -43,6 +45,21 @@ export default function StealthStocksDashboard({
   onSymbolClick: (sym: string) => void
   renderWall?: (sym: string) => ReactNode
 }) {
+  // Nov 3 2026: member-controlled narrowing on top of the Elite/Strong/Watch tiers
+  const [maxMove, setMaxMove] = useState(1.5)   // stock price move, close to close (% either way)
+  const [minOI, setMinOI] = useState(1)         // futures OI rise (%)
+  const [sortKey, setSortKey] = useState<SortKey>('tier')
+  const [sortDir, setSortDir] = useState<1 | -1>(1)
+  const rows = useMemo(
+    () => allRows.filter(r => Math.abs(r.price_chg) <= maxMove + 1e-9 && r.today_oi_chg >= minOI - 1e-9),
+    [allRows, maxMove, minOI],
+  )
+  const narrowed = maxMove < 1.5 || minOI > 1
+  const pickSort = (k: SortKey) => {
+    if (k === sortKey) setSortDir(d => (d === 1 ? -1 : 1) as 1 | -1)
+    else { setSortKey(k); setSortDir(k === 'tier' || k === 'symbol' ? 1 : -1) }
+  }
+  const oiSliderMax = Math.max(10, Math.ceil(Math.max(0, ...allRows.map(r => r.today_oi_chg || 0)) / 5) * 5)
   const [focus, setFocus] = useState<string | null>(null)
   const [hover, setHover] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
@@ -62,7 +79,25 @@ export default function StealthStocksDashboard({
   const py = (v: number) => H - MB - (ylog(v) / yTop) * (H - MT - MB)
   const yTicks = [1, 2, 5, 10, 25, 50, 100].filter(t => t <= yMaxRaw * 1.08)
 
-  const shown = useMemo(() => (focus ? rows.filter(r => r.symbol === focus) : rows), [rows, focus])
+  const shown = useMemo(() => {
+    const base = focus ? rows.filter(r => r.symbol === focus) : rows
+    if (sortKey === 'tier') return sortDir === 1 ? base : [...base].reverse()
+    const val = (r: StealthRow): number | string => {
+      switch (sortKey) {
+        case 'symbol': return r.symbol
+        case 'oi': return r.today_oi_chg ?? -1e9
+        case 'next': return r.next_month_oi_chg ?? -1e9
+        case 'price': return r.price_chg ?? 0
+        case 'delivery': return r.delivery_pct ?? -1e9
+        case 'volume': return r.vol_ratio ?? -1e9
+        default: return r.net_delta ?? -1e12
+      }
+    }
+    return [...base].sort((a, b) => {
+      const x = val(a), y = val(b)
+      return (typeof x === 'string' ? x.localeCompare(y as string) : (x as number) - (y as number)) * sortDir
+    })
+  }, [rows, focus, sortKey, sortDir])
   const list = showAll || focus ? shown : shown.slice(0, 15)
   const hovered = rows.find(r => r.symbol === hover) || null
 
@@ -88,6 +123,30 @@ export default function StealthStocksDashboard({
             ? 'Watch = close to the rule: OI rise a bit smaller, or the stock price moved 1–1.5% instead of 1% or less.'
             : 'Futures OI up 1.5%+ while the stock price moved 1% or less. Every qualifying stock is shown.'}
         </span>
+      </div>
+
+      {/* narrow-down sliders */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-x-6 gap-y-3 items-end">
+        <label className="block min-w-0">
+          <span className="flex justify-between text-[10px] text-gray-500 tracking-wide">
+            <span>STOCK PRICE MOVE · up to</span><b className="text-gray-200 text-xs">±{maxMove.toFixed(2)}%</b>
+          </span>
+          <input type="range" min={0.1} max={1.5} step={0.05} value={maxMove}
+            onChange={e => setMaxMove(Number(e.target.value))} className="w-full accent-cyan-400 mt-1" aria-label="Maximum stock price move" />
+          <span className="flex justify-between text-[10px] text-gray-600"><span>quieter</span><span>wider</span></span>
+        </label>
+        <label className="block min-w-0">
+          <span className="flex justify-between text-[10px] text-gray-500 tracking-wide">
+            <span>FUTURES OI RISE · at least</span><b className="text-gray-200 text-xs">+{minOI}%</b>
+          </span>
+          <input type="range" min={1} max={oiSliderMax} step={1} value={Math.min(minOI, oiSliderMax)}
+            onChange={e => setMinOI(Number(e.target.value))} className="w-full accent-emerald-400 mt-1" aria-label="Minimum futures OI rise" />
+          <span className="flex justify-between text-[10px] text-gray-600"><span>any</span><span>bigger</span></span>
+        </label>
+        <div className="flex items-center gap-3 text-[11px] text-gray-400 pb-1">
+          <span><b className="text-white">{rows.length}</b> of {allRows.length} stocks</span>
+          {narrowed && <button onClick={() => { setMaxMove(1.5); setMinOI(1) }} className="text-cyan-400 hover:text-cyan-300">Reset</button>}
+        </div>
       </div>
 
       {/* KPI tiles */}
@@ -215,10 +274,15 @@ export default function StealthStocksDashboard({
           <table className="w-full text-xs min-w-[760px]">
             <thead>
               <tr className="text-[10px] uppercase tracking-wide text-gray-500 text-left border-b border-gray-800">
-                <th className="py-1.5 pr-2">Stock</th><th className="px-2">Tier</th>
-                <th className="px-2 text-right">Fut OI rise</th><th className="px-2 text-right">Next month</th>
-                <th className="px-2 text-right">Price</th><th className="px-2 text-right">Delivery</th>
-                <th className="px-2 text-right">Volume</th><th className="px-2 text-right">Net delta</th><th className="px-2">Wall</th>
+                {([['symbol', 'Stock', 'py-1.5 pr-2'], ['tier', 'Tier', 'px-2'], ['oi', 'Fut OI rise', 'px-2 text-right'], ['next', 'Next month', 'px-2 text-right'],
+                   ['price', 'Price', 'px-2 text-right'], ['delivery', 'Delivery', 'px-2 text-right'], ['volume', 'Volume', 'px-2 text-right'], ['delta', 'Net delta', 'px-2 text-right']] as [SortKey, string, string][]).map(([k, label, cls]) => (
+                  <th key={k} className={cls} aria-sort={sortKey === k ? (sortDir === 1 ? 'ascending' : 'descending') : 'none'}>
+                    <button onClick={() => pickSort(k)} className={`uppercase tracking-wide hover:text-white ${sortKey === k ? 'text-cyan-300' : ''}`}>
+                      {label}{sortKey === k ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}
+                    </button>
+                  </th>
+                ))}
+                <th className="px-2">Wall</th>
               </tr>
             </thead>
             <tbody>

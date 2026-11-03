@@ -153,8 +153,8 @@ export default function StealthStocksDashboard({
                 </g>
               ))}
               <text x={(ML + W - MR) / 2} y={H - 4} textAnchor="middle" fontSize="10" fill="#6b7280" letterSpacing="0.5">STOCK PRICE MOVE (CLOSE TO CLOSE)</text>
-              <text x={px(-0.95)} y={py(yMaxRaw * 1.08) + 12} fontSize="9" fill="#34d399" opacity="0.8">STRONG ZONE</text>
-              <text x={px(-0.45)} y={py(yMaxRaw * 1.08) + 24} fontSize="9" fill="#f59e0b" opacity="0.9">ELITE</text>
+              <text x={px(1) - 6} y={py(yMaxRaw * 1.08) + 12} textAnchor="end" fontSize="9" fill="#34d399" opacity="0.8">STRONG ZONE</text>
+              <text x={px(0.5) - 6} y={py(yMaxRaw * 1.08) + 24} textAnchor="end" fontSize="9" fill="#f59e0b" opacity="0.9">ELITE ZONE</text>
               {/* dots (watch first so elite/strong sit on top) */}
               {[...rows].sort((a, b) => ({ WATCH: 0, STRONG: 1, ELITE: 2 } as any)[a.tier] - ({ WATCH: 0, STRONG: 1, ELITE: 2 } as any)[b.tier]).map(r => {
                 const t = TIERS[r.tier] || TIERS.WATCH

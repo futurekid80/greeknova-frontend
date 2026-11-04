@@ -474,9 +474,9 @@ export default function StealthDashboard({
 
         <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-4">
           <p className="text-sm font-bold text-gray-200">Top Qualifying Stocks</p>
-          <p className="text-[11px] text-gray-500 mb-3">Highest contract concentration</p>
+          <p className="text-[11px] text-gray-500 mb-3">Most contracts first · every stock with a hit is listed (scroll)</p>
           <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
-            {top.slice(0, 12).map(r => (
+            {top.map(r => (
               <div key={r.sym} className="flex items-center justify-between gap-2 border border-gray-800 rounded-lg px-3 py-2 bg-gray-900/40">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-mono font-bold text-xs text-white truncate">{r.sym}</span>

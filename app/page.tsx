@@ -1266,7 +1266,19 @@ export default function MarketPulse() {
     }
   }
 
-  const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData)
+  // Nov 4 2026: auto-refresh is now ON by default (every 3 min) but only while
+  // the tab is visible and the market is open, so the homepage no longer goes
+  // stale. The old 'Auto' button still works as a manual on/off.
+  const autoTick = () => {
+    try {
+      if (document.visibilityState !== 'visible') return
+      const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+      const d = ist.getDay(), m = ist.getHours() * 60 + ist.getMinutes()
+      if (d === 0 || d === 6 || m < 540 || m > 945) return
+    } catch {}
+    fetchData()
+  }
+  const { enabled: autoEnabled, toggle: toggleAuto, countdownStr } = useAutoRefresh(autoTick, 3 * 60 * 1000, true)
   useEffect(() => {
     fetchData()
     // BUG FIX (Oct 18 2026): removed the old unconditional "blind retry"

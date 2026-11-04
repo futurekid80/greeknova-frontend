@@ -33,6 +33,14 @@ function Card({ title, sub, right, children }: { title: string; sub?: string; ri
 
 const Empty = ({ text }: { text: string }) => <p className="text-xs text-gray-500 py-5 text-center">{text}</p>
 
+function marketOpenIST() {
+  try {
+    const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+    const d = ist.getDay(), m = ist.getHours() * 60 + ist.getMinutes()
+    return d !== 0 && d !== 6 && m >= 540 && m <= 945
+  } catch { return false }
+}
+
 export default function PulseNowStrip({ stocks, onSymbolClick, loading, day }: Props) {
   const [stealth, setStealth] = useState<any[] | null>(null)
   const [alerts, setAlerts] = useState<any[] | null>(null)
@@ -40,17 +48,21 @@ export default function PulseNowStrip({ stocks, onSymbolClick, loading, day }: P
   useEffect(() => {
     let dead = false
     const get = async (p: string) => { try { const r = await fetch(API + p); return r.ok ? await r.json() : null } catch { return null } }
-    get('/option-stealth-buildup/saved?window=eod&zone=5').then(s => { if (!dead) setStealth(s?.events || []) })
-    return () => { dead = true }
+    const run = () => get('/option-stealth-buildup/saved?window=eod&zone=5').then(s => { if (!dead && s) setStealth(s.events || []) })
+    run()
+    const id = setInterval(() => { if (marketOpenIST() && document.visibilityState === 'visible') run() }, 60000)
+    return () => { dead = true; clearInterval(id) }
   }, [])
 
   // Alerts for the active trading day (the last session when the market is closed).
   useEffect(() => {
     let dead = false
-    fetch(`${API}/alerts?limit=8${day ? `&date=${day}` : ''}`)
+    const run = () => fetch(`${API}/alerts?limit=8${day ? `&date=${day}` : ''}`)
       .then(r => (r.ok ? r.json() : null)).catch(() => null)
-      .then(a => { if (!dead) setAlerts(a?.alerts || []) })
-    return () => { dead = true }
+      .then(a => { if (!dead && a) setAlerts(a.alerts || []) })
+    run()
+    const id = setInterval(() => { if (marketOpenIST() && document.visibilityState === 'visible') run() }, 60000)
+    return () => { dead = true; clearInterval(id) }
   }, [day])
 
   const eq = useMemo(() => (stocks || []).filter(s => !INDICES.includes(s.symbol)), [stocks])

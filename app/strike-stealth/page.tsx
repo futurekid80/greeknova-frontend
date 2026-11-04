@@ -187,7 +187,7 @@ export default function StrikeStealthBuildup() {
   // Rs 25 lakh of premium money added (OI added x premium). Today that is ~140 rows instead of ~600.
   const [bestOfDay, setBestOfDay] = useState(true)
   // Nov 3 2026: EOD list defaults to strikes that still qualify on the latest scan; ones frozen from earlier in the day are opt-in.
-  const [showEarlier, setShowEarlier] = useState(false)
+  const [showEarlier, setShowEarlier] = useState(true)
   // Nov 3 2026: simplified page is the default (?v=old for the legacy layout): opens on Saved today / Day / Best of the day / latest scan, advanced filters tucked away.
   const [simple, setSimple] = useState(true)
   const [advOpen, setAdvOpen] = useState(false)
@@ -502,7 +502,7 @@ export default function StrikeStealthBuildup() {
             loading={loading}
             error={data?.error}
             emptyHint={view === 'saved'
-              ? 'Nothing saved yet — the background scan starts saving hits at the next market open (9:15 IST on a trading day). Use Live scan to see current hits.'
+              ? (rawHits.length > 0 ? 'No hits match the current filters — loosen a filter or turn off “Best of the day”.' : 'Nothing saved yet — the background scan starts saving hits at the next market open (9:15 IST on a trading day). Use Live scan to see current hits.')
               : `No hits in the ${(data?.window_label ?? 'selected').toLowerCase()} window right now. The 5-min and Hourly windows only show fresh activity while the market is open — pick "EOD / vs prev close" above to see the whole day's picture.`}
             onDownload={(rows) => downloadHitsCSV(rows as any, timeWindow, zone, view)}
           />
@@ -589,7 +589,7 @@ export default function StrikeStealthBuildup() {
         {!loading && filteredHits.length === 0 && !data?.error && (
           <p className="text-gray-500 text-sm">
             {allHits.length === 0
-              ? (view === 'saved' ? 'Nothing saved yet — the background scan starts saving hits at the next market open (9:15 IST on a trading day). Use Live scan to see current hits.' : 'No stealth buildup hits in this snapshot window.')
+              ? (view === 'saved' ? (rawHits.length > 0 ? 'No hits match the current filters — loosen a filter or turn off “Best of the day”.' : 'Nothing saved yet — the background scan starts saving hits at the next market open (9:15 IST on a trading day). Use Live scan to see current hits.') : 'No stealth buildup hits in this snapshot window.')
               : 'No hits match the current filters — try widening them.'}
           </p>
         )}

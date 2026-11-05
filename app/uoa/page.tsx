@@ -7,6 +7,7 @@ import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Clock, AlertTriangle, Search, X, MoonStar } from 'lucide-react'
 
+import OIAddedToday from '@/components/OIAddedToday'
 const API = 'https://api.greeknova.com'
 
 interface UOASignal {
@@ -365,6 +366,8 @@ export default function UOA() {
             </div>
           </div>
         )}
+
+        <OIAddedToday />
 
         {/* Summary boxes */}
         <div className="grid grid-cols-4 gap-3 mb-6">

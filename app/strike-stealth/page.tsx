@@ -503,6 +503,7 @@ export default function StrikeStealthBuildup() {
         )}
 
         {layout === 'dashboard' && (
+          <>
           {adjMode && (
             <div className="mb-3 rounded-lg border border-cyan-800/60 bg-cyan-950/30 px-3 py-2 text-xs text-cyan-200">
               <b>Preview — market-move adjusted.</b> Live EOD scan where the premium test ignores the part of the premium change caused by the market's own move
@@ -519,6 +520,7 @@ export default function StrikeStealthBuildup() {
               : `No hits in the ${(data?.window_label ?? 'selected').toLowerCase()} window right now. The 5-min and Hourly windows only show fresh activity while the market is open — pick "EOD / vs prev close" above to see the whole day's picture.`}
             onDownload={(rows) => downloadHitsCSV(rows as any, timeWindow, zone, view)}
           />
+          </>
         )}
 
         {layout === 'list' && (

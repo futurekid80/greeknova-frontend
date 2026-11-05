@@ -568,7 +568,12 @@ export default function StealthDashboard({
                     </td>
                     <td className="px-2 py-2 text-right text-gray-400">{inr(h.old_premium)} → <b className="text-white">{inr(h.new_premium)}</b></td>
                     <td className="px-2 py-2 text-right text-gray-200">{inr(h.cmp)}</td>
-                    <td className="px-2 py-2"><Chip cls={TIER_CHIP[h.tier]}>{h.tier}</Chip></td>
+                    <td className="px-2 py-2">
+                      <Chip cls={TIER_CHIP[h.tier]}>{h.tier}</Chip>
+                      {(h as any).best_tier && (h as any).best_tier !== h.tier && (
+                        <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap" title="The best grade this contract reached earlier today, when its premium was quieter">Best today: {(h as any).best_tier.charAt(0) + (h as any).best_tier.slice(1).toLowerCase()}</div>
+                      )}
+                    </td>
                   </tr>
                 )
               })}

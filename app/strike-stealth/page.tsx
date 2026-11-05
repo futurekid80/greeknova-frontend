@@ -212,8 +212,9 @@ export default function StrikeStealthBuildup() {
           setSavedDate(j.date ?? null)
           const hits: StealthHit[] = (j.events || []).map((e: any) => ({
             ...e,
-            tier: e.best_tier || e.tier,
-            tier_label: ((e.best_tier || e.tier) as string).charAt(0) + ((e.best_tier || e.tier) as string).slice(1).toLowerCase(),
+            tier: e.tier || e.best_tier,
+            best_tier: e.best_tier || e.tier,
+            tier_label: ((e.tier || e.best_tier) as string).charAt(0) + ((e.tier || e.best_tier) as string).slice(1).toLowerCase(),
             oi_pct: Number(e.oi_pct), premium_pct: Number(e.premium_pct),
             old_premium: Number(e.old_premium), new_premium: Number(e.new_premium),
           }))
@@ -257,7 +258,7 @@ export default function StrikeStealthBuildup() {
   const freshOk = (h: { freshness?: string }) => view !== 'saved' ? true : freshFilter !== 'all' ? h.freshness === freshFilter : !(earlierHidden && h.freshness === 'Seen Earlier Today')
   const earlierCount = view === 'saved' && timeWindow === 'eod' ? rawHits.filter(h => h.freshness === 'Seen Earlier Today').length : 0
   const allHits = bestOn
-    ? rawHits.filter(h => (h.tier === 'ELITE' || h.tier === 'STRONG') && (h.new_oi - h.old_oi) * h.new_premium >= 2500000)
+    ? rawHits.filter(h => (((h as any).best_tier || h.tier) === 'ELITE' || ((h as any).best_tier || h.tier) === 'STRONG') && (h.new_oi - h.old_oi) * h.new_premium >= 2500000)
     : rawHits
   const expiryOptions = Array.from(new Set(allHits.map(h => h.expiry).filter((e): e is string => !!e))).sort()
 

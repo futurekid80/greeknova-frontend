@@ -86,7 +86,15 @@ export default function PulseNowStrip({ stocks, onSymbolClick, loading, day }: P
   }, [eq])
 
   const topStealth = useMemo(
-    () => (stealth || []).slice().sort((a, b) => Number(b.oi_pct || 0) - Number(a.oi_pct || 0)).slice(0, 5),
+    () => {
+      const rank: Record<string, number> = { ELITE: 2, STRONG: 1 }
+      const t = (e: any) => rank[String(e.best_tier || e.tier || '').toUpperCase()] || 0
+      const lakh = (e: any) => ((Number(e.new_oi || 0) - Number(e.old_oi || 0)) * Number(e.new_premium || 0)) / 100000
+      return (stealth || [])
+        .filter((e: any) => t(e) > 0 && lakh(e) >= 25)
+        .sort((a: any, b: any) => t(b) - t(a) || Number(b.oi_pct || 0) - Number(a.oi_pct || 0))
+        .slice(0, 5)
+    },
     [stealth]
   )
 

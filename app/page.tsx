@@ -1051,7 +1051,7 @@ export default function MarketPulse() {
   }, [])
   const chooseOiBasis = (v: 'near' | 'combined') => { setOiBasis(v); try { localStorage.setItem('gn_oi_basis', v) } catch {} }
   useEffect(() => {
-    try { setNewFeed(new URLSearchParams(window.location.search).get('v') === 'new') } catch {}
+    try { setNewFeed(new URLSearchParams(window.location.search).get('v') !== 'old') } catch { setNewFeed(true) }  // Nov 5 2026: new Pulse is the default; ?v=old keeps the legacy layout
   }, [])
   const [lastUpdate, setLastUpdate]   = useState('')
   const [searchedSymbol, setSearchedSymbol] = useState<string|null>(null)

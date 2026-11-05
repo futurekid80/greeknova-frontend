@@ -305,7 +305,7 @@ function OldStockDeepDive({ params }: { params: { symbol: string } }) {
 export default function StockDeepDive({ params }: { params: { symbol: string } }) {
   const [mode, setMode] = useState<'pending' | 'new' | 'old'>('pending')
   useEffect(() => {
-    try { setMode(new URLSearchParams(window.location.search).get('v') === 'new' ? 'new' : 'old') } catch { setMode('old') }
+    try { setMode(new URLSearchParams(window.location.search).get('v') === 'old' ? 'old' : 'new') } catch { setMode('new') }  // Nov 5 2026: new stock page is the default; ?v=old keeps the legacy page
   }, [])
   if (mode === 'pending') return <div className="min-h-screen bg-[#07070e]" />
   if (mode === 'new') return <StockDashboard symbol={params.symbol} />

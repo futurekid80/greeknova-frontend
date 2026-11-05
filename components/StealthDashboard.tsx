@@ -562,6 +562,9 @@ export default function StealthDashboard({
                         {mv > 0 ? '+' : mv < 0 ? '−' : ''}{Math.abs(mv).toFixed(2)}%
                       </span>
                       {ultra && <div className="text-[9px] font-bold text-emerald-400 mt-0.5">⚡ ULTRA-LOW</div>}
+                      {(h as any).premium_pct_raw != null && Math.abs((h as any).premium_pct_raw - h.premium_pct) >= 1 && (
+                        <div className="text-[9px] text-gray-500 mt-0.5" title="Plain premium change vs yesterday's close, before removing the market's own move">Raw {(h as any).premium_pct_raw >= 0 ? '+' : ''}{(h as any).premium_pct_raw}%</div>
+                      )}
                       {h.prem_low != null && h.prem_high != null && (
                         <div className="text-[10px] text-gray-500 mt-0.5" title="Lowest to highest premium traded today">Day range {inr(h.prem_low)}–{inr(h.prem_high)}</div>
                       )}

@@ -193,13 +193,18 @@ export default function StrikeStealthBuildup() {
   const [advOpen, setAdvOpen] = useState(false)
   useEffect(() => {
     try {
-      if (new URLSearchParams(window.location.search).get('v') === 'old') setSimple(false)
+      const vq = new URLSearchParams(window.location.search).get('v')
+      if (vq === 'adj') { adjRef.current = true; setAdjMode(true); setSimple(true); setView('live'); setTimeWindow('eod'); setBestOfDay(false) }
+      else if (vq === 'old') setSimple(false)
       else { setSimple(true); setView('saved'); setTimeWindow('eod') }
     } catch {}
   }, [])
   // Nov 3 2026: only the most recent request may update the page, so a slow reply for an earlier
   // window / view (5-min, Hourly, Live) can never overwrite the EOD data after you've switched.
   const reqId = useRef(0)
+  // Nov 5 2026 PREVIEW (?v=adj): live EOD scan with the market's own move removed from the premium test.
+  const adjRef = useRef(false)
+  const [adjMode, setAdjMode] = useState(false)
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
     const myReq = ++reqId.current
     const fresh = () => myReq === reqId.current
@@ -225,7 +230,7 @@ export default function StrikeStealthBuildup() {
         .finally(() => { if (fresh()) setLoading(false) })
       return
     }
-    fetch(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
+    fetch(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}${adjRef.current && w === 'eod' ? '&adj=1' : ''}`)
       .then(r => r.json())
       .then(j => { if (!fresh()) return; setData(j); setUpdatedAt(new Date()) })
       .catch(() => { if (fresh() && !silent) setData({ error: 'Failed to load' }) })
@@ -498,6 +503,13 @@ export default function StrikeStealthBuildup() {
         )}
 
         {layout === 'dashboard' && (
+          {adjMode && (
+            <div className="mb-3 rounded-lg border border-cyan-800/60 bg-cyan-950/30 px-3 py-2 text-xs text-cyan-200">
+              <b>Preview — market-move adjusted.</b> Live EOD scan where the premium test ignores the part of the premium change caused by the market's own move
+              (it re-prices each option at yesterday's implied volatility with today's spot and time). The small "Raw" figure under each premium is the plain change vs yesterday's close.
+              Compare with the normal page; nothing here is saved.
+            </div>
+          )}
           <StealthDashboard
             hits={allHits.filter(h => freshOk(h)) as any}
             loading={loading}

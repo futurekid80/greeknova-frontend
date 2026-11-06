@@ -162,8 +162,12 @@ export default function PulseFeedDashboard({
   }, [sectorFilter])
 
   // Stealth strikes per stock (saved EOD events -- cheap, filled by the 5-min job).
-  // Bias uses the same rule as Strike Stealth: Call Buying + Put Writing = bullish,
+  // Bias uses the same direction rule as Strike Stealth: Call Buying + Put Writing = bullish,
   // Put Buying + Call Writing = bearish. Silently absent if nothing is saved yet.
+  // Nov 6 2026: simplified to match the Stealth page's "Best of the day" view --
+  // only Elite/Strong strikes with >= Rs 25 lakh added count, and each side is
+  // weighed by money added (Rs lakh), not by number of strikes. A side needs
+  // >= 65% of the money to call a direction; otherwise it reads Mixed.
   const [stealth, setStealth] = useState<Record<string, { n: number; bull: number; bear: number }>>({})
   const [stealthDate, setStealthDate] = useState('')
   useEffect(() => {
@@ -174,11 +178,14 @@ export default function PulseFeedDashboard({
         if (off) return
         const m: Record<string, { n: number; bull: number; bear: number }> = {}
         for (const e of (j?.events || [])) {
+          const tier = String(e.best_tier || e.tier || '').toUpperCase()
+          const lakh = ((Number(e.new_oi || 0) - Number(e.old_oi || 0)) * Number(e.new_premium || 0)) / 100000
+          if ((tier !== 'ELITE' && tier !== 'STRONG') || lakh < 25) continue
           const r = m[e.symbol] ?? { n: 0, bull: 0, bear: 0 }
           r.n++
           const a = e.activity, t = e.option_type
-          if ((t === 'CE' && a === 'BUYING') || (t === 'PE' && a === 'WRITING')) r.bull++
-          else if ((t === 'PE' && a === 'BUYING') || (t === 'CE' && a === 'WRITING')) r.bear++
+          if ((t === 'CE' && a === 'BUYING') || (t === 'PE' && a === 'WRITING')) r.bull += lakh
+          else if ((t === 'PE' && a === 'BUYING') || (t === 'CE' && a === 'WRITING')) r.bear += lakh
           m[e.symbol] = r
         }
         setStealth(m); setStealthDate(j?.date || '')
@@ -187,14 +194,20 @@ export default function PulseFeedDashboard({
     return () => { off = true }
   }, [])
   const showStealth = Object.keys(stealth).length > 0
+  const stealthBias = (x: { bull: number; bear: number }) => {
+    const tot = x.bull + x.bear
+    if (tot <= 0) return 'Mixed'
+    return x.bull / tot >= 0.65 ? 'Bullish' : x.bear / tot >= 0.65 ? 'Bearish' : 'Mixed'
+  }
+  const fmtMoney = (lakh: number) => lakh >= 100 ? `₹${(lakh / 100).toFixed(1)} cr` : `₹${Math.round(lakh)} lakh`
   const stealthChip = (sym: string) => {
     const x = stealth[sym]
     if (!x) return <span className="text-gray-700">—</span>
-    const bias = x.bull > x.bear ? 'Bullish' : x.bear > x.bull ? 'Bearish' : 'Mixed'
+    const bias = stealthBias(x)
     const cls = bias === 'Bullish' ? 'text-emerald-300 border-emerald-700/60 bg-emerald-950/30'
       : bias === 'Bearish' ? 'text-rose-300 border-rose-700/60 bg-rose-950/30' : 'text-gray-300 border-gray-700 bg-gray-900/30'
     return (
-      <a href="/strike-stealth" title={`${x.n} Stealth strike${x.n > 1 ? 's' : ''} (EOD window${stealthDate ? ', ' + stealthDate : ''}) · Bullish signs ${x.bull}, bearish signs ${x.bear}. Click to open Strike Stealth.`}>
+      <a href="/strike-stealth" title={`${x.n} Elite/Strong Stealth strike${x.n > 1 ? 's' : ''} with ₹25 lakh+ added (EOD window${stealthDate ? ', ' + stealthDate : ''}) · Money added on bullish side ${fmtMoney(x.bull)}, bearish side ${fmtMoney(x.bear)}. A direction needs 65%+ of the money, otherwise Mixed. Click to open Strike Stealth.`}>
         <Chip cls={cls}>🎯 {x.n} · {bias}</Chip>
       </a>
     )
@@ -307,7 +320,7 @@ export default function PulseFeedDashboard({
       s.symbol, sectorOf[s.symbol] || '', s.cmp, s.price_chg_pct, s.oi_chg_pct, s.label || s.signal, s.cpr_position || '',
       s.width_pct ?? '', s.vol_ratio ?? '', s.vol_surge ? 'Y' : '', s.week52_high ?? '', s.pct_from_52w_high ?? '',
       isWar(s) ? 'Y' : '', s.confluence ? 'Y' : '',
-      stealth[s.symbol]?.n ?? '', stealth[s.symbol] ? (stealth[s.symbol].bull > stealth[s.symbol].bear ? 'Bullish' : stealth[s.symbol].bear > stealth[s.symbol].bull ? 'Bearish' : 'Mixed') : '',
+      stealth[s.symbol]?.n ?? '', stealth[s.symbol] ? stealthBias(stealth[s.symbol]) : '',
     ].map(esc).join(',')))
     try {
       const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -441,7 +454,7 @@ export default function PulseFeedDashboard({
             <button onClick={() => upd({ volSurge: !f.volSurge })} className={pill(f.volSurge, '!py-1')}>🔊 Volume surge</button>
             <button onClick={() => upd({ warZone: !f.warZone })} className={pill(f.warZone, '!py-1')}>⚡ War Zone only</button>
             <button onClick={() => upd({ confluence: !f.confluence })} className={pill(f.confluence, '!py-1')}>🔗 Confluence only</button>
-            {showStealth && <button onClick={() => upd({ stealth: !f.stealth })} className={pill(f.stealth, '!py-1')}>🎯 Has Stealth strikes</button>}
+            {showStealth && <button onClick={() => upd({ stealth: !f.stealth })} className={pill(f.stealth, '!py-1')}>🎯 Has Elite/Strong Stealth strikes</button>}
           </div>
         )}
       </div>

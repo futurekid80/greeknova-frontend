@@ -1170,7 +1170,8 @@ export default function MarketPulse() {
     fetchWithTimeout(`${API}/index-data`).then(r => r.json()).then(indexJson => {
       if (indexJson?.timestamp) {
         const ts = indexJson.timestamp
-        setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}))
+        // Nov 6 2026: backend sends a true UTC timestamp, so show it in IST (was labelled UTC, i.e. 5.5h behind)
+        setLastUpdate(new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Kolkata'}))
         const cmpMap2: Record<string,number> = {}
         const seen = new Set<string>()
         ;(indexJson.cmps || []).forEach((c:any) => { if(!seen.has(c.symbol)){cmpMap2[c.symbol]=c.cmp;seen.add(c.symbol)} })

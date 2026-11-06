@@ -505,6 +505,12 @@ function useClassicNavPref() {
 
   useEffect(() => {
     let cancelled = false
+    // Nov 6 2026: "All Tools" sometimes vanished because the saved choice is
+    // only read from Supabase (4s timeout, session retries) and any slow or
+    // failed read silently fell back to the simple menu. Remember the last
+    // known choice in this browser so the menu shows instantly and stays put
+    // when the server read is slow; the server value still wins when it loads.
+    try { if (localStorage.getItem('gn_classic_nav') === '1') setClassicNav(true) } catch {}
     async function load() {
       // Oct 15 2026: Navbar remounts on every page navigation (it's
       // rendered per-page, not in a shared layout), so this effect -- and
@@ -546,7 +552,10 @@ function useClassicNavPref() {
             .maybeSingle(),
           4000
         )
-        if (!cancelled && !error && data) setClassicNav(!!data.enabled)
+        if (!cancelled && !error && data) {
+          setClassicNav(!!data.enabled)
+          try { localStorage.setItem('gn_classic_nav', data.enabled ? '1' : '0') } catch {}
+        }
       } catch {
         // fall through to default
       }
@@ -560,6 +569,7 @@ function useClassicNavPref() {
   async function toggle() {
     const next = !classicNav
     setClassicNav(next)
+    try { localStorage.setItem('gn_classic_nav', next ? '1' : '0') } catch {}
     let session
     try {
       ({ data: { session } } = await getSessionCached())

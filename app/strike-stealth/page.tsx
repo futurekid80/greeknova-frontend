@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Zap, Search, Download } from 'lucide-react'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import StealthDashboard from '@/components/StealthDashboard'
+import { labelUnclear } from '@/lib/stealthLabel'
 
 const API = 'https://api.greeknova.com'
 
@@ -297,6 +298,7 @@ export default function StrikeStealthBuildup() {
   const biasMap = new Map<string, BiasRow>()
   for (const h of allHits) {
     if (h.activity !== 'BUYING' && h.activity !== 'WRITING') continue
+    if (labelUnclear(h.activity, h.premium_pct)) continue // Nov 7 2026: unclear labels don't count toward bias
     const r = biasMap.get(h.symbol) ?? { symbol: h.symbol, cb: 0, pw: 0, pb: 0, cw: 0, bull: 0, bear: 0 }
     if (h.activity === 'BUYING') { if (h.option_type === 'CE') r.cb++; else r.pb++ }
     else { if (h.option_type === 'PE') r.pw++; else r.cw++ }

@@ -144,7 +144,7 @@ function Slider({ label, value, steps, fmt, onIdx, active = true, icon }: {
 }
 
 export default function StealthDashboard({
-  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort, showSince,
+  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort, showSince, foldSliders,
 }: {
   hits: DashHit[]
   loading: boolean
@@ -154,7 +154,9 @@ export default function StealthDashboard({
   unclearKeys?: Set<string> | null
   initialSort?: 'move' | 'pct' | 'oi' | 'money' | 'chain'
   showSince?: boolean
+  foldSliders?: boolean
 }) {
+  const [slidersOpen, setSlidersOpen] = useState(false)
   const maxSeen = showSince ? Math.max(1, ...hits.map(x => x.times_seen ?? 1)) : 1
   const [f, setF] = useState<F>({ ...BASE, ...PRESETS[1].f })
   const [preset, setPreset] = useState<string>('all')
@@ -310,6 +312,7 @@ export default function StealthDashboard({
           {!showSince && PRESETS.map(p => (
             <button key={p.id} onClick={() => applyPreset(p.id)} className={pill(preset === p.id)}>{p.label}</button>
           ))}
+          {foldSliders && <button onClick={() => setSlidersOpen(v => !v)} className="text-xs text-indigo-300 hover:text-indigo-200">{slidersOpen ? '▾ Hide sliders' : '▸ Sliders'}</button>}
           <button onClick={reset} className="ml-auto flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
             <RotateCcw size={12} /> Reset Filters
           </button>
@@ -317,7 +320,7 @@ export default function StealthDashboard({
       </div>
 
       {/* Sliders + toggles */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3 space-y-3">
+      <div className={`rounded-xl border border-gray-800 bg-gray-900/30 p-3 space-y-3 ${foldSliders && !slidersOpen ? 'hidden' : ''}`}>
         <div className="flex flex-wrap gap-3">
           <Slider label="Min New OI" value={f.minOI} steps={OI_STEPS} fmt={v => (v === 0 ? '0' : fmtOI(v).replace(' ', ''))}
             onIdx={i => upd({ minOI: OI_STEPS[i] })} />

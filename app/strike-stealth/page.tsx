@@ -193,11 +193,13 @@ export default function StrikeStealthBuildup() {
   // Nov 3 2026: simplified page is the default (?v=old for the legacy layout): opens on Saved today / Day / Best of the day / latest scan, advanced filters tucked away.
   const [simple, setSimple] = useState(true)
   const [advOpen, setAdvOpen] = useState(false)
+  const [prev, setPrev] = useState(false) // Nov 7 2026 PREVIEW (?v=simple): simpler top-of-page layout, for Manish's review only
   useEffect(() => {
     try {
       const vq = new URLSearchParams(window.location.search).get('v')
       if (vq === 'adj') { adjRef.current = true; setAdjMode(true); setSimple(true); setView('live'); setTimeWindow('eod'); setBestOfDay(false) }
       else if (vq === 'nb') { setNbMode(true); setSimple(true); setView('saved'); setTimeWindow('eod') }
+      else if (vq === 'simple') { setPrev(true); setShortlist(true); setSimple(true); setView('saved'); setTimeWindow('eod') }
       else if (vq === 'old') setSimple(false)
       else { setSimple(true); setView('saved'); setTimeWindow('eod') }
     } catch {}
@@ -399,8 +401,16 @@ export default function StrikeStealthBuildup() {
 
         {simple && (
           <div className="mb-4 rounded-xl border border-gray-800 bg-gray-900/40 p-3">
+            {prev && (
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <button onClick={() => setShortlist(true)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${shortlist ? 'bg-amber-950/50 text-amber-300 border-amber-600' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>🎯 Buyer&apos;s shortlist</button>
+                <button onClick={() => setShortlist(false)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${!shortlist ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'}`}>Everything</button>
+              </div>
+            )}
             {windowBlock}
-            <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className={`flex flex-wrap items-center gap-2 mb-3 ${prev && !advOpen ? 'hidden' : ''}`}>
               <span className="text-xs text-gray-400 mr-1">Show:</span>
               {([['all', 'All'], ['index', 'Indices'], ['stocks', 'Stocks']] as const).map(([v, label]) => (
                 <button key={v} onClick={() => setInstrumentFilter(v)}
@@ -408,11 +418,11 @@ export default function StrikeStealthBuildup() {
                     instrumentFilter === v ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
                   }`}>{label}</button>
               ))}
-              <button onClick={() => setShortlist(v => !v)}
+              {!prev && <button onClick={() => setShortlist(v => !v)}
                 title="Only the clearest, largest positions that are still active, with the strongest strike per stock and side. Works best on the live scan and the latest saved scan."
                 className={`ml-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
                   shortlist ? 'bg-amber-950/50 text-amber-300 border-amber-600' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
-                }`}>🎯 Buyer&apos;s shortlist{shortlist ? ' · ON' : ''}</button>
+                }`}>🎯 Buyer&apos;s shortlist{shortlist ? ' · ON' : ''}</button>}
               <button onClick={toggleAdj}
                 title="Judges how quiet the premium is after removing the part caused by the stock's own move, so a stock that ran up or down does not hide real put or call writing. Shows the live end-of-day scan."
                 className={`ml-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
@@ -423,7 +433,7 @@ export default function StrikeStealthBuildup() {
               {loading && !data ? 'Loading…' : simpleStatus}
             </p>
             <button onClick={() => setAdvOpen(v => !v)} className="mt-2 text-[11px] text-cyan-400 hover:text-cyan-300">
-              {advOpen ? '▾ Hide advanced filters' : '▸ Advanced filters (zone, freshness, tier, layout, earlier-today strikes)'}
+              {prev ? (advOpen ? '▾ Hide more options' : '▸ More options (live or saved, indices or stocks, strike zone, freshness, adjust for the stock\'s own move)') : advOpen ? '▾ Hide advanced filters' : '▸ Advanced filters (zone, freshness, tier, layout, earlier-today strikes)'}
             </button>
           </div>
         )}
@@ -556,6 +566,7 @@ export default function StrikeStealthBuildup() {
             initialSort={shortlist ? 'money' : undefined}
             hits={(shortlist ? shortlistRows.map((h: any) => (intraday[h.tradingsymbol] ? { ...h, ...intraday[h.tradingsymbol] } : h)) : allHits.filter(h => freshOk(h))) as any}
             showSince={shortlist}
+            foldSliders={prev}
             unclearKeys={nbKeys}
             loading={loading}
             error={data?.error}

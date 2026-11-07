@@ -415,7 +415,7 @@ export default function StrikeStealthBuildup() {
         <div className="flex items-center gap-2 mb-4">
           <span className="text-xs text-gray-400 mr-1">📋 View:</span>
           {([['live', 'Live scan'], ['saved', 'Saved today']] as const).map(([v, label]) => (
-            <button key={v} onClick={() => setView(v)}
+            <button key={v} onClick={() => { setView(v); if (v === 'saved' && adjRef.current) { adjRef.current = false; setAdjMode(false) } }}
               className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
                 view === v
                   ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700'
@@ -540,7 +540,7 @@ export default function StrikeStealthBuildup() {
             unclearKeys={nbKeys}
             loading={loading}
             error={data?.error}
-            emptyHint={view === 'saved'
+            emptyHint={shortlist ? 'Nothing meets the shortlist right now. It keeps only the clearest, largest positions that are still active, so on a quiet day or a thin session it can be empty. Turn it off to see everything.' : view === 'saved'
               ? (rawHits.length > 0 ? 'No hits match the current filters — loosen a filter or turn off “Best of the day”.' : 'Nothing saved yet — the background scan starts saving hits at the next market open (9:15 IST on a trading day). Use Live scan to see current hits.')
               : `No hits in the ${(data?.window_label ?? 'selected').toLowerCase()} window right now. The 5-min and Hourly windows only show fresh activity while the market is open — pick "EOD / vs prev close" above to see the whole day's picture.`}
             onDownload={(rows) => downloadHitsCSV(rows as any, timeWindow, zone, view)}

@@ -3,6 +3,7 @@
 // that stock's whole option chain; then only the strongest strike per stock and side is kept.
 const MIN_RS = 2_500_000        // Rs 25 lakh of premium added
 const MIN_CHAIN_SHARE = 5       // % of the chain's open interest
+const MIN_RS_NO_CHAIN = 10_000_000  // Rs 1 crore: used instead when the chain share is not available (e.g. saved rows after a restart)
 
 type Row = {
   symbol: string; option_type: string; tier: string; activity?: string | null
@@ -19,7 +20,8 @@ export function buyerShortlist<T extends Row>(hits: T[], isUnclear: (h: T) => bo
     if (h.freshness === 'Seen Earlier Today') continue
     if (isUnclear(h)) continue
     if (money(h) < MIN_RS) continue
-    if (h.chain_share_added == null || h.chain_share_added < MIN_CHAIN_SHARE) continue
+    if (h.chain_share_added == null) { if (money(h) < MIN_RS_NO_CHAIN) continue }
+    else if (h.chain_share_added < MIN_CHAIN_SHARE) continue
     const k = `${h.symbol}|${h.option_type}|${h.activity}`
     const cur = best.get(k)
     if (!cur || money(h) > money(cur)) best.set(k, h)

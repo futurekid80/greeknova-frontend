@@ -8,6 +8,7 @@ import { useAutoRefresh } from "@/lib/useAutoRefresh"
 import PulseFeedDashboard from '@/components/PulseFeedDashboard'
 import PulseNowStrip from '@/components/PulseNowStrip'
 import PulseScreens from '@/components/PulseScreens'
+import DiwaliVibe, { Diya } from '@/components/DiwaliVibe'
 
 import { ALL_SYMBOLS as _CANON_SYMBOLS } from '@/lib/symbols'
 const API = 'https://api.greeknova.com'
@@ -1031,6 +1032,7 @@ export default function MarketPulse() {
   const [loading, setLoading]         = useState(true)
   // Oct 31 2026: new dashboard-format feed is previewable with ?v=new while Manish reviews it.
   const [newFeed, setNewFeed]         = useState(false)
+  const [diwaliReplay, setDiwaliReplay] = useState(0) // Nov 7 2026: Diwali touch, see components/DiwaliVibe.tsx
   // Customisable Pulse blocks (new layout only): hidden block ids, remembered per browser.
   const [hiddenBlocks, setHiddenBlocks] = useState<string[]>([])
   const [showCustomise, setShowCustomise] = useState(false)
@@ -1369,7 +1371,7 @@ export default function MarketPulse() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-3">
           <div>
-            <h1 className="text-3xl font-black text-white tracking-tight mb-1">Market Pulse</h1>
+            <h1 className="text-3xl font-black text-white tracking-tight mb-1">Market Pulse<Diya onClick={() => setDiwaliReplay(n => n + 1)}/><DiwaliVibe replayKey={diwaliReplay}/></h1>
             <p className="text-gray-500 text-sm">Live OI flow · CPR context · War zone detection</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">

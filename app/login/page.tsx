@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import DiwaliVibe, { Diya } from '@/components/DiwaliVibe'
 
 const DEMO_API = 'https://api.greeknova.com'
 
@@ -88,6 +89,8 @@ export default function LoginPage() {
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-white tracking-tight">
             Greek<span className="text-blue-400">Nova</span>
+            <Diya />
+            <DiwaliVibe />
           </h1>
           <p className="text-gray-400 mt-2 text-sm">
             F&O Analytics Platform — Beta Access

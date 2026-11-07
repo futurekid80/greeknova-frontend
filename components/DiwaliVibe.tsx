@@ -1,8 +1,8 @@
 'use client'
 // Nov 7 2026: light Diwali touch -- a flickering diya next to the page title and
-// a one-time ~5 second burst of crackers. Built to stay cheap:
+// a one-time ~8 second burst of crackers. Built to stay cheap:
 //  - no libraries, no images, no network calls
-//  - canvas runs only for ~5s, once per browser session, then is removed
+//  - canvas runs only for ~8s, once per browser session, then is removed
 //  - skipped for visitors who ask for reduced motion, and on low-power devices
 //  - never blocks clicks (pointer-events none), sits under the navbar
 //  - switches itself off after 10 Nov (IST), so nothing needs cleaning up
@@ -42,29 +42,33 @@ function runCrackers(canvas: HTMLCanvasElement, onDone: () => void) {
     const cx = w * (0.15 + Math.random() * 0.7)
     const cy = h * (0.12 + Math.random() * 0.3)
     const c = COLORS[Math.floor(Math.random() * COLORS.length)]
-    for (let i = 0; i < 36; i++) {
-      const a = (Math.PI * 2 * i) / 36
-      const s = 1.5 + Math.random() * 2.5
+    for (let i = 0; i < 56; i++) {
+      const a = (Math.PI * 2 * i) / 56
+      const s = 1.8 + Math.random() * 3.2
       parts.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, c })
     }
   }
   const start = performance.now()
-  const burstAt = [0, 500, 1100, 1800, 2500, 3200]
+  const burstAt = [0, 600, 1300, 2100, 2900, 3700, 4500, 5400, 6300]
   let next = 0
   let raf = 0
   const frame = (t: number) => {
     const el = t - start
     while (next < burstAt.length && el >= burstAt[next]) { burst(); next++ }
-    ctx.clearRect(0, 0, w, h)
+    // soft trails: fade the previous frame instead of wiping it
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'
+    ctx.fillRect(0, 0, w, h)
+    ctx.globalCompositeOperation = 'source-over'
     parts = parts.filter(p => p.life > 0)
     for (const p of parts) {
-      p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.vx *= 0.99; p.life -= 0.014
+      p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.vx *= 0.99; p.life -= 0.011
       ctx.globalAlpha = Math.max(p.life, 0)
       ctx.fillStyle = p.c
-      ctx.fillRect(p.x, p.y, 2.5, 2.5)
+      ctx.fillRect(p.x, p.y, 3, 3)
     }
     ctx.globalAlpha = 1
-    if (el < 5200 && (parts.length > 0 || next < burstAt.length)) raf = requestAnimationFrame(frame)
+    if (el < 8500 && (parts.length > 0 || next < burstAt.length)) raf = requestAnimationFrame(frame)
     else onDone()
   }
   raf = requestAnimationFrame(frame)

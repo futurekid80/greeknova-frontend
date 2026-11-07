@@ -207,6 +207,11 @@ export default function StrikeStealthBuildup() {
   // Nov 5 2026 PREVIEW (?v=adj): live EOD scan with the market's own move removed from the premium test.
   const adjRef = useRef(false)
   const [adjMode, setAdjMode] = useState(false)
+  // Nov 7 2026: visible switch for the market-move adjusted EOD view (same live scan as ?v=adj). Off = the normal saved view.
+  const toggleAdj = () => {
+    if (adjRef.current) { adjRef.current = false; setAdjMode(false); setView('saved'); setTimeWindow('eod') }
+    else { adjRef.current = true; setAdjMode(true); setView('live'); setTimeWindow('eod'); setBestOfDay(false) }
+  }
   const [nbMode, setNbMode] = useState(false) // Nov 7 2026 PREVIEW (?v=nb): neighbour-check for unclear labels
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
     const myReq = ++reqId.current
@@ -240,7 +245,7 @@ export default function StrikeStealthBuildup() {
       .finally(() => { if (fresh()) setLoading(false) })
   }, [])
 
-  useEffect(() => { load(zone, timeWindow, view) }, [load, zone, timeWindow, view])
+  useEffect(() => { load(zone, timeWindow, view) }, [load, zone, timeWindow, view, adjMode])
 
   // Auto-refresh every 60s while the market is open and the tab is visible.
   useEffect(() => {
@@ -383,6 +388,11 @@ export default function StrikeStealthBuildup() {
                     instrumentFilter === v ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
                   }`}>{label}</button>
               ))}
+              <button onClick={toggleAdj}
+                title="Judges how quiet the premium is after removing the part caused by the stock's own move, so a stock that ran up or down does not hide real put or call writing. Shows the live end-of-day scan."
+                className={`ml-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                  adjMode ? 'bg-cyan-950/60 text-cyan-300 border-cyan-600' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+                }`}>⚖️ Adjust for the stock&apos;s own move{adjMode ? ' · ON' : ''}</button>
             </div>
             <p className="text-xs text-gray-400">
               {loading && !data ? 'Loading…' : simpleStatus}
@@ -511,9 +521,9 @@ export default function StrikeStealthBuildup() {
           <>
           {adjMode && (
             <div className="mb-3 rounded-lg border border-cyan-800/60 bg-cyan-950/30 px-3 py-2 text-xs text-cyan-200">
-              <b>Preview — market-move adjusted.</b> Live EOD scan where the premium test ignores the part of the premium change caused by the market's own move
+              <b>Market-move adjusted view.</b> Live EOD scan where the premium test ignores the part of the premium change caused by the market's own move
               (it re-prices each option at yesterday's implied volatility with today's spot and time). The small "Raw" figure under each premium is the plain change vs yesterday's close.
-              Compare with the normal page; nothing here is saved.
+              Switch it off above to return to the normal saved view; nothing here is saved.
             </div>
           )}
           <StealthDashboard

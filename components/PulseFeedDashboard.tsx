@@ -6,7 +6,6 @@
 // nothing new on the server. Replaces the old five-tab list (kept behind
 // ?v=old on the page until Manish signs off).
 import { useEffect, useMemo, useState } from 'react'
-import { labelUnclear } from '@/lib/stealthLabel'
 import { Download, RotateCcw, Search } from 'lucide-react'
 
 export interface PulseRow {
@@ -185,7 +184,6 @@ export default function PulseFeedDashboard({
           const r = m[e.symbol] ?? { n: 0, bull: 0, bear: 0 }
           r.n++
           const a = e.activity, t = e.option_type
-          if (labelUnclear(a, e.premium_pct)) { m[e.symbol] = r; continue } // unclear label: counted as a strike, not toward bias
           if ((t === 'CE' && a === 'BUYING') || (t === 'PE' && a === 'WRITING')) r.bull += lakh
           else if ((t === 'PE' && a === 'BUYING') || (t === 'CE' && a === 'WRITING')) r.bear += lakh
           m[e.symbol] = r

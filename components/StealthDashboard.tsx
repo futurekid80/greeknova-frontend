@@ -6,7 +6,6 @@
 // the page already fetched (live scan or saved-today), nothing new on the server.
 import { useEffect, useMemo, useState } from 'react'
 import { Download, RotateCcw, Search } from 'lucide-react'
-import { labelUnclear, UNCLEAR_LABEL_HINT } from '@/lib/stealthLabel'
 
 export interface DashHit {
   symbol: string
@@ -273,7 +272,6 @@ export default function StealthDashboard({
                 <b> OI up + premium up = Buying</b>, and <b>Quiet</b> = premium within 1% (a smaller move is noise, not a side). In the EOD window the label is judged on implied volatility (IV) so the stock&apos;s own move and a day of time decay don&apos;t count: <b>IV down since yesterday&apos;s close = Writing, IV up = Buying, within about 3% = Quiet</b> (if IV can&apos;t be worked out it falls back to the premium rule above). It is still a pattern, not seen in actual trades. Typical reading: Call Buying + Put Writing
                 leans bullish; Put Buying + Call Writing leans bearish; the <i>Bias by symbol</i> panel above sums this up per stock.
                 In the EOD window the label compares only yesterday's close with now, so a premium that swings and comes back reads Quiet.
-                A grey dashed label with a <b>?</b> means the premium and the pricing signal point different ways, so the label is unclear and is left out of the Bias counts.
                 Check the <i>Day range</i> under the premium, and the amber <b>⚠ Last hour</b> note, which appears when the last hour alone points the other way.
               </li>
               <li>
@@ -549,10 +547,7 @@ export default function StealthDashboard({
                     <td className="px-2 py-2 text-right font-bold text-white">{h.strike.toLocaleString('en-IN')}</td>
                     <td className="px-2 py-2"><Chip cls={h.option_type === 'CE' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : 'text-rose-300 border-rose-700/50 bg-rose-950/30'}>{h.option_type}</Chip></td>
                     <td className="px-2 py-2"><Chip cls={MONEY_CHIP[m.label]}>{m.label}</Chip><div className="text-[10px] text-gray-500">{m.label === 'ATM' ? 'At Strike' : `${m.label === 'ITM' ? '' : ''}+${m.n}`}</div></td>
-                    <td className="px-2 py-2">{h.activity ? (labelUnclear(h.activity, h.premium_pct)
-                      ? <span title={UNCLEAR_LABEL_HINT}><Chip cls="text-gray-400 border-gray-600 border-dashed bg-gray-800/30">{ACT_ICON[h.activity]} {h.activity_label ?? h.activity} ?</Chip></span>
-                      : <span title="Inferred from the premium move (OI up + premium up 1%+ = Buying, down 1%+ = Writing, otherwise Quiet). A pattern, not seen in actual trades."><Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip></span>
-                    ) : <span className="text-gray-600">—</span>}
+                    <td className="px-2 py-2">{h.activity ? <span title="Inferred from the premium move (OI up + premium up 1%+ = Buying, down 1%+ = Writing, otherwise Quiet). A pattern, not seen in actual trades."><Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip></span> : <span className="text-gray-600">—</span>}
                       {h.activity_conflict && h.hr_activity && (
                         <div className="mt-1 text-[10px] font-semibold text-amber-300" title={`Whole-day reading and the last hour disagree. ${h.hr_share_pct ?? '?'}% of today's OI build came in the last hour.`}>
                           ⚠ Last hour: {ACT_ICON[h.hr_activity]} {h.hr_activity_label ?? h.hr_activity}

@@ -193,6 +193,7 @@ export default function StrikeStealthBuildup() {
   // Nov 3 2026: simplified page is the default (?v=old for the legacy layout): opens on Saved today / Day / Best of the day / latest scan, advanced filters tucked away.
   const [simple, setSimple] = useState(true)
   const [advOpen, setAdvOpen] = useState(false)
+  const [biasOpen, setBiasOpen] = useState(false) // Bias chips start folded while the shortlist is on, so the table comes first
   const [prev, setPrev] = useState(false) // Nov 7 2026 PREVIEW (?v=simple): simpler top-of-page layout, for Manish's review only
   useEffect(() => {
     try {
@@ -528,7 +529,11 @@ export default function StrikeStealthBuildup() {
 
         {biasRows.length > 0 && (
           <div className="mb-5 p-4 rounded-xl border border-gray-800 bg-gray-900/30">
-            <p className="text-xs font-bold text-gray-300 mb-1">🧭 Bias by symbol{shortlist ? ' · based on shortlist' : ''}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-gray-300 mb-1">🧭 Bias by symbol{shortlist ? ' · based on shortlist' : ''}</p>
+              {shortlist && <button onClick={() => setBiasOpen(v => !v)} className="text-[11px] text-cyan-400 hover:text-cyan-300">{biasOpen ? '▾ Hide' : `▸ Show ${biasRows.length} symbols`}</button>}
+            </div>
+            <div className={shortlist && !biasOpen ? 'hidden' : ''}>
             <p className="text-[11px] text-gray-500 mb-3">
               Bullish = Call Buying + Put Writing · Bearish = Put Buying + Call Writing. ✓ Confirmed = both kinds agree on the same symbol.
               Tap a symbol to see its strikes. {mixedCount > 0 ? `${mixedCount} symbol${mixedCount > 1 ? 's' : ''} with signs on both sides (range/mixed) not shown.` : ''}
@@ -548,6 +553,7 @@ export default function StrikeStealthBuildup() {
                   </span>
                 </button>
               ))}
+            </div>
             </div>
           </div>
         )}

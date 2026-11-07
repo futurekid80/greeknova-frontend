@@ -5,6 +5,7 @@ import { RefreshCw, Zap, Search, Download } from 'lucide-react'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import StealthDashboard from '@/components/StealthDashboard'
 import { labelUnclear, neighbourUnclearKeys, hitKey } from '@/lib/stealthLabel'
+import { buyerShortlist } from '@/lib/stealthShortlist'
 
 const API = 'https://api.greeknova.com'
 
@@ -212,6 +213,7 @@ export default function StrikeStealthBuildup() {
     if (adjRef.current) { adjRef.current = false; setAdjMode(false); setView('saved'); setTimeWindow('eod') }
     else { adjRef.current = true; setAdjMode(true); setView('live'); setTimeWindow('eod'); setBestOfDay(false) }
   }
+  const [shortlist, setShortlist] = useState(false) // Nov 7 2026: Buyer's shortlist toggle (off by default)
   const [nbMode, setNbMode] = useState(false) // Nov 7 2026 PREVIEW (?v=nb): neighbour-check for unclear labels
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
     const myReq = ++reqId.current
@@ -388,6 +390,11 @@ export default function StrikeStealthBuildup() {
                     instrumentFilter === v ? 'bg-cyan-950/60 text-cyan-400 border-cyan-700' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
                   }`}>{label}</button>
               ))}
+              <button onClick={() => setShortlist(v => !v)}
+                title="Only the clearest, largest positions that are still active, with the strongest strike per stock and side. Works best on the live scan and the latest saved scan."
+                className={`ml-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                  shortlist ? 'bg-amber-950/50 text-amber-300 border-amber-600' : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-white'
+                }`}>🎯 Buyer&apos;s shortlist{shortlist ? ' · ON' : ''}</button>
               <button onClick={toggleAdj}
                 title="Judges how quiet the premium is after removing the part caused by the stock's own move, so a stock that ran up or down does not hide real put or call writing. Shows the live end-of-day scan."
                 className={`ml-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
@@ -527,7 +534,9 @@ export default function StrikeStealthBuildup() {
             </div>
           )}
           <StealthDashboard
-            hits={allHits.filter(h => freshOk(h)) as any}
+            key={shortlist ? 'sl' : 'all'}
+            initialSort={shortlist ? 'money' : undefined}
+            hits={(shortlist ? buyerShortlist(allHits.filter(h => freshOk(h)) as any[], (h: any) => (nbKeys ? nbKeys.has(hitKey(h)) : labelUnclear(h.activity, h.premium_pct))) : allHits.filter(h => freshOk(h))) as any}
             unclearKeys={nbKeys}
             loading={loading}
             error={data?.error}

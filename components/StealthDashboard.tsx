@@ -142,7 +142,7 @@ function Slider({ label, value, steps, fmt, onIdx, active = true, icon }: {
 }
 
 export default function StealthDashboard({
-  hits, loading, error, emptyHint, onDownload, unclearKeys,
+  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort,
 }: {
   hits: DashHit[]
   loading: boolean
@@ -150,6 +150,7 @@ export default function StealthDashboard({
   emptyHint?: string
   onDownload: (rows: DashHit[]) => void
   unclearKeys?: Set<string> | null
+  initialSort?: 'move' | 'pct' | 'oi' | 'money' | 'chain'
 }) {
   const [f, setF] = useState<F>({ ...BASE, ...PRESETS[1].f })
   const [preset, setPreset] = useState<string>('all')
@@ -162,7 +163,7 @@ export default function StealthDashboard({
     try { localStorage.setItem('gn_stealth_howto', v ? '0' : '1') } catch {}
     return !v
   })
-  const [sort, setSort] = useState<'move' | 'pct' | 'oi' | 'money' | 'chain'>('move')
+  const [sort, setSort] = useState<'move' | 'pct' | 'oi' | 'money' | 'chain'>(initialSort ?? 'move')
   const [pageSize, setPageSize] = useState(25)
   const [page, setPage] = useState(1)
 

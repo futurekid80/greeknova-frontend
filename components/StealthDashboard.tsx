@@ -565,8 +565,8 @@ export default function StealthDashboard({
                         {h.freshness === 'Fresh Now' && <span title="Fresh now" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-lime-400 align-middle" />}
                         <div className="text-[10px] text-gray-500">{fmtExp(h.expiry)}</div>
                         {showSince && h.first_seen && (
-                          <div className="text-[10px] text-cyan-400/80 whitespace-nowrap" title="When this position first showed up in today's scans">
-                            since {new Date(h.first_seen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}
+                          <div className="text-[10px] text-cyan-400/80 whitespace-nowrap" title="When our scan first caught this position today. The build itself may have started a little earlier.">
+                            first caught {new Date(h.first_seen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}
                             {(h.times_seen ?? 1) / maxSeen >= 0.7 && <span className="ml-1 rounded bg-cyan-900/40 px-1 text-cyan-300">steady</span>}
                           </div>
                         )}

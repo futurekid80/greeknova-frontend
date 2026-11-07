@@ -304,17 +304,17 @@ export default function StealthDashboard({
       </div>
 
       {/* Presets (hidden on the Buyer's shortlist) */}
-      {!showSince && <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3">
+      <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-gray-400 mr-1">✨ Strategy Presets:</span>
-          {PRESETS.map(p => (
+          {!showSince && <span className="text-xs text-gray-400 mr-1">✨ Strategy Presets:</span>}
+          {!showSince && PRESETS.map(p => (
             <button key={p.id} onClick={() => applyPreset(p.id)} className={pill(preset === p.id)}>{p.label}</button>
           ))}
           <button onClick={reset} className="ml-auto flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">
             <RotateCcw size={12} /> Reset Filters
           </button>
         </div>
-      </div>}
+      </div>
 
       {/* Sliders + toggles */}
       <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3 space-y-3">

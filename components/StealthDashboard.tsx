@@ -34,6 +34,8 @@ export interface DashHit {
   hr_oi_added?: number
   hr_share_pct?: number
   activity_conflict?: boolean
+  chain_share_added?: number | null
+  money_added?: number
   freshness?: string
   last_seen?: string
 }
@@ -70,7 +72,10 @@ const PRESETS: { id: string; label: string; f: Partial<F> }[] = [
 const OI_STEPS = [0, 50000, 100000, 250000, 500000]
 const PCT_STEPS = [0, 50, 100, 200, 500]
 const PREM_STEPS = [2, 5, 10, 15]
-const SORTS = [['move', 'Lowest Move'], ['pct', 'OI% Buildup'], ['oi', 'New OI']] as const
+const SORTS = [['move', 'Lowest Move'], ['pct', 'OI% Buildup'], ['oi', 'New OI'], ['money', '₹ Added'], ['chain', 'Chain Share']] as const
+// Nov 7 2026: rupee amount in Indian units (lakh / crore)
+const fmtRs = (n: number) => n >= 10000000 ? `₹${(n / 10000000).toFixed(2)} Cr` : n >= 100000 ? `₹${(n / 100000).toFixed(1)} L` : `₹${Math.round(n).toLocaleString('en-IN')}`
+const moneyOf = (h: { new_oi: number; old_oi: number; new_premium: number; money_added?: number }) => h.money_added ?? Math.max(h.new_oi - h.old_oi, 0) * h.new_premium
 
 const fmtOI = (n: number) => {
   if (Math.abs(n) >= 10000000) return `${(n / 10000000).toFixed(1)} Cr`
@@ -157,7 +162,7 @@ export default function StealthDashboard({
     try { localStorage.setItem('gn_stealth_howto', v ? '0' : '1') } catch {}
     return !v
   })
-  const [sort, setSort] = useState<'move' | 'pct' | 'oi'>('move')
+  const [sort, setSort] = useState<'move' | 'pct' | 'oi' | 'money' | 'chain'>('move')
   const [pageSize, setPageSize] = useState(25)
   const [page, setPage] = useState(1)
 
@@ -196,6 +201,8 @@ export default function StealthDashboard({
     const a = [...rows]
     if (sort === 'move') a.sort((x, y) => Math.abs(x.premium_pct) - Math.abs(y.premium_pct))
     else if (sort === 'pct') a.sort((x, y) => y.oi_pct - x.oi_pct)
+    else if (sort === 'money') a.sort((x, y) => moneyOf(y) - moneyOf(x))
+    else if (sort === 'chain') a.sort((x, y) => (y.chain_share_added ?? -1) - (x.chain_share_added ?? -1))
     else a.sort((x, y) => y.new_oi - x.new_oi)
     return a
   }, [rows, sort])
@@ -561,8 +568,8 @@ export default function StealthDashboard({
                         </div>
                       )}
                     </td>
-                    <td className="px-2 py-2 text-right"><span className="font-bold text-emerald-400">↗ +{h.oi_pct}%</span><div className="text-[10px] text-gray-500">was {fmtOI(h.old_oi)}</div></td>
-                    <td className="px-2 py-2 text-right"><span className="font-bold text-white">{fmtOI(h.new_oi)}</span><div className="text-[10px] text-gray-500">{h.new_oi.toLocaleString('en-IN')}</div></td>
+                    <td className="px-2 py-2 text-right"><span className="font-bold text-emerald-400">↗ +{h.oi_pct}%</span><div className="text-[10px] text-gray-500">was {fmtOI(h.old_oi)}</div>{h.chain_share_added != null && <div className="text-[10px] text-cyan-300/90" title="How much this strike added, as a share of the whole option chain's open interest for this stock, expiry and side">{h.chain_share_added}% of chain</div>}</td>
+                    <td className="px-2 py-2 text-right"><span className="font-bold text-white">{fmtOI(h.new_oi)}</span><div className="text-[10px] text-gray-500">{h.new_oi.toLocaleString('en-IN')}</div><div className="text-[10px] font-semibold text-amber-300" title="Open interest added multiplied by the premium: the rupees put into this strike">{fmtRs(moneyOf(h))} added</div></td>
                     <td className="px-2 py-2 text-right bg-emerald-950/20">
                       {(h as any).premium_pct_raw != null && Math.abs((h as any).premium_pct_raw - h.premium_pct) >= 1 && (
                         <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5" title="Premium change after removing the part caused by the stock's own move">After the stock&apos;s move</div>

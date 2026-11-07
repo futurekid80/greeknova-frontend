@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw, Zap, Search, Download } from 'lucide-react'
 import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import StealthDashboard from '@/components/StealthDashboard'
-import { labelUnclear } from '@/lib/stealthLabel'
+import { labelUnclear, neighbourUnclearKeys, hitKey } from '@/lib/stealthLabel'
 
 const API = 'https://api.greeknova.com'
 
@@ -196,6 +196,7 @@ export default function StrikeStealthBuildup() {
     try {
       const vq = new URLSearchParams(window.location.search).get('v')
       if (vq === 'adj') { adjRef.current = true; setAdjMode(true); setSimple(true); setView('live'); setTimeWindow('eod'); setBestOfDay(false) }
+      else if (vq === 'nb') { setNbMode(true); setSimple(true); setView('saved'); setTimeWindow('eod') }
       else if (vq === 'old') setSimple(false)
       else { setSimple(true); setView('saved'); setTimeWindow('eod') }
     } catch {}
@@ -206,6 +207,7 @@ export default function StrikeStealthBuildup() {
   // Nov 5 2026 PREVIEW (?v=adj): live EOD scan with the market's own move removed from the premium test.
   const adjRef = useRef(false)
   const [adjMode, setAdjMode] = useState(false)
+  const [nbMode, setNbMode] = useState(false) // Nov 7 2026 PREVIEW (?v=nb): neighbour-check for unclear labels
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
     const myReq = ++reqId.current
     const fresh = () => myReq === reqId.current
@@ -294,11 +296,12 @@ export default function StrikeStealthBuildup() {
   // bearish signs = Put Buying + Call Writing ("Quiet" hits are ignored).
   // CONFIRMED = both bullish kinds (or both bearish kinds) present on the same
   // symbol. A symbol with signs on both sides is a range/mixed read, not a bias.
+  const nbKeys = nbMode ? neighbourUnclearKeys(allHits as any) : null
   type BiasRow = { symbol: string; cb: number; pw: number; pb: number; cw: number; bull: number; bear: number }
   const biasMap = new Map<string, BiasRow>()
   for (const h of allHits) {
     if (h.activity !== 'BUYING' && h.activity !== 'WRITING') continue
-    if (labelUnclear(h.activity, h.premium_pct)) continue // Nov 7 2026: unclear labels don't count toward bias
+    if (nbKeys ? nbKeys.has(hitKey(h as any)) : labelUnclear(h.activity, h.premium_pct)) continue // Nov 7 2026: unclear labels don't count toward bias
     const r = biasMap.get(h.symbol) ?? { symbol: h.symbol, cb: 0, pw: 0, pb: 0, cw: 0, bull: 0, bear: 0 }
     if (h.activity === 'BUYING') { if (h.option_type === 'CE') r.cb++; else r.pb++ }
     else { if (h.option_type === 'PE') r.pw++; else r.cw++ }
@@ -515,6 +518,7 @@ export default function StrikeStealthBuildup() {
           )}
           <StealthDashboard
             hits={allHits.filter(h => freshOk(h)) as any}
+            unclearKeys={nbKeys}
             loading={loading}
             error={data?.error}
             emptyHint={view === 'saved'

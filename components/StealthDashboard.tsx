@@ -6,7 +6,7 @@
 // the page already fetched (live scan or saved-today), nothing new on the server.
 import { useEffect, useMemo, useState } from 'react'
 import { Download, RotateCcw, Search } from 'lucide-react'
-import { labelUnclear, UNCLEAR_LABEL_HINT } from '@/lib/stealthLabel'
+import { labelUnclear, UNCLEAR_LABEL_HINT, NB_UNCLEAR_HINT, hitKey } from '@/lib/stealthLabel'
 
 export interface DashHit {
   symbol: string
@@ -137,13 +137,14 @@ function Slider({ label, value, steps, fmt, onIdx, active = true, icon }: {
 }
 
 export default function StealthDashboard({
-  hits, loading, error, emptyHint, onDownload,
+  hits, loading, error, emptyHint, onDownload, unclearKeys,
 }: {
   hits: DashHit[]
   loading: boolean
   error?: string
   emptyHint?: string
   onDownload: (rows: DashHit[]) => void
+  unclearKeys?: Set<string> | null
 }) {
   const [f, setF] = useState<F>({ ...BASE, ...PRESETS[1].f })
   const [preset, setPreset] = useState<string>('all')
@@ -549,8 +550,8 @@ export default function StealthDashboard({
                     <td className="px-2 py-2 text-right font-bold text-white">{h.strike.toLocaleString('en-IN')}</td>
                     <td className="px-2 py-2"><Chip cls={h.option_type === 'CE' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : 'text-rose-300 border-rose-700/50 bg-rose-950/30'}>{h.option_type}</Chip></td>
                     <td className="px-2 py-2"><Chip cls={MONEY_CHIP[m.label]}>{m.label}</Chip><div className="text-[10px] text-gray-500">{m.label === 'ATM' ? 'At Strike' : `${m.label === 'ITM' ? '' : ''}+${m.n}`}</div></td>
-                    <td className="px-2 py-2">{h.activity ? (labelUnclear(h.activity, h.premium_pct)
-                      ? <span title={UNCLEAR_LABEL_HINT}><Chip cls="text-gray-400 border-gray-600 border-dashed bg-gray-800/30">{ACT_ICON[h.activity]} {h.activity_label ?? h.activity} ?</Chip></span>
+                    <td className="px-2 py-2">{h.activity ? ((unclearKeys ? unclearKeys.has(hitKey(h as any)) : labelUnclear(h.activity, h.premium_pct))
+                      ? <span title={unclearKeys ? NB_UNCLEAR_HINT : UNCLEAR_LABEL_HINT}><Chip cls="text-gray-400 border-gray-600 border-dashed bg-gray-800/30">{ACT_ICON[h.activity]} {h.activity_label ?? h.activity} ?</Chip></span>
                       : <span title="Inferred from the premium move (OI up + premium up 1%+ = Buying, down 1%+ = Writing, otherwise Quiet). A pattern, not seen in actual trades."><Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip></span>
                     ) : <span className="text-gray-600">—</span>}
                       {h.activity_conflict && h.hr_activity && (

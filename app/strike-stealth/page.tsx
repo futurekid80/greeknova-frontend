@@ -215,6 +215,8 @@ export default function StrikeStealthBuildup() {
   }
   const [shortlist, setShortlist] = useState(false) // Nov 7 2026: Buyer's shortlist toggle (off by default)
   const [nbMode, setNbMode] = useState(false) // Nov 7 2026 PREVIEW (?v=nb): neighbour-check for unclear labels
+  // Nov 7 2026: day range + last-hour read for the shortlist rows only (saved view), fetched on demand.
+  const [intraday, setIntraday] = useState<Record<string, any>>({})
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
     const myReq = ++reqId.current
     const fresh = () => myReq === reqId.current
@@ -248,6 +250,17 @@ export default function StrikeStealthBuildup() {
   }, [])
 
   useEffect(() => { load(zone, timeWindow, view) }, [load, zone, timeWindow, view, adjMode])
+
+  useEffect(() => {
+    if (!shortlist || view !== 'saved' || timeWindow !== 'eod' || !savedDate) { setIntraday({}); return }
+    const rows: any[] = ((data as any)?.hits || [])
+    const syms = Array.from(new Set(rows.map(h => h.tradingsymbol).filter(Boolean))).slice(0, 60)
+    if (!syms.length) return
+    let live = true
+    fetch(`${API}/option-stealth-buildup/intraday?date=${encodeURIComponent(savedDate)}&symbols=${encodeURIComponent(syms.join(','))}`)
+      .then(r => r.json()).then(j => { if (live) setIntraday(j?.data || {}) }).catch(() => {})
+    return () => { live = false }
+  }, [shortlist, view, timeWindow, savedDate, data])
 
   // Auto-refresh every 60s while the market is open and the tab is visible.
   useEffect(() => {
@@ -536,7 +549,8 @@ export default function StrikeStealthBuildup() {
           <StealthDashboard
             key={shortlist ? 'sl' : 'all'}
             initialSort={shortlist ? 'money' : undefined}
-            hits={(shortlist ? buyerShortlist(allHits.filter(h => freshOk(h)) as any[], (h: any) => (nbKeys ? nbKeys.has(hitKey(h)) : labelUnclear(h.activity, h.premium_pct))) : allHits.filter(h => freshOk(h))) as any}
+            hits={(shortlist ? buyerShortlist(allHits.filter(h => freshOk(h)) as any[], (h: any) => (nbKeys ? nbKeys.has(hitKey(h)) : labelUnclear(h.activity, h.premium_pct))).map((h: any) => (intraday[h.tradingsymbol] ? { ...h, ...intraday[h.tradingsymbol] } : h)) : allHits.filter(h => freshOk(h))) as any}
+            showSince={shortlist}
             unclearKeys={nbKeys}
             loading={loading}
             error={data?.error}

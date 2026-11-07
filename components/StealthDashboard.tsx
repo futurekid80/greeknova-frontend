@@ -27,6 +27,8 @@ export interface DashHit {
   activity?: 'WRITING' | 'BUYING' | 'NEUTRAL'
   activity_label?: string
   prem_low?: number
+  first_seen?: string
+  times_seen?: number
   prem_high?: number
   prem_range_pct?: number
   hr_activity?: 'WRITING' | 'BUYING' | 'NEUTRAL'
@@ -142,7 +144,7 @@ function Slider({ label, value, steps, fmt, onIdx, active = true, icon }: {
 }
 
 export default function StealthDashboard({
-  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort,
+  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort, showSince,
 }: {
   hits: DashHit[]
   loading: boolean
@@ -151,7 +153,9 @@ export default function StealthDashboard({
   onDownload: (rows: DashHit[]) => void
   unclearKeys?: Set<string> | null
   initialSort?: 'move' | 'pct' | 'oi' | 'money' | 'chain'
+  showSince?: boolean
 }) {
+  const maxSeen = showSince ? Math.max(1, ...hits.map(x => x.times_seen ?? 1)) : 1
   const [f, setF] = useState<F>({ ...BASE, ...PRESETS[1].f })
   const [preset, setPreset] = useState<string>('all')
   const [moreOpen, setMoreOpen] = useState(false)
@@ -548,6 +552,12 @@ export default function StealthDashboard({
                         {h.is_confluence && <span title="Confluence with FUT-level Stealth Buildup" className="ml-1">🔗</span>}
                         {h.freshness === 'Fresh Now' && <span title="Fresh now" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-lime-400 align-middle" />}
                         <div className="text-[10px] text-gray-500">{fmtExp(h.expiry)}</div>
+                        {showSince && h.first_seen && (
+                          <div className="text-[10px] text-cyan-400/80" title="When this position first showed up in today's scans">
+                            since {new Date(h.first_seen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {(h.times_seen ?? 1) / maxSeen >= 0.7 && <span className="ml-1 rounded bg-cyan-900/40 px-1 text-cyan-300">steady</span>}
+                          </div>
+                        )}
                         {h.freshness === 'Seen Earlier Today' && h.last_seen && (
                           <div className="text-[10px] text-amber-500/80" title="This strike no longer qualified on the latest scan. Its figures are frozen as of this time.">
                             last seen {new Date(h.last_seen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}

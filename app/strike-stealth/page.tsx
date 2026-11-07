@@ -307,10 +307,15 @@ export default function StrikeStealthBuildup() {
     })
 
   const hits = showAll ? filteredHits : filteredHits.slice(0, PAGE_SIZE)
-  const shownForStatus = allHits.filter(h => freshOk(h) && (instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol))))
+  // Nov 7 2026: the shortlist rows, worked out once so the list, the status line and Bias all use the same set.
+  const nbKeys0 = nbMode ? neighbourUnclearKeys(allHits as any) : null
+  const shortlistRows: any[] = shortlist
+    ? buyerShortlist(allHits.filter(h => freshOk(h)) as any[], (h: any) => (nbKeys0 ? nbKeys0.has(hitKey(h)) : labelUnclear(h.activity, h.premium_pct)))
+    : []
+  const shownForStatus = shortlist ? shortlistRows : allHits.filter(h => freshOk(h) && (instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol))))
   const lastSeenMax = rawHits.reduce((m, h) => (h.last_seen && h.last_seen > m ? h.last_seen : m), '')
   const lastSeenTxt = lastSeenMax ? new Date(lastSeenMax).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }) : ''
-  const simpleStatus = `${view === 'saved' ? `Latest scan${lastSeenTxt ? ` ${lastSeenTxt} IST` : ''} · ` : ''}${shownForStatus.length} ${bestOn ? 'strong hits' : 'hits'} across ${new Set(shownForStatus.map(h => h.symbol)).size} symbols${bestOn ? ' (Elite/Strong, ₹25 lakh+ added)' : ''}`
+  const simpleStatus = `${view === 'saved' ? `Latest scan${lastSeenTxt ? ` ${lastSeenTxt} IST` : ''} · ` : ''}${shownForStatus.length} ${shortlist ? `on your shortlist (from ${allHits.filter(h => freshOk(h)).length} scanned)` : bestOn ? 'strong hits' : 'hits'} across ${new Set(shownForStatus.map(h => h.symbol)).size} symbols${bestOn ? ' (Elite/Strong, ₹25 lakh+ added)' : ''}`
 
   // (Oct 31 2026): per-symbol Bias. Bullish signs = Call Buying + Put Writing;
   // bearish signs = Put Buying + Call Writing ("Quiet" hits are ignored).
@@ -319,7 +324,7 @@ export default function StrikeStealthBuildup() {
   const nbKeys = nbMode ? neighbourUnclearKeys(allHits as any) : null
   type BiasRow = { symbol: string; cb: number; pw: number; pb: number; cw: number; bull: number; bear: number }
   const biasMap = new Map<string, BiasRow>()
-  for (const h of allHits) {
+  for (const h of (shortlist ? shortlistRows : allHits)) {
     if (h.activity !== 'BUYING' && h.activity !== 'WRITING') continue
     if (nbKeys ? nbKeys.has(hitKey(h as any)) : labelUnclear(h.activity, h.premium_pct)) continue // Nov 7 2026: unclear labels don't count toward bias
     const r = biasMap.get(h.symbol) ?? { symbol: h.symbol, cb: 0, pw: 0, pb: 0, cw: 0, bull: 0, bear: 0 }
@@ -513,7 +518,7 @@ export default function StrikeStealthBuildup() {
 
         {biasRows.length > 0 && (
           <div className="mb-5 p-4 rounded-xl border border-gray-800 bg-gray-900/30">
-            <p className="text-xs font-bold text-gray-300 mb-1">🧭 Bias by symbol</p>
+            <p className="text-xs font-bold text-gray-300 mb-1">🧭 Bias by symbol{shortlist ? ' · based on shortlist' : ''}</p>
             <p className="text-[11px] text-gray-500 mb-3">
               Bullish = Call Buying + Put Writing · Bearish = Put Buying + Call Writing. ✓ Confirmed = both kinds agree on the same symbol.
               Tap a symbol to see its strikes. {mixedCount > 0 ? `${mixedCount} symbol${mixedCount > 1 ? 's' : ''} with signs on both sides (range/mixed) not shown.` : ''}
@@ -549,7 +554,7 @@ export default function StrikeStealthBuildup() {
           <StealthDashboard
             key={shortlist ? 'sl' : 'all'}
             initialSort={shortlist ? 'money' : undefined}
-            hits={(shortlist ? buyerShortlist(allHits.filter(h => freshOk(h)) as any[], (h: any) => (nbKeys ? nbKeys.has(hitKey(h)) : labelUnclear(h.activity, h.premium_pct))).map((h: any) => (intraday[h.tradingsymbol] ? { ...h, ...intraday[h.tradingsymbol] } : h)) : allHits.filter(h => freshOk(h))) as any}
+            hits={(shortlist ? shortlistRows.map((h: any) => (intraday[h.tradingsymbol] ? { ...h, ...intraday[h.tradingsymbol] } : h)) : allHits.filter(h => freshOk(h))) as any}
             showSince={shortlist}
             unclearKeys={nbKeys}
             loading={loading}

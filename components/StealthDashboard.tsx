@@ -303,8 +303,8 @@ export default function StealthDashboard({
         )}
       </div>
 
-      {/* Presets */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3">
+      {/* Presets (hidden on the Buyer's shortlist) */}
+      {!showSince && <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-gray-400 mr-1">✨ Strategy Presets:</span>
           {PRESETS.map(p => (
@@ -314,7 +314,7 @@ export default function StealthDashboard({
             <RotateCcw size={12} /> Reset Filters
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Sliders + toggles */}
       <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-3 space-y-3">
@@ -360,12 +360,14 @@ export default function StealthDashboard({
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-2">
+          {showSince ? <span /> : (
           <button onClick={() => setMoreOpen(v => !v)} className="text-xs text-indigo-300 hover:text-indigo-200">
-            {moreOpen ? '▾' : '▸'} More Filters (Tier, Expiry, Activity, Confluence)
-          </button>
+              {moreOpen ? '▾' : '▸'} More Filters (Tier, Expiry, Activity, Confluence)
+            </button>
+          )}
           <span className="text-xs text-gray-400">Showing <b className="text-white">{n}</b> of {hits.length} contracts</span>
         </div>
-        {moreOpen && (
+        {moreOpen && !showSince && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {(['ALL', 'ELITE', 'STRONG', 'WATCH'] as const).map(t => (
               <button key={t} onClick={() => upd({ tier: t })} className={pill(f.tier === t)}>{t === 'ALL' ? 'All tiers' : t.charAt(0) + t.slice(1).toLowerCase()}</button>

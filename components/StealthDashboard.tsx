@@ -564,12 +564,18 @@ export default function StealthDashboard({
                     <td className="px-2 py-2 text-right"><span className="font-bold text-emerald-400">↗ +{h.oi_pct}%</span><div className="text-[10px] text-gray-500">was {fmtOI(h.old_oi)}</div></td>
                     <td className="px-2 py-2 text-right"><span className="font-bold text-white">{fmtOI(h.new_oi)}</span><div className="text-[10px] text-gray-500">{h.new_oi.toLocaleString('en-IN')}</div></td>
                     <td className="px-2 py-2 text-right bg-emerald-950/20">
+                      {(h as any).premium_pct_raw != null && Math.abs((h as any).premium_pct_raw - h.premium_pct) >= 1 && (
+                        <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5" title="Premium change after removing the part caused by the stock's own move">After the stock&apos;s move</div>
+                      )}
                       <span className={`inline-block font-bold rounded px-1.5 py-0.5 border ${Math.abs(mv) <= 5 ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/40' : 'text-amber-300 border-amber-700/50 bg-amber-950/30'}`}>
                         {mv > 0 ? '+' : mv < 0 ? '−' : ''}{Math.abs(mv).toFixed(2)}%
                       </span>
                       {ultra && <div className="text-[9px] font-bold text-emerald-400 mt-0.5">⚡ ULTRA-LOW</div>}
                       {(h as any).premium_pct_raw != null && Math.abs((h as any).premium_pct_raw - h.premium_pct) >= 1 && (
-                        <div className="text-[9px] text-gray-500 mt-0.5" title="Plain premium change vs yesterday's close, before removing the market's own move">Raw {(h as any).premium_pct_raw >= 0 ? '+' : ''}{(h as any).premium_pct_raw}%</div>
+                        <div className="mt-1" title="Plain premium change vs yesterday's close, before removing the stock's own move">
+                          <div className="text-[9px] uppercase tracking-wide text-gray-500">Actual change</div>
+                          <span className="inline-block font-bold rounded px-1.5 py-0.5 border text-gray-200 border-gray-600 bg-gray-800/40">{(h as any).premium_pct_raw >= 0 ? '+' : '−'}{Math.abs((h as any).premium_pct_raw).toFixed(2)}%</span>
+                        </div>
                       )}
                       {h.prem_low != null && h.prem_high != null && (
                         <div className="text-[10px] text-gray-500 mt-0.5" title="Lowest to highest premium traded today">Day range {inr(h.prem_low)}–{inr(h.prem_high)}</div>

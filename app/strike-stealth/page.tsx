@@ -318,7 +318,7 @@ export default function StrikeStealthBuildup() {
   const shownForStatus = shortlist ? shortlistRows : allHits.filter(h => freshOk(h) && (instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol))))
   const lastSeenMax = rawHits.reduce((m, h) => (h.last_seen && h.last_seen > m ? h.last_seen : m), '')
   const lastSeenTxt = lastSeenMax ? new Date(lastSeenMax).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }) : ''
-  const simpleStatus = `${view === 'saved' ? `Latest scan${lastSeenTxt ? ` ${lastSeenTxt} IST` : ''} · ` : ''}${shownForStatus.length} ${shortlist ? `on your shortlist (from ${allHits.filter(h => freshOk(h)).length} scanned)` : bestOn ? 'strong hits' : 'hits'} across ${new Set(shownForStatus.map(h => h.symbol)).size} symbols${bestOn ? ' (Elite/Strong, ₹25 lakh+ added)' : ''}`
+  const simpleStatus = `${view === 'saved' ? `Latest scan${lastSeenTxt ? ` ${lastSeenTxt} IST` : ''} · ` : ''}${shownForStatus.length} ${shortlist ? `on your shortlist (from ${allHits.filter(h => freshOk(h)).length} scanned)` : bestOn ? 'strong hits' : 'hits'} across ${new Set(shownForStatus.map(h => h.symbol)).size} symbols${bestOn && !shortlist ? ' (Elite/Strong, ₹25 lakh+ added)' : ''}`
 
   // (Oct 31 2026): per-symbol Bias. Bullish signs = Call Buying + Put Writing;
   // bearish signs = Put Buying + Call Writing ("Quiet" hits are ignored).
@@ -502,7 +502,7 @@ export default function StrikeStealthBuildup() {
           </div>
         )}
 
-        {view === 'saved' && timeWindow === 'eod' && (
+        {view === 'saved' && timeWindow === 'eod' && !(prev && shortlist) && (
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <button onClick={() => setBestOfDay(v => !v)}
               className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${

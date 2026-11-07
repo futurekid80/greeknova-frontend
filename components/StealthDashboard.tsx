@@ -29,6 +29,13 @@ export interface DashHit {
   prem_low?: number
   first_seen?: string
   times_seen?: number
+  bw_start?: string
+  bw_end?: string
+  bw_prem_pct?: number
+  bw_share_pct?: number
+  bw_activity?: 'BUYING' | 'WRITING' | 'NEUTRAL'
+  bw_activity_label?: string
+  bw_spread?: boolean
   prem_high?: number
   prem_range_pct?: number
   hr_activity?: 'WRITING' | 'BUYING' | 'NEUTRAL'
@@ -577,6 +584,17 @@ export default function StealthDashboard({
                       ? <span title={unclearKeys ? NB_UNCLEAR_HINT : UNCLEAR_LABEL_HINT}><Chip cls="text-gray-400 border-gray-600 border-dashed bg-gray-800/30">{ACT_ICON[h.activity]} {h.activity_label ?? h.activity} ?</Chip></span>
                       : <span title="Inferred from the premium move (OI up + premium up 1%+ = Buying, down 1%+ = Writing, otherwise Quiet). A pattern, not seen in actual trades."><Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip></span>
                     ) : <span className="text-gray-600">—</span>}
+                      {showSince && h.bw_start && h.bw_end && (() => {
+                        const t = (x: string) => new Date(x).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true })
+                        if (h.bw_spread) return <div className="mt-1 text-[10px] text-gray-500" title="No single stretch of the day carried most of the build">Built through the day</div>
+                        const word = (h.bw_prem_pct ?? 0) >= 1 ? 'premium rising' : (h.bw_prem_pct ?? 0) <= -1 ? 'premium falling' : 'premium flat'
+                        const differs = h.bw_activity && h.activity && h.bw_activity !== h.activity
+                        return (
+                          <div className={`mt-1 text-[10px] ${differs ? 'text-cyan-300 font-semibold' : 'text-gray-500'}`} title={`${h.bw_share_pct}% of today's OI build came in this stretch. The label here follows what the premium did while the OI was added, not the change since yesterday's close.`}>
+                            Built {t(h.bw_start)}–{t(h.bw_end)}: {word}{h.bw_activity_label ? ` → ${h.bw_activity_label}` : ''}
+                          </div>
+                        )
+                      })()}
                       {h.activity_conflict && h.hr_activity && (
                         <div className="mt-1 text-[10px] font-semibold text-amber-300" title={`Whole-day reading and the last hour disagree. ${h.hr_share_pct ?? '?'}% of today's OI build came in the last hour.`}>
                           ⚠ Last hour: {ACT_ICON[h.hr_activity]} {h.hr_activity_label ?? h.hr_activity}

@@ -6,7 +6,7 @@
 // the page already fetched (live scan or saved-today), nothing new on the server.
 import { useEffect, useMemo, useState } from 'react'
 import { Download, RotateCcw, Search } from 'lucide-react'
-import { labelUnclear, UNCLEAR_LABEL_HINT, NB_UNCLEAR_HINT, hitKey } from '@/lib/stealthLabel'
+import { labelUnclear, signalsMixed, MIXED_HINT, UNCLEAR_LABEL_HINT, NB_UNCLEAR_HINT, hitKey } from '@/lib/stealthLabel'
 
 export interface DashHit {
   symbol: string
@@ -165,7 +165,7 @@ export default function StealthDashboard({
 }) {
   const [slidersOpen, setSlidersOpen] = useState(false)
   const maxSeen = showSince ? Math.max(1, ...hits.map(x => x.times_seen ?? 1)) : 1
-  const [f, setF] = useState<F>({ ...BASE, ...PRESETS[1].f })
+  const [f, setF] = useState<F>(showSince ? { ...BASE } : { ...BASE, ...PRESETS[1].f }) // Nov 9 2026: no slider limits on the Buyer's shortlist, so the table matches the count
   const [preset, setPreset] = useState<string>('all')
   const [moreOpen, setMoreOpen] = useState(false)
   const [howOpen, setHowOpen] = useState(true)
@@ -580,7 +580,9 @@ export default function StealthDashboard({
                     <td className="px-2 py-2 text-right font-bold text-white">{h.strike.toLocaleString('en-IN')}</td>
                     <td className="px-2 py-2"><Chip cls={h.option_type === 'CE' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : 'text-rose-300 border-rose-700/50 bg-rose-950/30'}>{h.option_type}</Chip></td>
                     <td className="px-2 py-2"><Chip cls={MONEY_CHIP[m.label]}>{m.label}</Chip><div className="text-[10px] text-gray-500">{m.label === 'ATM' ? 'At Strike' : `${m.label === 'ITM' ? '' : ''}+${m.n}`}</div></td>
-                    <td className="px-2 py-2">{h.activity ? ((unclearKeys ? unclearKeys.has(hitKey(h as any)) : labelUnclear(h.activity, h.premium_pct)) || (showSince && !!h.bw_activity && !h.bw_spread && h.bw_activity !== h.activity)
+                    <td className="px-2 py-2">{h.activity ? (foldSliders && signalsMixed(h.activity, h.premium_pct)
+                      ? <span title={MIXED_HINT}><Chip cls="text-gray-400 border-gray-600 border-dashed bg-gray-800/30">⚖️ Mixed signals</Chip></span>
+                      : (unclearKeys ? unclearKeys.has(hitKey(h as any)) : labelUnclear(h.activity, h.premium_pct)) || (showSince && !!h.bw_activity && !h.bw_spread && h.bw_activity !== h.activity)
                       ? <span title={showSince && !!h.bw_activity && !h.bw_spread && h.bw_activity !== h.activity ? 'The change since yesterday\'s close and what the premium did while the open interest was being added point different ways, so this label is not certain. See the Built line below.' : unclearKeys ? NB_UNCLEAR_HINT : UNCLEAR_LABEL_HINT}><Chip cls="text-gray-400 border-gray-600 border-dashed bg-gray-800/30">{ACT_ICON[h.activity]} {h.activity_label ?? h.activity} ?</Chip></span>
                       : <span title="Inferred from the premium move (OI up + premium up 1%+ = Buying, down 1%+ = Writing, otherwise Quiet). A pattern, not seen in actual trades."><Chip cls={ACT_CHIP[h.activity]}>{ACT_ICON[h.activity]} {h.activity_label ?? h.activity}</Chip></span>
                     ) : <span className="text-gray-600">—</span>}

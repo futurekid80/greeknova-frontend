@@ -12,6 +12,20 @@ export function labelUnclear(activity?: string | null, premiumPct?: number | nul
   return false
 }
 
+// Nov 9 2026: "Mixed signals" = the day label and the premium direction point opposite ways
+// (Buying while the premium is down, Writing while it is up). The label comes from implied
+// volatility, so this can happen for honest reasons, but a reader cannot tell which read to trust.
+// The Buyer's shortlist leaves such rows out; the full list shows them as "Mixed".
+export function signalsMixed(activity?: string | null, premiumPct?: number | null): boolean {
+  if (premiumPct == null || Number.isNaN(Number(premiumPct))) return false
+  const p = Number(premiumPct)
+  if (activity === 'BUYING') return p < 1
+  if (activity === 'WRITING') return p > -1
+  return false
+}
+export const MIXED_HINT =
+  'Mixed signals: the day label and the premium move point different ways (for example Buying while the premium is down). Shown for completeness; left out of the Buyer\'s shortlist.'
+
 export const UNCLEAR_LABEL_HINT =
   'Unclear: the premium and the pricing signal point different ways here (the label says Writing but the premium is up sharply). Treat this label with caution; it is left out of the Bias counts.'
 

@@ -315,10 +315,11 @@ export default function StrikeStealthBuildup() {
   const shortlistRows: any[] = shortlist
     ? buyerShortlist(allHits.filter(h => freshOk(h)) as any[], (h: any) => (nbKeys0 ? nbKeys0.has(hitKey(h)) : labelUnclear(h.activity, h.premium_pct)))
     : []
+  const mixedOut = shortlist ? Math.max(0, buyerShortlist(allHits.filter(h => freshOk(h)) as any[], (h: any) => (nbKeys0 ? nbKeys0.has(hitKey(h)) : labelUnclear(h.activity, h.premium_pct)), false).length - shortlistRows.length) : 0
   const shownForStatus = shortlist ? shortlistRows : allHits.filter(h => freshOk(h) && (instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol))))
   const lastSeenMax = rawHits.reduce((m, h) => (h.last_seen && h.last_seen > m ? h.last_seen : m), '')
   const lastSeenTxt = lastSeenMax ? new Date(lastSeenMax).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }) : ''
-  const simpleStatus = `${view === 'saved' ? `Latest scan${lastSeenTxt ? ` ${lastSeenTxt} IST` : ''} · ` : ''}${shownForStatus.length} ${shortlist ? `on your shortlist (from ${allHits.filter(h => freshOk(h)).length} scanned)` : bestOn ? 'strong hits' : 'hits'} across ${new Set(shownForStatus.map(h => h.symbol)).size} symbols${bestOn && !shortlist ? ' (Elite/Strong, ₹25 lakh+ added)' : ''}`
+  const simpleStatus = `${view === 'saved' ? `Latest scan${lastSeenTxt ? ` ${lastSeenTxt} IST` : ''} · ` : ''}${shownForStatus.length} ${shortlist ? `on your shortlist (from ${allHits.filter(h => freshOk(h)).length} scanned${mixedOut > 0 ? `, ${mixedOut} left out for mixed signals` : ''})` : bestOn ? 'strong hits' : 'hits'} across ${new Set(shownForStatus.map(h => h.symbol)).size} symbols${bestOn && !shortlist ? ' (Elite/Strong, ₹25 lakh+ added)' : ''}`
 
   // (Oct 31 2026): per-symbol Bias. Bullish signs = Call Buying + Put Writing;
   // bearish signs = Put Buying + Call Writing ("Quiet" hits are ignored).

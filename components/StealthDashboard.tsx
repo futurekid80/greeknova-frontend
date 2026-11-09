@@ -597,6 +597,13 @@ export default function StealthDashboard({
                           </div>
                         )
                       })()}
+                      {showSince && (() => {
+                        const pk = Number((h as any).peak_oi_pct), now = Number(h.oi_pct)
+                        if (!(pk > 0) || Number.isNaN(now)) return null
+                        const gave = 1 - now / pk
+                        if (gave < 0.25) return null
+                        return <div className="mt-1 text-[10px] font-semibold text-orange-300" title="The open interest added today was larger earlier in the day and has since come down, so part of the build has been closed out. Treat the current number with care.">↩ Partly unwound: today&apos;s OI build is {Math.round(gave * 100)}% smaller than at its peak</div>
+                      })()}
                       {h.activity_conflict && h.hr_activity && (
                         <div className="mt-1 text-[10px] font-semibold text-amber-300" title={`Whole-day reading and the last hour disagree. ${h.hr_share_pct ?? '?'}% of today's OI build came in the last hour.`}>
                           ⚠ Last hour: {ACT_ICON[h.hr_activity]} {h.hr_activity_label ?? h.hr_activity}

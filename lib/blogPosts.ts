@@ -46,7 +46,6 @@ export const BLOG_POSTS: BlogPost[] = [
         'Tier (Elite, Strong, Watch): how clear and how large the build looks. Elite is the rarest and strongest; Watch is "keep an eye on it".',
         'Buying or writing: a plain-words read of whether the money looks like it is buying the option or selling it. When that read disagrees with how the premium moved, we say so instead of forcing an answer.',
         'Since / steady: how long the build has been visible, and whether it is holding.',
-        'Partly unwound: if part of the day\'s build has already been closed out, the row tells you, so a stale number does not mislead you.',
       ] },
       { type: 'h', text: 'What it does not tell you' },
       { type: 'ul', items: [

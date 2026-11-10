@@ -34,6 +34,11 @@ export const WIDGETS: Widget[] = [
   // ── Overview & Positional ────────────────────────────────────────────
   { key: 'market-pulse',       label: 'Market Pulse',            description: 'Index cards, breadth, CPR — the homepage',            href: '/',                     destination: 'overview', defaultEnabled: true },
   { key: 'positional-intel',   label: 'Positional Intelligence',  description: 'Stealth Buildup / Elite Setups, conviction tiers',    href: '/positional',           destination: 'overview', defaultEnabled: true },
+  // Nov 10 2026: Strike Stealth and Strike OI + Premium History were in the
+  // nav but never had Dashboard tiles, so the Dashboard looked like it was
+  // missing our newest screens. Added; saved customisations are untouched
+  // (a tile with no saved choice just uses defaultEnabled).
+  { key: 'strike-stealth',     label: 'Option Strike Stealth Buildup', description: 'Quiet OI build-ups at strikes, with tier and buyer\'s shortlist', href: '/strike-stealth', destination: 'overview', defaultEnabled: true },
   { key: 'premarket',          label: 'Pre-Market Brief',         description: 'Pre-open summary and prior-day EOD intelligence',     href: '/premarket',            destination: 'overview', defaultEnabled: true },
   { key: 'watchlist',          label: 'Watchlist',                description: 'Your saved symbols at a glance',                       href: '/watchlist',            destination: 'overview', defaultEnabled: false },
   { key: 'journal',            label: 'Journal',                  description: 'Your trading journal',                                 href: '/journal',              destination: 'overview', defaultEnabled: false },
@@ -70,6 +75,7 @@ export const WIDGETS: Widget[] = [
   { key: 'oiprofile',          label: 'OI Profile',               description: 'OI distribution by strike',                            href: '/oiprofile',            destination: 'option-sellers', defaultEnabled: false },
   { key: 'oiheatmap',          label: 'OI Heatmap',               description: 'OI heatmap across strikes and expiries',               href: '/oiheatmap',            destination: 'option-sellers', defaultEnabled: false },
   { key: 'oihistory',          label: 'OI History',               description: 'Historical OI by strike',                              href: '/oihistory',            destination: 'option-sellers', defaultEnabled: false },
+  { key: 'strike-history',    label: 'Strike OI + Premium History', description: 'OI and premium history for a chosen strike',          href: '/strike-history',       destination: 'option-sellers', defaultEnabled: false },
   { key: 'jungle',             label: 'Options Jungle',           description: 'Broad options activity scanner',                       href: '/jungle',               destination: 'option-sellers', defaultEnabled: false },
   { key: 'uoa',                label: 'UOA',                      description: 'Unusual options activity',                             href: '/uoa',                  destination: 'option-sellers', defaultEnabled: false },
   { key: 'custom-scanner',     label: 'Custom Scanner',           description: 'Build and save your own scan conditions',             href: '/custom-scanner',       destination: 'option-sellers', defaultEnabled: false },

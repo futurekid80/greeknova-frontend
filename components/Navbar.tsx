@@ -7,6 +7,7 @@ import { supabase, getSessionCached, withTimeout } from '@/lib/supabase'
 import { clearCachedMarketData } from '@/lib/authFetch'
 import VixGauge from '@/components/VixGauge'
 import TrialCountdown from '@/components/TrialCountdown'
+import { publishedPosts } from '@/lib/blogPosts'
 
 // Oct 2 2026: regrouped by trader persona (Positional / Intraday / Option
 // Sellers) instead of by data-type (Market / OI Analysis / Greeks / Signals)
@@ -660,6 +661,18 @@ export default function Navbar({ active: activeProp }: { active?: string }) {
               🎬 Watch Demo
               {active === '/demo' && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
             </Link>
+            {/* Nov 10 2026: "Learn" blog link -- only shown once at least one post
+                is marked published in lib/blogPosts.ts, so it never points at
+                an empty page. */}
+            {publishedPosts().length > 0 && (
+              <Link href="/blog"
+                className={`text-sm font-semibold transition-colors relative shrink-0 whitespace-nowrap ${
+                  active === '/blog' ? 'text-white' : 'text-amber-400 hover:text-amber-300'
+                }`}>
+                📝 Learn
+                {active === '/blog' && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
+              </Link>
+            )}
             {/* Oct 14 2026: the old 5-dropdown persona/OI nav (Market, Open
                 Interest, Positional, Intraday, Option Sellers -- NAV_GROUPS
                 below) and the standalone VIX/Alerts text links (STANDALONE

@@ -9,7 +9,7 @@ import AlertToggle from '@/components/AlertToggle'
 import { useAlerts } from '@/contexts/AlertsContext'
 
 interface PCRPoint { time: string; pcr: number; vol_pcr?: number; ce_oi: number; pe_oi: number; ce_vol?: number; pe_vol?: number }
-interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number; expiry: string | null }
+interface PCRData { symbol: string; points: PCRPoint[]; total_snapshots: number; expiry: string | null; basis?: string; strikes?: number | null }
 
 const INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX']
 const API = 'https://api.greeknova.com'
@@ -232,7 +232,9 @@ export default function PCRTrend() {
         )}
 
         <p className="text-[11px] text-gray-500 mb-3">
-          Shown for {data?.expiry ? formatExpiry(data.expiry) : 'the nearest expiry'} only, using the strikes around the current price. Broker and NSE figures often add every strike, and some add every expiry, so their PCR can read differently. Compare like with like.
+          {data?.basis === 'whole_chain'
+            ? <>Shown for {data?.expiry ? formatExpiry(data.expiry) : 'the nearest expiry'}, adding up every strike of that expiry{data?.strikes ? ` (${data.strikes} strikes)` : ''}, the same way brokers and NSE do. Refreshed every 10 minutes.</>
+            : <>Shown for {data?.expiry ? formatExpiry(data.expiry) : 'the nearest expiry'} only, using the strikes around the current price. Broker and NSE figures add every strike, so they can read differently. Compare like with like.</>}
         </p>
 
         {/* Summary cards */}

@@ -218,7 +218,7 @@ export default function PCRTrend() {
             <span className="text-xs text-gray-500 mr-1">Expiry:</span>
             <button onClick={() => setSelectedExpiry('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${selectedExpiry === 'all' ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/60' : 'bg-gray-900/40 text-gray-500 border-gray-800 hover:text-white'}`}>
-              All
+              Nearest expiry
             </button>
             {expiries.map((exp, i) => (
               <button key={exp} onClick={() => setSelectedExpiry(exp)}
@@ -230,6 +230,10 @@ export default function PCRTrend() {
             ))}
           </div>
         )}
+
+        <p className="text-[11px] text-gray-500 mb-3">
+          Shown for {data?.expiry ? formatExpiry(data.expiry) : 'the nearest expiry'} only, using the strikes around the current price. Broker and NSE figures often add every strike, and some add every expiry, so their PCR can read differently. Compare like with like.
+        </p>
 
         {/* Summary cards */}
         {latest && (

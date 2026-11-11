@@ -47,6 +47,7 @@ export interface DashHit {
   money_added?: number
   freshness?: string
   last_seen?: string
+  close_refreshed_at?: string | null
 }
 
 interface F {
@@ -576,15 +577,17 @@ export default function StealthDashboard({
                           // frozen at its last scan, so say "as of <time>" in amber (merged into the first-caught line
                           // on the shortlist instead of adding a second line).
                           const tm = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })
-                          const frozen = h.freshness === 'Seen Earlier Today' && !!h.last_seen
+                          const atClose = h.freshness === 'Seen Earlier Today' && !!h.close_refreshed_at
+                          const frozen = h.freshness === 'Seen Earlier Today' && !!h.last_seen && !atClose
                           const caught = showSince && !!h.first_seen
-                          if (!frozen && !caught) return null
+                          if (!frozen && !caught && !atClose) return null
                           return (
                             <div className="text-[10px] whitespace-nowrap" title={frozen ? 'This strike no longer qualified on the latest scan, so its premium move and label are frozen as of this time and may have changed since.' : 'When our scan first caught this position today. The build itself may have started a little earlier.'}>
                               {caught && <span className="text-cyan-400/80">first caught {tm(h.first_seen as string)}</span>}
-                              {caught && !frozen && (h.times_seen ?? 1) / maxSeen >= 0.7 && <span className="ml-1 rounded bg-cyan-900/40 px-1 text-cyan-300">steady</span>}
+                              {caught && !frozen && !atClose && (h.times_seen ?? 1) / maxSeen >= 0.7 && <span className="ml-1 rounded bg-cyan-900/40 px-1 text-cyan-300">steady</span>}
                               {caught && frozen && <span className="text-gray-600"> · </span>}
                               {frozen && <span className="text-amber-500/80">as of {tm(h.last_seen as string)}</span>}
+                              {atClose && <span className="text-gray-500" title="This strike stopped meeting our filters earlier in the day. Its premium move, open interest and label were re-read against the closing data, so they compare yesterday's close with today's close.">{caught ? ' · ' : ''}at close</span>}
                             </div>
                           )
                         })()}

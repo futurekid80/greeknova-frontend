@@ -571,17 +571,23 @@ export default function StealthDashboard({
                         {h.is_confluence && <span title="Confluence with FUT-level Stealth Buildup" className="ml-1">🔗</span>}
                         {h.freshness === 'Fresh Now' && <span title="Fresh now" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-lime-400 align-middle" />}
                         <div className="text-[10px] text-gray-500">{fmtExp(h.expiry)}</div>
-                        {showSince && h.first_seen && (
-                          <div className="text-[10px] text-cyan-400/80 whitespace-nowrap" title="When our scan first caught this position today. The build itself may have started a little earlier.">
-                            first caught {new Date(h.first_seen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}
-                            {(h.times_seen ?? 1) / maxSeen >= 0.7 && <span className="ml-1 rounded bg-cyan-900/40 px-1 text-cyan-300">steady</span>}
-                          </div>
-                        )}
-                        {h.freshness === 'Seen Earlier Today' && h.last_seen && (
-                          <div className="text-[10px] text-amber-500/80" title="This strike no longer qualified on the latest scan. Its figures are frozen as of this time.">
-                            last seen {new Date(h.last_seen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}
-                          </div>
-                        )}
+                        {(() => {
+                          // Nov 11 2026: one small line per row. A row that no longer qualifies on the latest scan is
+                          // frozen at its last scan, so say "as of <time>" in amber (merged into the first-caught line
+                          // on the shortlist instead of adding a second line).
+                          const tm = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })
+                          const frozen = h.freshness === 'Seen Earlier Today' && !!h.last_seen
+                          const caught = showSince && !!h.first_seen
+                          if (!frozen && !caught) return null
+                          return (
+                            <div className="text-[10px] whitespace-nowrap" title={frozen ? 'This strike no longer qualified on the latest scan, so its premium move and label are frozen as of this time and may have changed since.' : 'When our scan first caught this position today. The build itself may have started a little earlier.'}>
+                              {caught && <span className="text-cyan-400/80">first caught {tm(h.first_seen as string)}</span>}
+                              {caught && !frozen && (h.times_seen ?? 1) / maxSeen >= 0.7 && <span className="ml-1 rounded bg-cyan-900/40 px-1 text-cyan-300">steady</span>}
+                              {caught && frozen && <span className="text-gray-600"> · </span>}
+                              {frozen && <span className="text-amber-500/80">as of {tm(h.last_seen as string)}</span>}
+                            </div>
+                          )
+                        })()}
                       </button>
                     </td>
                     <td className="px-2 py-2 text-right font-bold text-white">{h.strike.toLocaleString('en-IN')}</td>

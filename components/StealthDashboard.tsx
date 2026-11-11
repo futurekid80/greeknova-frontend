@@ -319,7 +319,7 @@ export default function StealthDashboard({
           {!showSince && PRESETS.map(p => (
             <button key={p.id} onClick={() => applyPreset(p.id)} className={pill(preset === p.id)}>{p.label}</button>
           ))}
-          {foldSliders && (
+          {foldSliders && !slidersOpen && (
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
               <input value={f.search} onChange={e => upd({ search: e.target.value })} placeholder="Search stock (e.g. NIFTY, BEL)…"
@@ -368,7 +368,7 @@ export default function StealthDashboard({
                 </button>
               ))}
             </div>
-            <div className={`relative ${foldSliders ? 'hidden' : ''}`}>
+            <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
               <input value={f.search} onChange={e => upd({ search: e.target.value })} placeholder="Filter stock (e.g. NIFTY, BEL)…"
                 className="w-full bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 focus:outline-none focus:border-indigo-600 placeholder-gray-600" />

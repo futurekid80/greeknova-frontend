@@ -189,7 +189,7 @@ export default function Alerts() {
     if (symbolGuess.length < 2) { setSymbolDayAlerts([]); return }
     searchDebounce.current = setTimeout(() => {
       setSymbolDayLoading(true)
-      fetch(`https://api.greeknova.com/alerts?symbol=${encodeURIComponent(symbolGuess)}&limit=500${viewingPast ? `&date=${selectedDate}` : ''}`)
+      fetch(`https://api.greeknova.com/alerts?symbol=${encodeURIComponent(symbolGuess)}&partial=1&limit=500${viewingPast ? `&date=${selectedDate}` : ''}`)
         .then((r) => r.json())
         .then((j) => setSymbolDayAlerts(j.alerts || []))
         .catch(() => setSymbolDayAlerts([]))

@@ -313,7 +313,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
                   <table className="w-full text-xs min-w-[460px]">
                     <thead>
                       <tr className="text-[10px] uppercase tracking-wide text-gray-500 text-left border-b border-gray-800">
-                        <th className="py-1.5 pr-2">Date</th><th className="px-2">Signal</th><th className="px-2 text-right">Price</th><th className="px-2 text-right">Fut OI</th><th className="px-2 text-right">Volume</th>
+                        <th className="py-1.5 pr-2">Date</th><th className="px-2">Signal</th><th className="px-2 text-right" title="Stock (cash) price change, close vs previous close, the same measure the Stealth tag uses">Price</th><th className="px-2 text-right">Fut OI</th><th className="px-2 text-right">Volume</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -331,7 +331,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
                               )}
                             </div>
                           </td>
-                          <td className={`px-2 text-right font-semibold ${d.price_chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn(d.price_chg || 0, 2)}</td>
+                          <td className={`px-2 text-right font-semibold ${(d.cash_price_chg ?? d.price_chg) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn((d.cash_price_chg ?? d.price_chg) || 0, 2)}</td>
                           <td className={`px-2 text-right ${d.fut_oi_chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn(d.fut_oi_chg || 0, 2)}</td>
                           <td className="px-2 text-right text-gray-400">{d.vol_ratio ? `${Number(d.vol_ratio).toFixed(1)}×` : '—'}</td>
                         </tr>

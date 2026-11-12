@@ -7,7 +7,7 @@ interface SignalHistoryRow {
   date: string
   signal: string
   fut_oi_chg: number
-  price_chg: number
+  price_chg: number | null
   close_price: number
   volume?: number
   vol_ratio?: number | null
@@ -98,6 +98,10 @@ export default function SignalHistoryPopup({ symbol, onClose }: { symbol: string
           </div>
         )}
 
+        {!loading && data && data.total > 0 && data.total < 5 && (
+          <p className="px-5 pb-2 text-[11px] text-amber-400/80">New in our tracking, so history is limited. A dash (–) means there was no earlier close to compare against.</p>
+        )}
+
         <div className="overflow-y-auto max-h-96">
           {loading ? (
             <div className="py-10 text-center">
@@ -144,8 +148,8 @@ export default function SignalHistoryPopup({ symbol, onClose }: { symbol: string
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        <span className={`text-xs font-mono font-semibold ${row.price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {fmt(row.price_chg)}
+                        <span className={`text-xs font-mono font-semibold ${row.price_chg == null ? 'text-gray-500' : row.price_chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {row.price_chg == null ? '–' : fmt(row.price_chg)}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right">

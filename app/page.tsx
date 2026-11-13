@@ -1183,6 +1183,28 @@ export default function MarketPulse() {
           .map(s => analyzeIndex(indexData as OIRecord[], s, cmpMap2[s]||0))
           .filter(Boolean) as IndexAnalysis[]
         setAnalyses(idxResults)
+        // Nov 12 2026: switch index-card PCR to the whole-chain figure (every strike of the
+        // nearest expiry, same as brokers/Sensibull) from /pcr-trend. Falls back silently
+        // to the figure above when the whole-chain series isn't available yet.
+        Promise.all(PULSE_CARD_SYMBOLS.map(sym =>
+          fetchWithTimeout(`${API}/pcr-trend/${sym}`).then(r => r.json()).catch(() => null)
+        )).then(trends => {
+          const wc: Record<string, number> = {}
+          PULSE_CARD_SYMBOLS.forEach((sym, i) => {
+            const t = trends[i]
+            const last = t?.basis === 'whole_chain' ? t.points?.[t.points.length - 1] : null
+            if (last && last.pcr > 0) wc[sym] = Math.round(last.pcr * 100) / 100
+          })
+          if (!Object.keys(wc).length) return
+          setAnalyses(prev => prev.map(a => {
+            const v = wc[a.symbol]
+            if (v === undefined) return a
+            let posture: 'BULLISH'|'BEARISH'|'NEUTRAL' = 'NEUTRAL', strength = 50
+            if (v > 1.2) { posture = 'BULLISH'; strength = Math.min(95, 55 + (v - 1.2) * 25) }
+            else if (v < 0.8) { posture = 'BEARISH'; strength = Math.min(95, 55 + (0.8 - v) * 40) }
+            return { ...a, pcr: v, posture, postureStrength: Math.round(strength) }
+          }))
+        })
       }
       setFetchAttempted(true)
     }).catch(e => { console.error('index-data failed:', e); setFetchAttempted(true) })

@@ -8,6 +8,7 @@ import { useAutoRefresh } from "@/lib/useAutoRefresh"
 import PulseFeedDashboard from '@/components/PulseFeedDashboard'
 import PulseNowStrip from '@/components/PulseNowStrip'
 import PulseScreens from '@/components/PulseScreens'
+import DataStatusTag from '@/components/DataStatusTag'
 import DiwaliVibe, { Diya } from '@/components/DiwaliVibe'
 
 import { ALL_SYMBOLS as _CANON_SYMBOLS } from '@/lib/symbols'
@@ -1372,6 +1373,7 @@ export default function MarketPulse() {
               {marketOpen ? 'LIVE' : 'MARKET CLOSED'}
             </span>
           </div>
+          <DataStatusTag/>
           <div className="flex items-center gap-6 px-4 overflow-x-auto scrollbar-hide">
             {analyses.map(a => (
               <button key={a.symbol} onClick={() => setSearchedSymbol(a.symbol)} className="flex items-center gap-2 flex-shrink-0 hover:opacity-80">

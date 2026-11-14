@@ -220,15 +220,31 @@ export default function StrikeStealthBuildup() {
   const [nbMode, setNbMode] = useState(false) // Nov 7 2026 PREVIEW (?v=nb): neighbour-check for unclear labels
   // Nov 7 2026: day range + last-hour read for the shortlist rows only (saved view), fetched on demand.
   const [intraday, setIntraday] = useState<Record<string, any>>({})
+  // Nov 14 2026: a background refresh must never replace good data with an error or an empty list.
+  // Before this, a 401/429/500 reply with a JSON body (or a hung request) was accepted as "the new data",
+  // so the table could blank out or the page could look refreshed while showing nothing. Now a bad
+  // reply is ignored, the old table stays, and a small "retrying" note appears next to the time.
+  const [refreshFailed, setRefreshFailed] = useState(false)
+  const lastOkRef = useRef(0)
+  const getJson = (url: string) => {
+    const ctl = new AbortController()
+    const tm = setTimeout(() => ctl.abort(), 20000)
+    return fetch(url, { signal: ctl.signal })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .finally(() => clearTimeout(tm))
+  }
   const load = useCallback((z: string, w: string, v: 'live' | 'saved', silent = false) => {
     const myReq = ++reqId.current
     const fresh = () => myReq === reqId.current
     if (!silent) setLoading(true)
+    const ok = () => { lastOkRef.current = Date.now(); setRefreshFailed(false) }
+    const bad = () => { if (fresh()) { if (silent) setRefreshFailed(true); else setData({ error: 'Failed to load' }) } }
     if (v === 'saved') {
-      fetch(`${API}/option-stealth-buildup/saved?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
-        .then(r => r.json())
+      getJson(`${API}/option-stealth-buildup/saved?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}`)
         .then(j => {
           if (!fresh()) return
+          if (!Array.isArray(j?.events)) throw new Error('unexpected reply')
+          ok()
           setSavedDate(j.date ?? null)
           const hits: StealthHit[] = (j.events || []).map((e: any) => ({
             ...e,
@@ -241,14 +257,17 @@ export default function StrikeStealthBuildup() {
           setData({ date: j.date, total: hits.length, confluence_count: hits.filter(h => h.is_confluence).length, hits, window: j.window, window_label: j.window_label })
           setUpdatedAt(new Date())
         })
-        .catch(() => { if (fresh() && !silent) setData({ error: 'Failed to load' }) })
+        .catch(bad)
         .finally(() => { if (fresh()) setLoading(false) })
       return
     }
-    fetch(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}${adjRef.current && w === 'eod' ? '&adj=1' : ''}`)
-      .then(r => r.json())
-      .then(j => { if (!fresh()) return; setData(j); setUpdatedAt(new Date()) })
-      .catch(() => { if (fresh() && !silent) setData({ error: 'Failed to load' }) })
+    getJson(`${API}/option-stealth-buildup?zone=${encodeURIComponent(z)}&window=${encodeURIComponent(w)}${adjRef.current && w === 'eod' ? '&adj=1' : ''}`)
+      .then(j => {
+        if (!fresh()) return
+        if (!Array.isArray(j?.hits)) throw new Error('unexpected reply')
+        ok(); setData(j); setUpdatedAt(new Date())
+      })
+      .catch(bad)
       .finally(() => { if (fresh()) setLoading(false) })
   }, [])
 
@@ -266,18 +285,33 @@ export default function StrikeStealthBuildup() {
   }, [shortlist, view, timeWindow, savedDate, data])
 
   // Auto-refresh every 60s while the market is open and the tab is visible.
+  // Nov 14 2026: a 15-second check compares against the real clock instead of trusting one 60s timer
+  // (browsers slow/freeze timers in background tabs and sleeping phones), and the same check runs the
+  // moment the tab becomes visible, regains focus, comes back from the back/forward cache, or the
+  // network returns. A refresh is only skipped if the last good one is under 45 seconds old.
   useEffect(() => {
     const marketOpenNow = () => {
       const ist = new Date(Date.now() + (5.5 * 60 + new Date().getTimezoneOffset()) * 60000)
       const day = ist.getDay(), mins = ist.getHours() * 60 + ist.getMinutes()
       return day >= 1 && day <= 5 && mins >= 9 * 60 + 15 && mins <= 15 * 60 + 35
     }
-    const id = setInterval(() => {
-      if (document.visibilityState === 'visible' && marketOpenNow()) load(zone, timeWindow, view, true)
-    }, 60000)
-    const onVis = () => { if (document.visibilityState === 'visible' && marketOpenNow()) load(zone, timeWindow, view, true) }
-    document.addEventListener('visibilitychange', onVis)
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+    const check = () => {
+      if (document.visibilityState !== 'visible' || !marketOpenNow()) return
+      if (Date.now() - lastOkRef.current < 45000) return
+      load(zone, timeWindow, view, true)
+    }
+    const id = setInterval(check, 15000)
+    document.addEventListener('visibilitychange', check)
+    window.addEventListener('focus', check)
+    window.addEventListener('pageshow', check)
+    window.addEventListener('online', check)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', check)
+      window.removeEventListener('focus', check)
+      window.removeEventListener('pageshow', check)
+      window.removeEventListener('online', check)
+    }
   }, [load, zone, timeWindow, view])
   useEffect(() => {
     setShowAll(false)
@@ -379,7 +413,7 @@ export default function StrikeStealthBuildup() {
             </button>
             {updatedAt && (
               <span className="text-[11px] text-gray-500 whitespace-nowrap hidden sm:inline">
-                Updated {updatedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })} · auto-refresh 1 min in market hours
+                Updated {updatedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })} · auto-refresh 1 min in market hours{refreshFailed ? ' · couldn\'t refresh just now, retrying' : ''}
               </span>
             )}
             <button onClick={() => load(zone, timeWindow, view)}

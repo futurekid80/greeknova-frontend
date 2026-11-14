@@ -449,9 +449,15 @@ function VolOIBreakout({ onSymbolClick }: { onSymbolClick: (sym: string) => void
       } catch(e) { console.error(e) }
       setLoading(false)
     }
-    load()
-    const t = setInterval(load, 5 * 60 * 1000)
-    return () => clearInterval(t)
+    let last = Date.now()
+    const run = () => { last = Date.now(); load() }
+    run()
+    const t = setInterval(run, 5 * 60 * 1000)
+    // Nov 14 2026: a sleeping tab/phone freezes the timer; refresh as soon as the page is back if it is >3 min old.
+    const wake = () => { if (document.visibilityState === 'visible' && Date.now() - last > 3 * 60 * 1000) run() }
+    document.addEventListener('visibilitychange', wake)
+    window.addEventListener('focus', wake)
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', wake); window.removeEventListener('focus', wake) }
   }, [])
 
   useEffect(() => {
@@ -1133,6 +1139,7 @@ export default function MarketPulse() {
   // data that unsticks "Loading index data...") is fetched unconditionally
   // regardless of whether the other four succeeded.
   async function fetchData() {
+    lastFetchRef.current = Date.now()
     setLoading(true)
     // Oct 14 2026: same reasoning as applyBreadthCache() above -- don't let
     // a cached, possibly-real CPR snapshot paint before we know there's a
@@ -1295,12 +1302,19 @@ export default function MarketPulse() {
   // Nov 4 2026: auto-refresh is now ON by default (every 3 min) but only while
   // the tab is visible and the market is open, so the homepage no longer goes
   // stale. The old 'Auto' button still works as a manual on/off.
+  // Nov 14 2026: (1) a tick is skipped if a fetch started less than 20s ago (no double-fetch when a tab
+  // wakes up and a timer fires together); (2) after the close the tab keeps refreshing, at most every
+  // 10 minutes until 22:30 IST, so a page left open picks up the evening's final data without a reload.
+  const lastFetchRef = useRef(0)
   const autoTick = () => {
     try {
       if (document.visibilityState !== 'visible') return
       const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
       const d = ist.getDay(), m = ist.getHours() * 60 + ist.getMinutes()
-      if (d === 0 || d === 6 || m < 540 || m > 945) return
+      if (d === 0 || d === 6 || m < 540 || m > 22 * 60 + 30) return
+      const sinceLast = Date.now() - lastFetchRef.current
+      if (sinceLast < 20000) return
+      if (m > 945 && sinceLast < 10 * 60 * 1000) return
     } catch {}
     fetchData()
   }

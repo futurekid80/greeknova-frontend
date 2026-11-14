@@ -52,8 +52,8 @@ export default function DataStatusTag() {
   const d = fmtDate(st.for_date)
   const label = final ? `FINAL DATA · ${d}` : 'FINALISING'
   const detail = final
-    ? `Final data for ${d} is ready. You can analyse tonight; no need to wait for tomorrow.`
-    : 'Today’s closing data is being finalised. Final figures usually by 8 pm.'
+    ? `Final data for ${d} is ready`
+    : 'Today\u2019s closing data is being finalised'
 
   return (
     <div className="flex-shrink-0 px-2 h-full flex items-center">

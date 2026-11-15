@@ -17,6 +17,7 @@ const DEMO_VIDEO_ID = 'vqdjMmgDf-k'
 const STEALTH_VIDEO_ID = 'PnFSXfV9gUc'
 
 const FEATURES: { emoji: string; title: string; blurb: string }[] = [
+  { emoji: '🕵️', title: 'Strike Stealth', blurb: 'Spot the option strikes where positions are quietly building, and whether it is buying or writing.' },
   { emoji: '🧱', title: 'Wall Migration', blurb: 'Watch where the real OI wall is moving to, strike by strike, as the day unfolds.' },
   { emoji: '🧠', title: 'Positional Intelligence', blurb: 'Stealth buildup, unwind and rollover signals across NIFTY, BANKNIFTY and 200+ F&O stocks.' },
   { emoji: '⚡', title: 'Gamma Squeeze', blurb: 'Spot where dealer hedging could accelerate a move before it happens.' },

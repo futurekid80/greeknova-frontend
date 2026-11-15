@@ -9,6 +9,13 @@ import Navbar from '@/components/Navbar'
 // meant to be visible to logged-out visitors.
 const DEMO_VIDEO_ID = 'vqdjMmgDf-k'
 
+// Nov 16 2026: Manish's dedicated Strike Stealth walkthrough (YouTube,
+// "Is This the Best Tool for Option Strike Analysis?"). Shown right under
+// the main platform walkthrough as its own featured block -- Strike Stealth
+// is the flagship feature. Copy below deliberately explains WHAT it does in
+// plain words and never the method/thresholds (Manish's standing rule).
+const STEALTH_VIDEO_ID = 'PnFSXfV9gUc'
+
 const FEATURES: { emoji: string; title: string; blurb: string }[] = [
   { emoji: '🧱', title: 'Wall Migration', blurb: 'Watch where the real OI wall is moving to, strike by strike, as the day unfolds.' },
   { emoji: '🧠', title: 'Positional Intelligence', blurb: 'Stealth buildup, unwind and rollover signals across NIFTY, BANKNIFTY and 200+ F&O stocks.' },
@@ -64,7 +71,52 @@ export default function DemoPage() {
           </a>
         </div>
 
-        <div style={{ marginTop: 56 }}>
+        <div id="strike-stealth" style={{ marginTop: 64 }}>
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <span style={{
+              display: 'inline-block', fontSize: 12, fontWeight: 600, letterSpacing: 0.4,
+              color: '#fbbf24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
+              borderRadius: 999, padding: '4px 12px', marginBottom: 16,
+            }}>
+              FEATURED
+            </span>
+            <h2 style={{ fontSize: 26, fontWeight: 800, color: '#fff', margin: 0, marginBottom: 10 }}>
+              🕵️ Strike Stealth
+            </h2>
+            <p style={{ fontSize: 14, color: '#9ca3af', margin: 0, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
+              Spot the option strikes where positions are quietly building, and see
+              whether it&apos;s buying or writing, before the move is obvious on the
+              chart. A full walkthrough of how to read it.
+            </p>
+          </div>
+
+          <div style={{
+            position: 'relative', width: '100%', aspectRatio: '16 / 9',
+            borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.5)', background: '#000',
+          }}>
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${STEALTH_VIDEO_ID}`}
+              title="Strike Stealth walkthrough"
+              loading="lazy"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 28 }}>
+            <a href="/login" style={{
+              display: 'inline-block', background: 'linear-gradient(135deg, #34d399, #0891b2)',
+              color: '#07070e', fontWeight: 700, fontSize: 14, padding: '12px 28px',
+              borderRadius: 10, textDecoration: 'none',
+            }}>
+              Try Strike Stealth free for 7 days →
+            </a>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 64 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, color: '#fff', textAlign: 'center', marginBottom: 24 }}>
             What's in the platform
           </h2>

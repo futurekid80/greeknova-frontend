@@ -76,6 +76,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
   const [pcrPts, setPcrPts] = useState<any[]>([])
   const [alerts, setAlerts] = useState<any[]>([])
   const [stealth, setStealth] = useState<any[]>([])
+  const [wolves, setWolves] = useState<any[] | null>(null)   // Nov 16 2026: stored Wolves signals for this stock
   const [loading, setLoading] = useState(true)
   const [intelLoading, setIntelLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -96,6 +97,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
     const quick = Promise.all([
       getJson(`/stock-oi/${enc}`).then(o => setOi(o)),
       getJson(`/pcr-trend/${enc}`).then(p => setPcrPts(p?.points || [])),
+      getJson(`/wolves/history/${enc}`).then(w => setWolves(w?.signals || [])),
       getJson(`/option-stealth-buildup/saved?window=eod&zone=5`).then(s => setStealth((s?.events || []).filter((e: any) => e.symbol === symbol))),
       getJson(`/oi-history/${enc}`).then(async h => {
         setHist(h)
@@ -127,6 +129,20 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
   const deliv: any[] = intel?.delivery || []
   const jungle: any[] = intel?.jungle || []
   const rows: any[] = useMemo(() => (hist?.rows || []).filter((r: any) => r.strike > 0 && (r.ce_chg || r.pe_chg)), [hist])
+  // Nov 16 2026: Wolves signals placed on the futures-history rows. A signal sits on the session it
+  // fired on; one logged on a weekend/holiday sits on the last session before it (its data is that close).
+  const wolvesByDay: Record<string, any[]> = useMemo(() => {
+    const out: Record<string, any[]> = {}
+    const days = hist20.map((d: any) => String(d.date).slice(0, 10)).sort()
+    for (const w of wolves || []) {
+      const wd = String(w.date).slice(0, 10)
+      let day = ''
+      for (const d of days) { if (d <= wd) day = d; else break }
+      if (!day) continue
+      ;(out[day] = out[day] || []).push(w)
+    }
+    return out
+  }, [wolves, hist20])
   const cprPos = cpr && cmp ? (cmp > cpr.tc ? 'Above CPR' : cmp < cpr.bc ? 'Below CPR' : 'Inside CPR') : null
   const pcrLean = pcr == null ? null : pcr >= 1.2 ? ['Put-heavy', 'text-emerald-400'] : pcr > 1 ? ['Leans put-heavy', 'text-emerald-400'] : pcr >= 0.8 ? ['Balanced', 'text-amber-300'] : ['Call-heavy', 'text-rose-400']
   const delLatest = deliv[0]?.delivery_pct
@@ -310,10 +326,10 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
             <Card title="Futures signal history" sub="Last sessions · what price and futures OI did each day. Stealth = futures OI rising while the stock price (cash) moved 1% or less">
               {hist20.length ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs min-w-[460px]">
+                  <table className="w-full text-xs min-w-[560px]">
                     <thead>
                       <tr className="text-[10px] uppercase tracking-wide text-gray-500 text-left border-b border-gray-800">
-                        <th className="py-1.5 pr-2">Date</th><th className="px-2">Signal</th><th className="px-2 text-right" title="Stock (cash) price change, close vs previous close, the same measure the Stealth tag uses">Price</th><th className="px-2 text-right">Fut OI</th><th className="px-2 text-right">Volume</th>
+                        <th className="py-1.5 pr-2">Date</th><th className="px-2">Signal</th><th className="px-2" title="Wolves signals that fired on that day, as shown on the Wolves page">🐺 Wolves</th><th className="px-2 text-right" title="Stock (cash) price change, close vs previous close, the same measure the Stealth tag uses">Price</th><th className="px-2 text-right">Fut OI</th><th className="px-2 text-right">Volume</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -330,6 +346,28 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
                                 </span>
                               )}
                             </div>
+                          </td>
+                          <td className="px-2">
+                            {(() => {
+                              const ws = (wolvesByDay[String(d.date).slice(0, 10)] || []).slice().sort((a: any, b: any) => (a.kind === 'wolf' ? 0 : 1) - (b.kind === 'wolf' ? 0 : 1))
+                              if (!ws.length) return <span className="text-gray-700">·</span>
+                              const tf = (t: string) => (t ? t.charAt(0) : '')
+                              return (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {ws.slice(0, 3).map((w: any, j: number) => {
+                                    const bull = String(w.direction).toLowerCase().startsWith('bull')
+                                    const cls = bull ? 'text-emerald-300 border-emerald-700/60 bg-emerald-950/30' : 'text-rose-300 border-rose-700/60 bg-rose-950/30'
+                                    return (
+                                      <span key={j} title={`${w.direction} ${w.label}${w.timeframe ? ` (${w.timeframe})` : ''} at ${inr(w.price)}`}
+                                        className={`text-[10px] font-bold rounded border px-1.5 py-0.5 whitespace-nowrap ${cls}`}>
+                                        {bull ? '▲' : '▼'} {w.kind === 'wolf' ? `🐺 ${w.label}` : `${w.label} ${tf(w.timeframe)}`}
+                                      </span>
+                                    )
+                                  })}
+                                  {ws.length > 3 && <span className="text-[10px] text-gray-500">+{ws.length - 3}</span>}
+                                </div>
+                              )
+                            })()}
                           </td>
                           <td className={`px-2 text-right font-semibold ${(d.cash_price_chg ?? d.price_chg) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn((d.cash_price_chg ?? d.price_chg) || 0, 2)}</td>
                           <td className={`px-2 text-right ${d.fut_oi_chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn(d.fut_oi_chg || 0, 2)}</td>
@@ -400,6 +438,33 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
             ) : <p className="text-xs text-gray-500 py-6 text-center">{intelLoading ? 'Loading…' : 'No notable option activity.'}</p>}
           </Card>
         </div>
+
+        {/* Wolves signal history (Nov 16 2026): the same stored signals the Wolves page showed, listed
+            for this stock so members can compare them with the price themselves. Nothing is recalculated
+            and no results are computed. */}
+        <Card title="🐺 Wolves signals for this stock" sub="History since 16 Oct, as shown on the Wolves page. Compare with the price yourself."
+          right={<a href="/wolves" className="text-[11px] text-indigo-300 hover:text-indigo-200">Wolves page →</a>}>
+          {wolves && wolves.length ? (
+            <div className="space-y-1.5">
+              {wolves.slice(0, 40).map((w: any, i: number) => {
+                const bull = String(w.direction).toLowerCase().startsWith('bull')
+                const cls = bull ? 'text-emerald-300 border-emerald-700/60 bg-emerald-950/30' : 'text-rose-300 border-rose-700/60 bg-rose-950/30'
+                let d = String(w.date)
+                try { d = new Date(w.date + 'T00:00:00+05:30').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) } catch {}
+                return (
+                  <div key={i} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border ${cls} px-3 py-1.5 text-xs`}>
+                    <span className="text-gray-400 w-14 font-semibold">{d}</span>
+                    <span className="font-bold">{bull ? '▲' : '▼'} {w.direction}</span>
+                    <span className="text-white font-semibold">{w.label}{w.timeframe ? ` · ${w.timeframe}` : ''}</span>
+                    <span className="text-gray-300">at {inr(w.price)}</span>
+                    {w.days_seen > 1 && <span className="text-gray-500">showed for {w.days_seen} days</span>}
+                  </div>
+                )
+              })}
+            </div>
+          ) : <p className="text-xs text-gray-500 py-6 text-center">{wolves === null ? 'Loading…' : 'No Wolves signals for this stock since 16 Oct.'}</p>}
+          <p className="text-[10px] text-gray-600 mt-2">For your own study. Past signals do not predict what happens next.</p>
+        </Card>
 
         {/* Alerts */}
         <Card title="Alerts for this stock" sub={asOf ? `Session of ${asOf}` : undefined}

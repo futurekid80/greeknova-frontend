@@ -129,6 +129,20 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
   const deliv: any[] = intel?.delivery || []
   const jungle: any[] = intel?.jungle || []
   const rows: any[] = useMemo(() => (hist?.rows || []).filter((r: any) => r.strike > 0 && (r.ce_chg || r.pe_chg)), [hist])
+  // Nov 16 2026: Wolves signals placed on the futures-history rows. A signal sits on the session it
+  // fired on; one logged on a weekend/holiday sits on the last session before it (its data is that close).
+  const wolvesByDay: Record<string, any[]> = useMemo(() => {
+    const out: Record<string, any[]> = {}
+    const days = hist20.map((d: any) => String(d.date).slice(0, 10)).sort()
+    for (const w of wolves || []) {
+      const wd = String(w.date).slice(0, 10)
+      let day = ''
+      for (const d of days) { if (d <= wd) day = d; else break }
+      if (!day) continue
+      ;(out[day] = out[day] || []).push(w)
+    }
+    return out
+  }, [wolves, hist20])
   const cprPos = cpr && cmp ? (cmp > cpr.tc ? 'Above CPR' : cmp < cpr.bc ? 'Below CPR' : 'Inside CPR') : null
   const pcrLean = pcr == null ? null : pcr >= 1.2 ? ['Put-heavy', 'text-emerald-400'] : pcr > 1 ? ['Leans put-heavy', 'text-emerald-400'] : pcr >= 0.8 ? ['Balanced', 'text-amber-300'] : ['Call-heavy', 'text-rose-400']
   const delLatest = deliv[0]?.delivery_pct
@@ -312,10 +326,10 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
             <Card title="Futures signal history" sub="Last sessions · what price and futures OI did each day. Stealth = futures OI rising while the stock price (cash) moved 1% or less">
               {hist20.length ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs min-w-[460px]">
+                  <table className="w-full text-xs min-w-[560px]">
                     <thead>
                       <tr className="text-[10px] uppercase tracking-wide text-gray-500 text-left border-b border-gray-800">
-                        <th className="py-1.5 pr-2">Date</th><th className="px-2">Signal</th><th className="px-2 text-right" title="Stock (cash) price change, close vs previous close, the same measure the Stealth tag uses">Price</th><th className="px-2 text-right">Fut OI</th><th className="px-2 text-right">Volume</th>
+                        <th className="py-1.5 pr-2">Date</th><th className="px-2">Signal</th><th className="px-2" title="Wolves signals that fired on that day, as shown on the Wolves page">🐺 Wolves</th><th className="px-2 text-right" title="Stock (cash) price change, close vs previous close, the same measure the Stealth tag uses">Price</th><th className="px-2 text-right">Fut OI</th><th className="px-2 text-right">Volume</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -332,6 +346,28 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
                                 </span>
                               )}
                             </div>
+                          </td>
+                          <td className="px-2">
+                            {(() => {
+                              const ws = (wolvesByDay[String(d.date).slice(0, 10)] || []).slice().sort((a: any, b: any) => (a.kind === 'wolf' ? 0 : 1) - (b.kind === 'wolf' ? 0 : 1))
+                              if (!ws.length) return <span className="text-gray-700">·</span>
+                              const tf = (t: string) => (t ? t.charAt(0) : '')
+                              return (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {ws.slice(0, 3).map((w: any, j: number) => {
+                                    const bull = String(w.direction).toLowerCase().startsWith('bull')
+                                    const cls = bull ? 'text-emerald-300 border-emerald-700/60 bg-emerald-950/30' : 'text-rose-300 border-rose-700/60 bg-rose-950/30'
+                                    return (
+                                      <span key={j} title={`${w.direction} ${w.label}${w.timeframe ? ` (${w.timeframe})` : ''} at ${inr(w.price)}`}
+                                        className={`text-[10px] font-bold rounded border px-1.5 py-0.5 whitespace-nowrap ${cls}`}>
+                                        {bull ? '▲' : '▼'} {w.kind === 'wolf' ? `🐺 ${w.label}` : `${w.label} ${tf(w.timeframe)}`}
+                                      </span>
+                                    )
+                                  })}
+                                  {ws.length > 3 && <span className="text-[10px] text-gray-500">+{ws.length - 3}</span>}
+                                </div>
+                              )
+                            })()}
                           </td>
                           <td className={`px-2 text-right font-semibold ${(d.cash_price_chg ?? d.price_chg) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn((d.cash_price_chg ?? d.price_chg) || 0, 2)}</td>
                           <td className={`px-2 text-right ${d.fut_oi_chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sgn(d.fut_oi_chg || 0, 2)}</td>

@@ -76,6 +76,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
   const [pcrPts, setPcrPts] = useState<any[]>([])
   const [alerts, setAlerts] = useState<any[]>([])
   const [stealth, setStealth] = useState<any[]>([])
+  const [wolves, setWolves] = useState<any[] | null>(null)   // Nov 16 2026: stored Wolves signals for this stock
   const [loading, setLoading] = useState(true)
   const [intelLoading, setIntelLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -96,6 +97,7 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
     const quick = Promise.all([
       getJson(`/stock-oi/${enc}`).then(o => setOi(o)),
       getJson(`/pcr-trend/${enc}`).then(p => setPcrPts(p?.points || [])),
+      getJson(`/wolves/history/${enc}`).then(w => setWolves(w?.signals || [])),
       getJson(`/option-stealth-buildup/saved?window=eod&zone=5`).then(s => setStealth((s?.events || []).filter((e: any) => e.symbol === symbol))),
       getJson(`/oi-history/${enc}`).then(async h => {
         setHist(h)
@@ -400,6 +402,33 @@ export default function StockDashboard({ symbol: rawSymbol }: { symbol: string }
             ) : <p className="text-xs text-gray-500 py-6 text-center">{intelLoading ? 'Loading…' : 'No notable option activity.'}</p>}
           </Card>
         </div>
+
+        {/* Wolves signal history (Nov 16 2026): the same stored signals the Wolves page showed, listed
+            for this stock so members can compare them with the price themselves. Nothing is recalculated
+            and no results are computed. */}
+        <Card title="🐺 Wolves signals for this stock" sub="History since 16 Oct, as shown on the Wolves page. Compare with the price yourself."
+          right={<a href="/wolves" className="text-[11px] text-indigo-300 hover:text-indigo-200">Wolves page →</a>}>
+          {wolves && wolves.length ? (
+            <div className="space-y-1.5">
+              {wolves.slice(0, 40).map((w: any, i: number) => {
+                const bull = String(w.direction).toLowerCase().startsWith('bull')
+                const cls = bull ? 'text-emerald-300 border-emerald-700/60 bg-emerald-950/30' : 'text-rose-300 border-rose-700/60 bg-rose-950/30'
+                let d = String(w.date)
+                try { d = new Date(w.date + 'T00:00:00+05:30').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) } catch {}
+                return (
+                  <div key={i} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border ${cls} px-3 py-1.5 text-xs`}>
+                    <span className="text-gray-400 w-14 font-semibold">{d}</span>
+                    <span className="font-bold">{bull ? '▲' : '▼'} {w.direction}</span>
+                    <span className="text-white font-semibold">{w.label}{w.timeframe ? ` · ${w.timeframe}` : ''}</span>
+                    <span className="text-gray-300">at {inr(w.price)}</span>
+                    {w.days_seen > 1 && <span className="text-gray-500">showed for {w.days_seen} days</span>}
+                  </div>
+                )
+              })}
+            </div>
+          ) : <p className="text-xs text-gray-500 py-6 text-center">{wolves === null ? 'Loading…' : 'No Wolves signals for this stock since 16 Oct.'}</p>}
+          <p className="text-[10px] text-gray-600 mt-2">For your own study. Past signals do not predict what happens next.</p>
+        </Card>
 
         {/* Alerts */}
         <Card title="Alerts for this stock" sub={asOf ? `Session of ${asOf}` : undefined}

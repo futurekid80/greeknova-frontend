@@ -175,6 +175,24 @@ export default function PCRTrend() {
     }
   })
 
+  // Nov 19 2026: mark on the chart where Vol PCR crossed OI PCR. Uses the same
+  // rule as the PCR Crossover alert (raw readings, a small band so tiny wiggles
+  // don't count, nothing before 09:30 IST when OI is still catching up), so the
+  // alert and the chart always tell the same story.
+  const CROSS_BAND = 0.03
+  const crossings: { time: string; dir: 'above' | 'below' }[] = []
+  {
+    let prevSide: 'above' | 'below' | null = null
+    for (const p of data?.points || []) {
+      if (!p.pcr || !p.vol_pcr || p.time < '09:30') continue
+      const gap = p.vol_pcr - p.pcr
+      const side = gap > CROSS_BAND ? 'above' : gap < -CROSS_BAND ? 'below' : null
+      if (!side) continue
+      if (prevSide && prevSide !== side) crossings.push({ time: p.time, dir: side })
+      prevSide = side
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#07070e] text-white">
       <Navbar active="/pcr" />
@@ -296,13 +314,17 @@ export default function PCRTrend() {
             <div className="h-72 flex items-center justify-center"><RefreshCw size={24} className="text-gray-600 animate-spin"/></div>
           ) : smoothedPoints.length ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={smoothedPoints} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+              <LineChart data={smoothedPoints} margin={{ top: 22, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false}/>
                 <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false}/>
                 <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} domain={['auto', 'auto']}/>
                 <Tooltip content={<CustomTooltip/>} cursor={{ stroke: 'rgba(255,255,255,0.1)' }}/>
                 <ReferenceLine y={1.0} stroke={chartColors.call} strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '1.0 Bullish', fill: chartColors.call, fontSize: 10, position: 'insideRight' }}/>
                 <ReferenceLine y={0.8} stroke={chartColors.put} strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: '0.8 Bearish', fill: chartColors.put, fontSize: 10, position: 'insideRight' }}/>
+                {showVolPCR && crossings.map(c => (
+                  <ReferenceLine key={c.time} x={c.time} stroke={c.dir === 'above' ? '#22d3ee' : '#f472b6'} strokeDasharray="2 3" strokeOpacity={0.8}
+                    label={{ value: c.dir === 'above' ? 'Vol above OI' : 'Vol below OI', fill: c.dir === 'above' ? '#22d3ee' : '#f472b6', fontSize: 10, position: 'top', offset: 6 }}/>
+                ))}
                 <Line type="stepAfter" dataKey="pcr_smooth" name="OI PCR" stroke={chartColors.spot} strokeWidth={2} dot={false} activeDot={{ r: 4 }}/>
                 {showVolPCR && (
                   <Line type="stepAfter" dataKey="vol_pcr_smooth" name="Vol PCR" stroke="#22d3ee" strokeWidth={1.5} strokeDasharray="5 3" dot={false} activeDot={{ r: 4 }}/>
@@ -320,6 +342,11 @@ export default function PCRTrend() {
             <span className="text-cyan-400 font-semibold"> Vol PCR</span> = contracts traded today (faster, intraday activity) ·
             When both rise together = strong bullish conviction · When they diverge = mixed signals
           </p>
+          {showVolPCR && (
+            <p className="text-xs text-gray-600 mt-1">
+              Dotted vertical lines mark where Vol PCR moved from one side of OI PCR to the other, using the actual readings from 09:30 onwards. The lines above are lightly smoothed, so they can look slightly later.
+            </p>
+          )}
         </div>
       </div>
     </div>

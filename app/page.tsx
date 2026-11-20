@@ -39,7 +39,7 @@ function fetchWithTimeout(url: string, ms = 8000): Promise<Response> {
 const PULSE_CARD_SYMBOLS = ['NIFTY', 'BANKNIFTY', 'SENSEX']
 
 interface OIRecord { symbol:string; strike:number; option_type:string; oi:number; volume:number; last_price:number; timestamp:string; expiry?:string }
-interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number }
+interface IndexAnalysis { symbol:string; pcr:number; totalCEOI:number; totalPEOI:number; maxPain:number; posture:'BULLISH'|'BEARISH'|'NEUTRAL'; postureStrength:number; topCEStrike:number; topPEStrike:number; pcrNear?:number }
 interface CPRRow { symbol:string; tc:number; bc:number; pivot:number; width_pct:number; width_label:string; width_color:string; width_emoji:string; cpr_trend:string; is_virgin:boolean; cpr_position:string; position_label:string; cmp:number; last_cmp?:number; has_oi_signal?:boolean; confluence?:boolean; width_pts?:number }
 interface PulseStock { symbol:string; cmp:number; oi_chg_pct:number; price_chg_pct:number; signal:string; label:string; confluence?:boolean; width_pct?:number; width_pts?:number; width_emoji?:string; cpr_position?:string; has_oi_signal?:boolean; oi_now?:number; oi_prev?:number; vol_surge?:boolean; vol_ratio?:number; week52_high?:number; pct_from_52w_high?:number; at_52w_high?:boolean; oi_comb?:number|null }
 
@@ -200,6 +200,9 @@ function IndexCard({ a, cpr, cmp, iv }: { a: IndexAnalysis; cpr?: CPRRow; cmp?: 
             <div key={m.label} className="bg-gray-800/50 rounded-xl p-2.5 border border-gray-700/40">
               <p className="text-xs text-gray-500 mb-1">{m.label}</p>
               <p className={`text-base font-bold ${m.colored ? (bull ? 'text-emerald-400' : bear ? 'text-red-400' : 'text-amber-400') : 'text-white'}`}>{m.value}</p>
+              {m.label === 'PCR' && a.pcrNear !== undefined && Math.abs(a.pcrNear - a.pcr) >= 0.01 && (
+                <p className="text-[10px] text-gray-500 mt-0.5">Near-ATM {a.pcrNear.toFixed(2)}</p>
+              )}
             </div>
           ))}
         </div>
@@ -1210,7 +1213,7 @@ export default function MarketPulse() {
             let posture: 'BULLISH'|'BEARISH'|'NEUTRAL' = 'NEUTRAL', strength = 50
             if (v > 1.2) { posture = 'BULLISH'; strength = Math.min(95, 55 + (v - 1.2) * 25) }
             else if (v < 0.8) { posture = 'BEARISH'; strength = Math.min(95, 55 + (0.8 - v) * 40) }
-            return { ...a, pcr: v, posture, postureStrength: Math.round(strength) }
+            return { ...a, pcrNear: a.pcr, pcr: v, posture, postureStrength: Math.round(strength) }
           }))
         })
       }

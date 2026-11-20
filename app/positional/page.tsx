@@ -81,6 +81,7 @@ interface VolStock {
 
 interface PIData {
   date: string
+  rollover_week?: boolean
   expiry: string
   series_start: string
   total_trading_days: number
@@ -1011,6 +1012,12 @@ export default function PositionalIntelligence() {
             ↻ Refresh
           </button>
         </div>
+
+        {data.rollover_week && (
+          <div className="text-xs text-amber-300/90 bg-amber-900/20 border border-amber-800/40 rounded-lg px-3 py-2">
+            Rollover week: traders are moving positions from the near to the next month, so OI here is shown near + next month combined to avoid misleading drops.
+          </div>
+        )}
 
         {/* ── Summary Strip ───────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

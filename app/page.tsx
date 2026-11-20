@@ -1361,7 +1361,14 @@ export default function MarketPulse() {
   const cprMap = Object.fromEntries(cprData.map(c => [c.symbol, c]))
   const warZoneCount = pulseStocks.filter(s => (s.width_pct||1)<0.3 && s.has_oi_signal).length
   const feedStocks: PulseStock[] = pulseStocks.length > 0
-    ? (newFeed && oiBasis === 'combined' ? pulseStocks.map(s => (s.oi_comb != null ? { ...s, oi_chg_pct: s.oi_comb } : s)) : pulseStocks)
+    ? (newFeed && oiBasis === 'combined'
+        ? pulseStocks.map(s => (s.oi_comb != null ? { ...s, oi_chg_pct: s.oi_comb } : s))
+        // Nov 20 2026: in rollover week the near-month figure falls (OI moves to next month) while the stock's
+        // label is worked out on near + next month, so the table could show "Long Buildup" next to a big negative
+        // near-month OI change. When the two figures point opposite ways, label the row "Rollover" instead.
+        : (newFeed ? pulseStocks.map(s => (
+            s.oi_comb != null && Math.abs(s.oi_chg_pct) >= 5 && Math.sign(s.oi_chg_pct) !== Math.sign(s.oi_comb) && s.signal !== 'NEUTRAL'
+              ? { ...s, signal: 'ROLLOVER', label: 'Rollover' } : s)) : pulseStocks))
     : cprData.map(c => ({
     symbol: c.symbol, cmp: c.last_cmp||c.cmp||0, oi_chg_pct:0, price_chg_pct:0,
     signal:'NEUTRAL', label:'—', has_oi_signal:c.has_oi_signal||false,

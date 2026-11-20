@@ -501,7 +501,11 @@ function UserMenu({ classicNav, onToggleClassicNav }: { classicNav: boolean, onT
 const CLASSIC_NAV_PREF_KEY = '__classic_nav__'
 
 function useClassicNavPref() {
-  const [classicNav, setClassicNav] = useState(false)
+  // Nov 20 2026: default is now the full "All Tools" menu. New trial members
+  // watch the intro video (which shows All Tools) and then landed on the simple
+  // menu until they found the switch, which cost them time. Anyone who has
+  // explicitly saved a choice (server row or this browser) keeps it.
+  const [classicNav, setClassicNav] = useState(true)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -511,7 +515,7 @@ function useClassicNavPref() {
     // failed read silently fell back to the simple menu. Remember the last
     // known choice in this browser so the menu shows instantly and stays put
     // when the server read is slow; the server value still wins when it loads.
-    try { if (localStorage.getItem('gn_classic_nav') === '1') setClassicNav(true) } catch {}
+    try { if (localStorage.getItem('gn_classic_nav') === '0') setClassicNav(false) } catch {}
     async function load() {
       // Oct 15 2026: Navbar remounts on every page navigation (it's
       // rendered per-page, not in a shared layout), so this effect -- and

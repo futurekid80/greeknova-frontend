@@ -1195,7 +1195,7 @@ export default function MarketPulse() {
         // nearest expiry, same as brokers/Sensibull) from /pcr-trend. Falls back silently
         // to the figure above when the whole-chain series isn't available yet.
         Promise.all(PULSE_CARD_SYMBOLS.map(sym =>
-          fetchWithTimeout(`${API}/pcr-trend/${sym}`).then(r => r.json()).catch(() => null)
+          fetchWithTimeout(`${API}/pcr-trend/${sym}?last_session=1`).then(r => r.json()).catch(() => null)
         )).then(trends => {
           const wc: Record<string, number> = {}
           PULSE_CARD_SYMBOLS.forEach((sym, i) => {

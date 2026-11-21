@@ -1375,6 +1375,9 @@ export default function MarketPulse() {
     width_pct:c.width_pct, width_pts:c.width_pts, width_emoji:c.width_emoji,
     cpr_position:c.cpr_position, confluence:c.confluence||false,
   }))
+  // Nov 21 2026: rollover week = near-month OI is falling hard for many stocks at once (positions moving to next month).
+  const rolloverWeek = pulseStocks.length > 0 &&
+    pulseStocks.filter(s => s.oi_comb != null && s.oi_chg_pct <= -5).length >= Math.max(20, Math.floor(0.15 * pulseStocks.length))
   const suggestions = searchQuery.length >= 1 ? ALL_SYMBOLS.filter(s => s.startsWith(searchQuery.toUpperCase())).slice(0,8) : []
 
   return (
@@ -1524,6 +1527,11 @@ export default function MarketPulse() {
             <button onClick={() => setShowCustomise(v => !v)}
               className="text-xs text-gray-300 border border-gray-700 rounded-lg px-3 py-1.5 hover:text-white">⚙ Customise this page{hiddenBlocks.length ? ` · ${hiddenBlocks.length} hidden` : ''}</button>
             </div>
+            {oiBasis === 'near' && rolloverWeek && (
+              <p className="mt-2 max-w-xl text-right text-[11px] text-amber-300/90">
+                Rollover week: near-month OI is falling as positions move to the next month. Switch to Near + next month to see real positioning.
+              </p>
+            )}
             {showCustomise && (
               <div className="mt-2 w-full sm:w-auto rounded-xl border border-gray-700 bg-gray-900/60 p-3">
                 <p className="text-[11px] text-gray-500 mb-2">Choose which sections to show. Saved on this browser.</p>

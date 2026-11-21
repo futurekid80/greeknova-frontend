@@ -39,6 +39,53 @@ function showAccessBanner(code: string) {
   }
 }
 
+// Nov 21 2026: when a trial or paid plan has ended the API answers 403 with code user_trial_expired / user_member_expired,
+// which used to leave every page blank with no explanation. Show one clear card with a link to the plans instead.
+// Logging in is never blocked; this only explains why the data is not loading.
+const PLANS_URL = 'https://get.greeknova.com'
+
+function showExpiredCard(code: string) {
+  try {
+    if (document.getElementById('gn-expired-card')) return
+    const trial = code === 'user_trial_expired'
+    const wrap = document.createElement('div')
+    wrap.id = 'gn-expired-card'
+    wrap.style.cssText =
+      'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;' +
+      'background:rgba(7,7,14,0.92);font-family:system-ui,sans-serif;'
+    const card = document.createElement('div')
+    card.style.cssText =
+      'max-width:420px;width:100%;background:#12121c;border:1px solid #2a2a3a;border-radius:14px;padding:28px 24px;' +
+      'text-align:center;color:#fff;'
+    const h = document.createElement('h2')
+    h.textContent = trial ? 'Your 7-day trial has ended' : 'Your GreekNova plan has expired'
+    h.style.cssText = 'margin:0 0 10px;font-size:20px;font-weight:800;'
+    const t = document.createElement('p')
+    t.textContent = trial
+      ? 'Thank you for trying GreekNova. To keep using the tools, choose a plan. It takes about a minute.'
+      : 'Renew to keep your access.'
+    t.style.cssText = 'margin:0 0 20px;font-size:14px;line-height:1.5;color:#b5b5c5;'
+    const a = document.createElement('a')
+    a.href = PLANS_URL
+    a.textContent = trial ? 'See plans' : 'Renew your plan'
+    a.style.cssText =
+      'display:inline-block;padding:10px 22px;border-radius:10px;background:#6366f1;color:#fff;font-weight:700;' +
+      'font-size:14px;text-decoration:none;'
+    const so = document.createElement('button')
+    so.textContent = 'Sign out'
+    so.style.cssText =
+      'display:block;margin:16px auto 0;background:none;border:0;color:#8b8b9d;font-size:12px;cursor:pointer;text-decoration:underline;'
+    so.onclick = () => {
+      supabase.auth.signOut().finally(() => { window.location.href = '/login' })
+    }
+    card.appendChild(h); card.appendChild(t); card.appendChild(a); card.appendChild(so)
+    wrap.appendChild(card)
+    document.body.appendChild(wrap)
+  } catch (e) {
+    // ignore
+  }
+}
+
 // Oct 15 2026: this banner was only ever added, never removed. A
 // token/dashboard_prefs race at page load (two tabs open, lock stolen)
 // could 401 the FIRST gated request on a page even with the retries above
@@ -102,6 +149,8 @@ async function watchAccess(p: Promise<Response>, gated: boolean): Promise<Respon
       const j = await res.clone().json()
       if (j && j.code === 'kite_session_stale') {
         forceReLoginForStaleKite()
+      } else if (j && (j.code === 'user_trial_expired' || j.code === 'user_member_expired')) {
+        showExpiredCard(j.code)
       } else if (j && (j.code === 'user_no_token' || j.code === 'user_bad_token' || j.code === 'user_not_member')) {
         showAccessBanner(j.code)
       }

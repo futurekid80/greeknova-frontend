@@ -27,6 +27,7 @@ interface BuildupData {
   long_bias: number
   short_bias: number
   rollover_week?: boolean
+  series_bridge?: boolean
 }
 
 const SIGNAL_META: Record<string, { color: string; bg: string; border: string; icon: string; badgeBg: string }> = {
@@ -210,6 +211,12 @@ export default function OIBuildupPeriod() {
         {data?.rollover_week && (
           <p className="text-xs text-amber-300/90 bg-amber-950/20 border border-amber-800/40 rounded-lg px-3 py-2 mb-4">
             Rollover week: traders are moving positions from the near to the next month, so OI change here is shown near + next month combined to avoid misleading drops.
+          </p>
+        )}
+
+        {data?.series_bridge && (
+          <p className="text-xs text-amber-300/90 bg-amber-950/20 border border-amber-800/40 rounded-lg px-3 py-2 mb-4">
+            A new series has just started, so this view looks back across the expiry and shows OI change near + next month combined until there are enough trading days in the new series.
           </p>
         )}
 

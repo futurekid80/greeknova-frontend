@@ -26,6 +26,7 @@ interface BuildupData {
   results: BuildupRow[]
   long_bias: number
   short_bias: number
+  rollover_week?: boolean
 }
 
 const SIGNAL_META: Record<string, { color: string; bg: string; border: string; icon: string; badgeBg: string }> = {
@@ -205,6 +206,12 @@ export default function OIBuildupPeriod() {
             </button>
           </div>
         </div>
+
+        {data?.rollover_week && (
+          <p className="text-xs text-amber-300/90 bg-amber-950/20 border border-amber-800/40 rounded-lg px-3 py-2 mb-4">
+            Rollover week: traders are moving positions from the near to the next month, so OI change here is shown near + next month combined to avoid misleading drops.
+          </p>
+        )}
 
         {data && (
           <div className="grid grid-cols-3 gap-3 mb-6">

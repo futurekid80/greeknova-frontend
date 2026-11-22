@@ -14,14 +14,14 @@ interface Sec {
   sector: string; stocks: number; label: string
   recent_score: number; prior_score: number | null; change: number | null
   breadth_pct: number; avg_px_5d: number; avg_px_prior: number | null
-  counts: Record<string, number>; leaders: Stk[]; weak: Stk[]
+  counts: Record<string, number>; leaders: Stk[]; weak: Stk[]; flip_kind?: string | null
 }
 interface Hist {
   label: string; sector_days: number
   n5: number; excess_5d_pct: number | null; beat_market_5d_pct: number | null
   n10: number; excess_10d_pct: number | null; beat_market_10d_pct: number | null
 }
-interface Data { as_of: string; history_days: number; window_recent: number; window_prior: number; sectors: Sec[]; history_check: Hist[]; note: string; error?: string }
+interface Data { turning_up_count?: number; turning_down_count?: number; wave_min?: number; as_of: string; history_days: number; window_recent: number; window_prior: number; sectors: Sec[]; history_check: Hist[]; note: string; error?: string }
 
 const LABEL_STYLE: Record<string, string> = {
   'Turning up': 'text-emerald-300 border-emerald-600 bg-emerald-950/50',
@@ -113,6 +113,12 @@ export default function SectorIntelPage() {
           <>
             <p className="text-xs text-gray-500 mb-4">As of {data.as_of} · recent = last {data.window_recent} trading days, prior = the {data.window_prior} days before that · {data.history_days} days of history</p>
 
+            {((data.turning_up_count ?? 0) >= (data.wave_min ?? 4) || (data.turning_down_count ?? 0) >= (data.wave_min ?? 4)) && (
+              <div className="border border-amber-700/60 bg-amber-950/30 text-amber-200 rounded-xl p-3 mb-4 text-xs">
+                Market-wide move today: {data.turning_up_count} sectors turning up and {data.turning_down_count} turning down. When many sectors flip together it says more about the market than about any one sector, so read single-sector flips with more weight.
+              </div>
+            )}
+
             <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4 mb-5 text-xs text-gray-400 leading-relaxed">
               <b className="text-gray-200">How to read the score (-100 to +100):</b> every stock in the sector is read as long buildup, short covering, short buildup or long unwinding over the window. Long buildup counts fully for the sector, short covering counts half, and the bearish two count the same way against it.
               <b className="text-gray-200"> Turning up</b> = weak in the prior window, clearly better in the last 5 days with most stocks rising. <b className="text-gray-200">Accumulating / Distributing</b> = a strong one-sided read that was not weak before.
@@ -123,7 +129,10 @@ export default function SectorIntelPage() {
                 <div key={s.sector} className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="font-bold truncate">{s.sector} <span className="text-gray-600 font-normal text-xs">· {s.stocks} stocks</span></div>
-                    <span className={`text-[10px] font-bold uppercase tracking-wide border rounded px-2 py-0.5 shrink-0 ${LABEL_STYLE[s.label] || LABEL_STYLE.Mixed}`}>{s.label}</span>
+                    <span className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className={`text-[10px] font-bold uppercase tracking-wide border rounded px-2 py-0.5 ${LABEL_STYLE[s.label] || LABEL_STYLE.Mixed}`}>{s.label}</span>
+                      {s.flip_kind && <span className="text-[9px] text-gray-500">{s.flip_kind === 'sector-only' ? 'sector-only flip' : 'with the market'}</span>}
+                    </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                     <div><div className="text-gray-500 mb-1">Recent {sign(s.recent_score, 0)}</div><Bar v={s.recent_score} /></div>
@@ -139,8 +148,8 @@ export default function SectorIntelPage() {
                       <span key={k} className="border border-gray-700 rounded px-1.5 py-0.5 text-gray-400">{STATE_NAME[k]} <b className="text-gray-200">{s.counts[k] ?? 0}</b></span>
                     ))}
                   </div>
-                  {s.leaders.length > 0 && <p className="text-[11px] text-gray-500 truncate" title="Strongest bullish reads in the last 5 days">▲ {s.leaders.map(d => `${d.symbol} ${sign(d.oi_pct, 0)}% OI`).join(' · ')}</p>}
-                  {s.weak.length > 0 && <p className="text-[11px] text-gray-500 truncate" title="Strongest bearish reads in the last 5 days">▼ {s.weak.map(d => `${d.symbol} ${sign(d.oi_pct, 0)}% OI`).join(' · ')}</p>}
+                  {s.leaders.length > 0 && <p className="text-[11px] text-gray-500 truncate" title="Strongest bullish reads in the last 5 days">▲ {s.leaders.map(d => `${d.symbol} ${sign(d.px_pct, 0)}% price, ${sign(d.oi_pct, 0)}% OI`).join(' · ')}</p>}
+                  {s.weak.length > 0 && <p className="text-[11px] text-gray-500 truncate" title="Strongest bearish reads in the last 5 days">▼ {s.weak.map(d => `${d.symbol} ${sign(d.px_pct, 0)}% price, ${sign(d.oi_pct, 0)}% OI`).join(' · ')}</p>}
                 </div>
               ))}
             </div>

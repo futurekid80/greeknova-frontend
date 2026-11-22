@@ -10,7 +10,7 @@ const API = 'https://api.greeknova.com'
 const ADMIN_EMAIL = 'megha.jethmalani@gmail.com'
 
 interface Stk { symbol: string; state: string; oi_pct: number; px_pct: number }
-interface StockRow extends Stk { px20: number | null }
+interface StockRow extends Stk { px20: number | null; oi20?: number | null; state20?: string | null }
 interface Sec {
   sector: string; stocks: number; label: string
   recent_score: number; prior_score: number | null; change: number | null
@@ -177,7 +177,7 @@ export default function SectorIntelPage() {
                     ))}
                     <span className="border border-gray-700 rounded px-1.5 py-0.5 text-gray-400">Stocks rising <b className="text-gray-200">{s.breadth_pct}%</b></span>
                   </div>
-                  <p className="text-[11px] text-gray-500 mb-2">Each bar shows how far a stock is ahead of (green, right) or behind (red, left) the sector average price move over the {basis === '5d' ? 'last 5' : 'last 20'} days. The sector average is {sign(avg, 1)}%. Chips show the stock&apos;s OI and price read over the last 5 days.</p>
+                  <p className="text-[11px] text-gray-500 mb-2">Each bar shows how far a stock is ahead of (green, right) or behind (red, left) the sector average price move over the {basis === '5d' ? 'last 5' : 'last 20'} days. The sector average is {sign(avg, 1)}%. The label beside each bar is the stock&apos;s OI and price read over the same period.</p>
                   <div className="space-y-1">
                     {rel.map(({ r, rel: v }) => (
                       <div key={r.symbol} className="flex items-center gap-2 text-[11px]">
@@ -190,7 +190,7 @@ export default function SectorIntelPage() {
                         <div className="w-28 sm:w-40 text-right text-gray-400 shrink-0">
                           <span className={(val(r) as number) >= 0 ? 'text-emerald-400' : 'text-red-400'}>{sign(val(r) as number, 1)}%</span>
                           <span className="text-gray-600"> · </span>
-                          <span title={`${STATE_NAME[r.state]}: OI ${sign(r.oi_pct, 0)}%, price ${sign(r.px_pct, 0)}% (5d)`}>{STATE_NAME[r.state]}</span>
+                          <span title={basis === '5d' ? `${STATE_NAME[r.state]}: OI ${sign(r.oi_pct, 0)}%, price ${sign(r.px_pct, 0)}% (5d)` : `${STATE_NAME[r.state20 || 'N']}: OI ${sign(r.oi20 ?? null, 0)}%, price ${sign(r.px20, 0)}% (20d)`}>{STATE_NAME[(basis === '5d' ? r.state : r.state20) || 'N']}</span>
                         </div>
                       </div>
                     ))}

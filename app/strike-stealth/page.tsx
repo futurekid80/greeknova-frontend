@@ -6,6 +6,7 @@ import StrikeZoneFilter from '@/components/StrikeZoneFilter'
 import StealthDashboard from '@/components/StealthDashboard'
 import { labelUnclear, neighbourUnclearKeys, hitKey } from '@/lib/stealthLabel'
 import { buyerShortlist } from '@/lib/stealthShortlist'
+import { useAdxDirections, adxFire, fireTitle } from '@/lib/adxFire'
 
 const API = 'https://api.greeknova.com'
 
@@ -151,6 +152,7 @@ export default function StrikeStealthBuildup() {
   // (Oct 27 2026, Manish's ask): extra client-side filters so the list stays
   // scannable without endless scrolling -- these slice the already-fetched
   // `hits` array, no extra round-trip to the backend.
+  const adxDirs = useAdxDirections()
   const [instrumentFilter, setInstrumentFilter] = useState<'all' | 'index' | 'stocks'>('all')
   const [optionTypeFilter, setOptionTypeFilter] = useState<'all' | 'CE' | 'PE'>('all')
   const [expiryFilter, setExpiryFilter] = useState<'all' | string>('all')
@@ -605,8 +607,9 @@ export default function StrikeStealthBuildup() {
           <StealthDashboard
             key={shortlist ? 'sl' : 'all'}
             initialSort={shortlist ? 'money' : undefined}
-            hits={(shortlist ? shortlistRows.map((h: any) => (intraday[h.tradingsymbol] ? { ...h, ...intraday[h.tradingsymbol] } : h)) : allHits.filter(h => freshOk(h))) as any}
+            hits={((shortlist ? shortlistRows.map((h: any) => (intraday[h.tradingsymbol] ? { ...h, ...intraday[h.tradingsymbol] } : h)) : allHits.filter(h => freshOk(h))) as any[]).filter((h: any) => instrumentFilter === 'all' || (instrumentFilter === 'index' ? INDICES.includes(h.symbol) : !INDICES.includes(h.symbol))) as any}
             showSince={shortlist}
+            adxDirs={adxDirs}
             foldSliders={prev}
             unclearKeys={nbKeys}
             loading={loading}
@@ -690,7 +693,11 @@ export default function StrikeStealthBuildup() {
           <div className="relative ml-auto">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search symbol…"
-              className="bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-1.5 w-40 focus:outline-none focus:border-cyan-700 placeholder:text-gray-600" />
+              className="bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-7 py-1.5 w-40 focus:outline-none focus:border-cyan-700 placeholder:text-gray-600" />
+            {search && (
+              <button type="button" aria-label="Clear search" onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-sm leading-none">×</button>
+            )}
           </div>
         </div>
 
@@ -716,6 +723,7 @@ export default function StrikeStealthBuildup() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-white">{h.symbol}</span>
+                    {(() => { const f = adxFire(h, adxDirs); return f ? <span title={fireTitle(f)} className="cursor-help">🔥</span> : null })()}
                     <span className="text-gray-300">{h.strike} {h.option_type}</span>
                     {h.expiry && (
                       <span className="text-[11px] text-gray-500 border border-gray-700 rounded px-1.5 py-0.5">

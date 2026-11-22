@@ -4,6 +4,7 @@
 // presets, sliders, KPI tiles, OI-vs-premium scatter with the absorption
 // corridor, top-stock list and a sortable table. Pure client-side over the hits
 // the page already fetched (live scan or saved-today), nothing new on the server.
+import { adxFire, fireTitle, type AdxDirs } from '@/lib/adxFire'
 import { useEffect, useMemo, useState } from 'react'
 import { Download, RotateCcw, Search } from 'lucide-react'
 import { labelUnclear, signalsMixed, MIXED_HINT, UNCLEAR_LABEL_HINT, NB_UNCLEAR_HINT, hitKey } from '@/lib/stealthLabel'
@@ -152,7 +153,7 @@ function Slider({ label, value, steps, fmt, onIdx, active = true, icon }: {
 }
 
 export default function StealthDashboard({
-  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort, showSince, foldSliders,
+  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort, showSince, foldSliders, adxDirs,
 }: {
   hits: DashHit[]
   loading: boolean
@@ -162,6 +163,7 @@ export default function StealthDashboard({
   unclearKeys?: Set<string> | null
   initialSort?: 'move' | 'pct' | 'oi' | 'money' | 'chain'
   showSince?: boolean
+  adxDirs?: AdxDirs
   foldSliders?: boolean
 }) {
   const [slidersOpen, setSlidersOpen] = useState(false)
@@ -324,7 +326,11 @@ export default function StealthDashboard({
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
               <input value={f.search} onChange={e => upd({ search: e.target.value })} placeholder="Search stock (e.g. NIFTY, BEL)…"
-                className="w-48 bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-1.5 focus:outline-none focus:border-indigo-600 placeholder-gray-600" />
+                className="w-48 bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-7 py-1.5 focus:outline-none focus:border-indigo-600 placeholder-gray-600" />
+              {f.search && (
+                <button type="button" aria-label="Clear stock filter" onClick={() => upd({ search: '' })}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-sm leading-none">×</button>
+              )}
             </div>
           )}
           {foldSliders && <button onClick={() => setSlidersOpen(v => !v)} className="text-xs text-indigo-300 hover:text-indigo-200">{slidersOpen ? '▾ Hide sliders' : '▸ Sliders'}</button>}
@@ -372,7 +378,11 @@ export default function StealthDashboard({
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
               <input value={f.search} onChange={e => upd({ search: e.target.value })} placeholder="Filter stock (e.g. NIFTY, BEL)…"
-                className="w-full bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 focus:outline-none focus:border-indigo-600 placeholder-gray-600" />
+                className="w-full bg-gray-800/40 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-7 py-2 focus:outline-none focus:border-indigo-600 placeholder-gray-600" />
+              {f.search && (
+                <button type="button" aria-label="Clear stock filter" onClick={() => upd({ search: '' })}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-sm leading-none">×</button>
+              )}
             </div>
           </div>
         </div>
@@ -570,6 +580,7 @@ export default function StealthDashboard({
                       <button onClick={() => upd({ search: h.symbol })} className="text-left">
                         <span className="font-bold text-white">{h.symbol}</span>
                         {h.is_confluence && <span title="Confluence with FUT-level Stealth Buildup" className="ml-1">🔗</span>}
+                        {(() => { const fr = adxDirs ? adxFire(h, adxDirs) : null; return fr ? <span title={fireTitle(fr)} className="ml-1 cursor-help">🔥</span> : null })()}
                         {h.freshness === 'Fresh Now' && <span title="Fresh now" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-lime-400 align-middle" />}
                         <div className="text-[10px] text-gray-500">{fmtExp(h.expiry)}</div>
                         {(() => {

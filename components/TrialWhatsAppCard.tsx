@@ -4,6 +4,7 @@
 // snoozes it 3 days, and it shows at most twice per browser in total (the earlier in-navbar phone prompt
 // was removed on Oct 24 for feeling naggy, so this must stay rare). Never blocks anything.
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 const API = 'https://api.greeknova.com'
 export const TRIAL_GROUP_URL = 'https://chat.whatsapp.com/DOyN0cWLwUF6PZlH3kMzAR?mode=gi_t'
@@ -62,7 +63,9 @@ export default function TrialWhatsAppCard() {
     setVisible(false)
   }
 
-  return (
+  // Rendered into <body> on purpose: this component is mounted inside the navbar, whose backdrop-blur makes it
+  // the containing block for any position:fixed child, which pushed the card off-screen (Nov 23 2026).
+  return createPortal(
     <div className="fixed bottom-4 right-4 z-[9998] w-[min(92vw,360px)] rounded-xl border border-emerald-800/40 bg-[#0b1220] shadow-xl p-4">
       <p className="text-sm font-medium text-gray-100 mb-1">Get the daily note on WhatsApp</p>
       <p className="text-xs text-gray-400 mb-3">
@@ -82,6 +85,7 @@ export default function TrialWhatsAppCard() {
           Maybe later
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

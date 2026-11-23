@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { TRIAL_GROUP_URL } from '@/components/TrialWhatsAppCard'
 
 const API = 'https://api.greeknova.com'
 
@@ -158,7 +159,19 @@ function CallbackHandler() {
           <div className="text-4xl mb-4">🎉</div>
           <div className="text-white text-lg font-semibold mb-1">You're in! 7-day free trial started.</div>
           <p className="text-gray-400 text-sm mb-4">
-            Want us to reach you on WhatsApp for support or before your trial ends? Totally optional.
+            I share a short daily note in our trial WhatsApp group on what to look at and how to read it.
+          </p>
+          <a
+            href={TRIAL_GROUP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => { fetch(`${API}/me/whatsapp-clicked`, { method: 'POST' }).catch(() => {}) }}
+            className="block w-full rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-3 py-2 mb-4"
+          >
+            Join the trial WhatsApp group
+          </a>
+          <p className="text-gray-400 text-xs mb-2">
+            Or share your WhatsApp number and I will add you myself. Optional.
           </p>
           <input
             type="tel"
@@ -168,6 +181,7 @@ function CallbackHandler() {
             onChange={(e) => setPhone(e.target.value)}
             className="w-full rounded-md bg-[#141c2e] border border-gray-700 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 outline-none focus:border-emerald-600 mb-2"
           />
+          <p className="text-[10px] text-gray-500 mb-2">By sharing your number you agree to receive GreekNova updates on WhatsApp. You can opt out any time.</p>
           {phoneError && <p className="text-xs text-red-400 mb-2">{phoneError}</p>}
           <div className="flex gap-2">
             <button

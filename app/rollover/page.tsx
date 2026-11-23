@@ -309,7 +309,7 @@ export default function RolloverPage() {
               <div className="space-y-1.5">
                 <p><span className="text-emerald-400 font-bold">🐂 Bullish Roll</span> — OI rolling + price stable/up → longs maintaining positions into next series</p>
                 <p><span className="text-red-400 font-bold">🐻 Bearish Roll</span> — OI rolling + price down → shorts maintaining pressure into next series</p>
-                <p><span className="text-amber-400 font-bold">🔄 Rolling</span> — OI rolling but price flat, direction unclear</p>
+                <p><span className="text-amber-400 font-bold">🔄 Flat Roll</span> — Rolled over, price flat, no clear direction</p>
                 <p><span className="text-gray-400 font-bold">❌ Squaring Off</span> — Both expiries losing OI, positions closing, no continuation</p>
                 <p><span className="text-blue-400 font-bold">⏳ Early Stage</span> — Very little next month OI, rollover just starting</p>
               </div>
@@ -364,7 +364,7 @@ export default function RolloverPage() {
           <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-600">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block"/>Bullish Roll</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block"/>Bearish Roll</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-500 inline-block"/>Rolling</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-500 inline-block"/>Flat Roll</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-gray-600 inline-block"/>Last Series</span>
           </div>
         </div>

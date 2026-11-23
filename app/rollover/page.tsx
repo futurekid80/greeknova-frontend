@@ -161,7 +161,7 @@ function MiniList({ title, sub, rows, accent }: {
                 <td className={`px-3 py-2 text-right font-semibold ${(r.vs_prev ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {r.vs_prev === null ? '–' : `${r.vs_prev >= 0 ? '+' : ''}${r.vs_prev.toFixed(1)}`}
                 </td>
-                <td className="px-3 py-2 text-gray-400">{FUT_LABEL[r.fut_signal] || 'Neutral'}</td>
+                <td className="px-3 py-2 text-gray-400">{FUT_LABEL[r.fut_signal] || 'No OI signal'}</td>
               </tr>
             ))}
           </tbody>
@@ -203,7 +203,7 @@ function RolloverSummary({ data }: { data: RolloverData }) {
   const withPrev = stocks.filter(s => s.vs_prev !== null)
   const accel = [...withPrev].sort((a, b) => (b.vs_prev as number) - (a.vs_prev as number)).slice(0, 5)
   const contr = [...withPrev].sort((a, b) => (a.vs_prev as number) - (b.vs_prev as number)).slice(0, 5)
-  const bullLead = stocks.filter(s => s.roll_signal === 'BULLISH_ROLL')
+  const bullLead = stocks.filter(s => s.fut_signal === 'LONG_BUILDUP' || s.fut_signal === 'SHORT_COVERING')
     .sort((a, b) => b.price_chg_pct - a.price_chg_pct).slice(0, 5)
   const shortSurge = stocks.filter(s => s.fut_signal === 'SHORT_BUILDUP' && s.vs_prev !== null)
     .sort((a, b) => (b.vs_prev as number) - (a.vs_prev as number)).slice(0, 5)
@@ -276,7 +276,7 @@ function RolloverSummary({ data }: { data: RolloverData }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <MiniList title="⚡ Rollover Accelerating" sub="Biggest rise in rollover vs last series (stocks)" accent="bg-blue-950/50" rows={accel} />
         <MiniList title="🔻 Rollover Slowing" sub="Biggest fall in rollover vs last series (stocks)" accent="bg-slate-800/60" rows={contr} />
-        <MiniList title="🐂 Bullish Roll Leaders" sub="Rolled with the biggest price gains (stocks)" accent="bg-emerald-950/50" rows={bullLead} />
+        <MiniList title="🐂 Bullish Roll, OI Confirmed" sub="Long buildup or short covering with the biggest price gains (stocks)" accent="bg-emerald-950/50" rows={bullLead} />
         <MiniList title="🐻 Short Buildup Rolls" sub="Short buildup with the biggest rise in rollover (stocks)" accent="bg-red-950/50" rows={shortSurge} />
       </div>
 
@@ -387,7 +387,7 @@ export default function RolloverPage() {
     }
     const rows = data.symbols.map(s => [
       s.symbol, s.curr_oi, s.next_oi, s.rollover_pct, s.prev_rollover_pct, s.vs_prev,
-      s.roll_label, s.price, s.price_chg_pct, s.fut_signal.replace(/_/g, ' ').toLowerCase(),
+      s.roll_label, s.price, s.price_chg_pct, FUT_LABEL[s.fut_signal] || 'No OI signal',
     ])
     const meta = [
       `GreekNova Rollover Tracker - ${data.curr_expiry} to ${data.next_expiry} series`,

@@ -375,7 +375,7 @@ export default function RolloverPage() {
             { key: 'all',          label: '◈ All',           count: data.total_symbols, color: 'text-white' },
             { key: 'BULLISH_ROLL', label: '🐂 Bullish Roll',  count: bullish,           color: 'text-emerald-400' },
             { key: 'BEARISH_ROLL', label: '🐻 Bearish Roll',  count: bearish,           color: 'text-red-400' },
-            { key: 'ROLLING',      label: '🔄 Rolling',       count: rolling,           color: 'text-amber-400' },
+            { key: 'ROLLING',      label: '🔄 Flat Roll',      count: rolling,           color: 'text-amber-400' },
             { key: 'SQUARING',     label: '❌ Squaring/Early', count: squaring,          color: 'text-gray-400' },
           ].map(item => (
             <button key={item.key}

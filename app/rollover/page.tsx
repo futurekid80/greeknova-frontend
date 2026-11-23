@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import Navbar from '@/components/Navbar'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Download } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts'
@@ -186,6 +186,32 @@ export default function RolloverPage() {
       return (bv - av) * sortDir
     })
 
+  function downloadCSV() {
+    if (!data) return
+    const head = ['Symbol','Current series OI','Next series OI','Rollover %','Last series rollover %','Change vs last series (pts)','Roll signal','Price','Price change %','Futures signal']
+    const esc = (v: string | number | null) => {
+      const t = v === null || v === undefined ? '' : String(v)
+      return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+    }
+    const rows = data.symbols.map(s => [
+      s.symbol, s.curr_oi, s.next_oi, s.rollover_pct, s.prev_rollover_pct, s.vs_prev,
+      s.roll_label, s.price, s.price_chg_pct, s.fut_signal.replace(/_/g, ' ').toLowerCase(),
+    ])
+    const meta = [
+      `GreekNova Rollover Tracker - ${data.curr_expiry} to ${data.next_expiry} series`,
+      `Market rollover ${data.market_rollover_pct}% | ${data.total_symbols} symbols | Benchmark date ${data.prev_bench_date}`,
+      'Educational data only. Not investment advice. GreekNova is not SEBI registered.',
+    ]
+    const csv = [...meta.map(m => esc(m)), '', head.map(esc).join(','), ...rows.map(r => r.map(esc).join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `greeknova-rollover-${data.curr_expiry}.csv`
+    document.body.appendChild(a); a.click(); a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   function toggleSort(col: string) {
     if (sortCol === col) setSortDir(d => d === -1 ? 1 : -1)
     else { setSortCol(col); setSortDir(-1) }
@@ -226,10 +252,16 @@ export default function RolloverPage() {
               )}
             </p>
           </div>
-          <button onClick={fetchData} disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all disabled:opacity-50">
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={downloadCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-900/40 hover:bg-emerald-900/60 text-sm font-medium text-emerald-300 rounded-lg border border-emerald-800/50 transition-all">
+              <Download size={13} />Download CSV
+            </button>
+            <button onClick={fetchData} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all disabled:opacity-50">
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />Refresh
+            </button>
+          </div>
         </div>
 
         {/* Series Overview Banner */}

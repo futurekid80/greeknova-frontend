@@ -1,12 +1,14 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import Navbar from '@/components/Navbar'
+import { supabase } from '@/lib/supabase'
 import { RefreshCw, Download } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine, PieChart, Pie
 } from 'recharts'
 
 const API = 'https://api.greeknova.com'
+const ADMIN_EMAIL = 'megha.jethmalani@gmail.com'
 
 interface RolloverSymbol {
   symbol: string
@@ -307,6 +309,13 @@ export default function RolloverPage() {
   const [filter, setFilter] = useState<string>('all')
   const [sortCol, setSortCol] = useState<string>('rollover_pct')
   const [sortDir, setSortDir] = useState<1|-1>(-1)
+  // Summary section is admin-only until approved for members
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setIsAdmin(session?.user?.email === ADMIN_EMAIL))
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => setIsAdmin(session?.user?.email === ADMIN_EMAIL))
+    return () => listener.subscription.unsubscribe()
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -475,7 +484,7 @@ export default function RolloverPage() {
           </div>
         </div>
 
-        <RolloverSummary data={data} />
+        {isAdmin && <RolloverSummary data={data} />}
 
         {/* How to read */}
         <details className="bg-blue-950/20 border border-blue-800/30 rounded-2xl p-5 mb-8 group">

@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Navbar from '@/components/Navbar'
 import { RefreshCw, Download } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine, PieChart, Pie
 } from 'recharts'
 
 const API = 'https://api.greeknova.com'
@@ -115,6 +115,189 @@ function RolloverRow({ s, rank }: { s: RolloverSymbol; rank: number }) {
         )}
       </td>
     </tr>
+  )
+}
+
+const INDEX_SYMS = ['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX','BANKEX','NIFTYNXT50']
+
+const FUT_LABEL: Record<string, string> = {
+  LONG_BUILDUP: 'Long Buildup', SHORT_BUILDUP: 'Short Buildup',
+  SHORT_COVERING: 'Short Covering', LONG_UNWINDING: 'Long Unwinding',
+}
+
+function MiniList({ title, sub, rows, accent }: {
+  title: string; sub: string; accent: string; rows: RolloverSymbol[]
+}) {
+  return (
+    <div className="bg-gray-900/40 border border-gray-800 rounded-2xl overflow-hidden min-w-0">
+      <div className={`px-4 py-3 border-b border-gray-800 ${accent}`}>
+        <p className="text-sm font-black text-white">{title}</p>
+        <p className="text-[11px] text-gray-400">{sub}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-gray-500 border-b border-gray-800/60">
+              <th className="px-3 py-2 text-left font-semibold">Symbol</th>
+              <th className="px-3 py-2 text-right font-semibold">Price chg</th>
+              <th className="px-3 py-2 text-right font-semibold">Rollover</th>
+              <th className="px-3 py-2 text-right font-semibold">vs last</th>
+              <th className="px-3 py-2 text-left font-semibold">Futures</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-600">Nothing to show</td></tr>
+            )}
+            {rows.map(r => (
+              <tr key={r.symbol} className="border-b border-gray-800/40">
+                <td className="px-3 py-2 font-bold text-white">{r.symbol}</td>
+                <td className={`px-3 py-2 text-right font-semibold ${r.price_chg_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {r.price_chg_pct >= 0 ? '+' : ''}{r.price_chg_pct.toFixed(2)}%
+                </td>
+                <td className="px-3 py-2 text-right text-gray-200">{r.rollover_pct.toFixed(1)}%</td>
+                <td className={`px-3 py-2 text-right font-semibold ${(r.vs_prev ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {r.vs_prev === null ? '–' : `${r.vs_prev >= 0 ? '+' : ''}${r.vs_prev.toFixed(1)}`}
+                </td>
+                <td className="px-3 py-2 text-gray-400">{FUT_LABEL[r.fut_signal] || 'Neutral'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function RolloverSummary({ data }: { data: RolloverData }) {
+  const all = data.symbols
+  const stocks = all.filter(s => !INDEX_SYMS.includes(s.symbol))
+  const indices = all.filter(s => INDEX_SYMS.includes(s.symbol))
+  const sc = data.signal_counts
+  const bull = sc['BULLISH_ROLL'] || 0
+  const bear = sc['BEARISH_ROLL'] || 0
+  const flat = sc['ROLLING'] || 0
+  const other = (sc['SQUARING'] || 0) + (sc['EARLY'] || 0)
+  const breadth = bear > 0 ? (bull / bear).toFixed(2) : '–'
+  const high = all.filter(s => s.rollover_pct >= 90).length
+  const highPct = all.length ? (high / all.length * 100).toFixed(1) : '0'
+  const avgPace = all.length ? (all.reduce((a, s) => a + s.rollover_pct, 0) / all.length).toFixed(1) : '0'
+
+  const donut = [
+    { name: 'Bullish Roll', value: bull, fill: '#10b981' },
+    { name: 'Bearish Roll', value: bear, fill: '#ef4444' },
+    { name: 'Flat Roll',    value: flat, fill: '#f59e0b' },
+    { name: 'Other',        value: other, fill: '#6b7280' },
+  ].filter(d => d.value > 0)
+
+  const sigCounts: Record<string, number> = {}
+  all.forEach(s => { if (FUT_LABEL[s.fut_signal]) sigCounts[s.fut_signal] = (sigCounts[s.fut_signal] || 0) + 1 })
+  const neutralCount = all.filter(s => !FUT_LABEL[s.fut_signal]).length
+  const sigData = Object.keys(FUT_LABEL).map(k => ({
+    name: FUT_LABEL[k], count: sigCounts[k] || 0,
+    fill: k === 'LONG_BUILDUP' || k === 'SHORT_COVERING' ? '#10b981' : '#ef4444',
+  }))
+
+  const withPrev = stocks.filter(s => s.vs_prev !== null)
+  const accel = [...withPrev].sort((a, b) => (b.vs_prev as number) - (a.vs_prev as number)).slice(0, 5)
+  const contr = [...withPrev].sort((a, b) => (a.vs_prev as number) - (b.vs_prev as number)).slice(0, 5)
+  const bullLead = stocks.filter(s => s.roll_signal === 'BULLISH_ROLL')
+    .sort((a, b) => b.price_chg_pct - a.price_chg_pct).slice(0, 5)
+  const shortSurge = stocks.filter(s => s.fut_signal === 'SHORT_BUILDUP' && s.vs_prev !== null)
+    .sort((a, b) => (b.vs_prev as number) - (a.vs_prev as number)).slice(0, 5)
+
+  return (
+    <div className="mb-8 space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Bull / Bear Breadth</p>
+          <p className={`text-3xl font-black ${bull >= bear ? 'text-emerald-400' : 'text-red-400'}`}>{breadth}x</p>
+          <p className="text-xs text-gray-600 mt-1">{bull} bullish vs {bear} bearish rolls</p>
+        </div>
+        <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Rolled 90% or more</p>
+          <p className="text-3xl font-black text-white">{highPct}%</p>
+          <p className="text-xs text-gray-600 mt-1">{high} of {all.length} symbols</p>
+        </div>
+        <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Average Stock Pace</p>
+          <p className="text-3xl font-black text-white">{avgPace}%</p>
+          <p className="text-xs text-gray-600 mt-1">simple average across symbols</p>
+        </div>
+        <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Flat Rolls</p>
+          <p className="text-3xl font-black text-amber-400">{flat}</p>
+          <p className="text-xs text-gray-600 mt-1">rolled, price flat</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-5 min-w-0">
+          <p className="text-sm font-black text-white">Rollover Direction</p>
+          <p className="text-[11px] text-gray-500 mb-2">How many symbols rolled with rising, falling or flat price</p>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div style={{ width: 170, height: 170 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={donut} dataKey="value" nameKey="name" innerRadius={48} outerRadius={78} stroke="#07070e" strokeWidth={2} />
+                  <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 11, color: '#fff' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-1.5 text-xs">
+              {donut.map(d => (
+                <p key={d.name} className="flex items-center gap-2 text-gray-300">
+                  <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: d.fill }} />
+                  {d.name} <span className="text-gray-500">{d.value}</span>
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-5 min-w-0">
+          <p className="text-sm font-black text-white">Futures Positioning</p>
+          <p className="text-[11px] text-gray-500 mb-2">Symbols by buildup or unwinding · {neutralCount} neutral not shown</p>
+          <ResponsiveContainer width="100%" height={170}>
+            <BarChart data={sigData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} interval={0} />
+              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 11, color: '#fff' }} />
+              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                {sigData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <MiniList title="⚡ Rollover Accelerating" sub="Biggest rise in rollover vs last series (stocks)" accent="bg-blue-950/50" rows={accel} />
+        <MiniList title="🔻 Rollover Slowing" sub="Biggest fall in rollover vs last series (stocks)" accent="bg-slate-800/60" rows={contr} />
+        <MiniList title="🐂 Bullish Roll Leaders" sub="Rolled with the biggest price gains (stocks)" accent="bg-emerald-950/50" rows={bullLead} />
+        <MiniList title="🐻 Short Buildup Rolls" sub="Short buildup with the biggest rise in rollover (stocks)" accent="bg-red-950/50" rows={shortSurge} />
+      </div>
+
+      {indices.length > 0 && (
+        <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-4">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Index futures (shown separately, not ranked above)</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+            {indices.map(i => (
+              <span key={i.symbol} className="text-gray-300">
+                <span className="font-bold text-white">{i.symbol}</span> {i.rollover_pct.toFixed(1)}%
+                {i.vs_prev !== null && (
+                  <span className={i.vs_prev >= 0 ? 'text-emerald-400' : 'text-red-400'}> ({i.vs_prev >= 0 ? '+' : ''}{i.vs_prev.toFixed(1)})</span>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="text-[11px] text-gray-600">
+        Market rollover above is weighted by open interest; Average Stock Pace is a simple average, so the two differ.
+        Educational data only, not investment advice. GreekNova is not SEBI registered.
+      </p>
+    </div>
   )
 }
 
@@ -292,6 +475,8 @@ export default function RolloverPage() {
           </div>
         </div>
 
+        <RolloverSummary data={data} />
+
         {/* How to read */}
         <details className="bg-blue-950/20 border border-blue-800/30 rounded-2xl p-5 mb-8 group">
           <summary className="text-sm font-bold text-blue-400 cursor-pointer flex items-center gap-2 select-none">
@@ -316,7 +501,7 @@ export default function RolloverPage() {
             </div>
             <div>
               <p className="text-white font-bold mb-2">vs Last Series</p>
-              <p>Compares today's rollover % with the same DTE (days to expiry) from the previous series (May 25, 2 days before May 26 expiry). If rollover is slower than last series, market is less committed to carrying positions forward — typically bearish.</p>
+              <p>Compares today's rollover % with the same days-to-expiry in the previous series, using that day's final data. If rollover is slower than last series, market is less committed to carrying positions forward — typically bearish.</p>
             </div>
             <div>
               <p className="text-white font-bold mb-2">Speed Badge</p>

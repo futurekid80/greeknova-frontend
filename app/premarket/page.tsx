@@ -79,6 +79,16 @@ function fmtCr(n: number | null) {
   return `${n >= 0 ? '+' : ''}₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`
 }
 
+// Nov 26 2026: "2026-11-25" -> "Wed 25 Nov" (calendar arithmetic only, so no timezone shift).
+function friendlyDate(iso?: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '')
+  if (!m) return iso || ''
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${days[d.getUTCDay()]} ${d.getUTCDate()} ${months[d.getUTCMonth()]}`
+}
+
 export default function PreMarket() {
   const [data, setData] = useState<PremarketData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -113,7 +123,7 @@ export default function PreMarket() {
             <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-1">☀️ Pre-Market Brief</h1>
             <p className="text-gray-500 text-sm">
               What to check before 9:15 AM — quick and focused, not a full report
-              {data ? ` · Based on ${data.date} close · Updated ${data.generated_at}` : ''}
+              {data ? ` · Based on ${friendlyDate(data.date)} close · Updated today ${data.generated_at}` : ''}
             </p>
           </div>
           <button onClick={fetchData} disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white rounded-lg border border-gray-700 transition-all disabled:opacity-50">

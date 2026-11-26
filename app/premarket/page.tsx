@@ -188,7 +188,7 @@ export default function PreMarket() {
                     </div>
                   ))}
                 </div>
-              ) : <p className="text-sm text-gray-600">Not available (market closed)</p>}
+              ) : <p className="text-sm text-gray-600">Not available right now</p>}
             </div>
           </div>
         )}

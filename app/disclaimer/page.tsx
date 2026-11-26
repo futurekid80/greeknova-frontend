@@ -93,12 +93,12 @@ export default function Disclaimer() {
           </div>
 
           <div>
-            <h2 className="text-xl font-black text-white mb-4">6. Beta Usage</h2>
+            <h2 className="text-xl font-black text-white mb-4">6. Platform Status</h2>
             <p className="text-gray-400">
-              GreekNova is currently in beta. Features may be incomplete, inaccurate, or change 
-              without notice. Beta access is provided as-is with no warranties of any kind. 
-              By participating in the beta program, you agree to provide feedback and understand 
-              that the platform is still under active development.
+              GreekNova is under active development. Features may be incomplete, inaccurate, or change
+              without notice. The platform is provided as-is with no warranties of any kind.
+              We welcome your feedback, and you understand that the platform is continuously
+              being improved.
             </p>
           </div>
 

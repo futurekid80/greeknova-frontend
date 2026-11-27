@@ -41,7 +41,8 @@ function fmt(n: number | undefined | null, dec = 2) {
   if (n == null) return '—'
   return n.toFixed(dec)
 }
-function fmtOI(n: number) {
+function fmtOI(n: number | null | undefined) {
+  if (n == null || isNaN(n)) return '—'
   if (n >= 10000000) return `${(n / 10000000).toFixed(1)}Cr`
   if (n >= 100000)   return `${(n / 100000).toFixed(1)}L`
   return n.toLocaleString()
@@ -100,9 +101,18 @@ export default function OptionChain() {
         : `${API}/option-chain/${symbol}`
       const res  = await fetch(url)
       const json = await res.json()
-      setData(json)
-      if (!expiry && json.expiry) setExpiry(json.expiry)
-    } catch (e) { console.error(e) }
+      // A server error or unexpected reply has no chain -- show "no data"
+      // instead of crashing the page.
+      if (!res.ok || !json || !Array.isArray(json.chain)) {
+        setData({ symbol, spot: 0, expiry: '', days_left: 0, expiries: [], timestamp: '', chain: [] })
+      } else {
+        setData({ ...json, expiries: Array.isArray(json.expiries) ? json.expiries : [] })
+        if (!expiry && json.expiry) setExpiry(json.expiry)
+      }
+    } catch (e) {
+      console.error(e)
+      setData({ symbol, spot: 0, expiry: '', days_left: 0, expiries: [], timestamp: '', chain: [] })
+    }
     setLoading(false)
   }, [symbol, expiry])
 
@@ -120,8 +130,8 @@ export default function OptionChain() {
         : `${API}/option-chain-spikes/${symbol}`
       const res = await fetch(url)
       const json = await res.json()
-      setSpikeData(json)
-    } catch (e) { console.error(e) }
+      setSpikeData(res.ok && json && Array.isArray(json.spikes) ? json : null)
+    } catch (e) { console.error(e); setSpikeData(null) }
     setSpikeLoading(false)
   }, [symbol, expiry])
 
@@ -150,7 +160,7 @@ export default function OptionChain() {
 
   const { enabled: autoOn, toggle: toggleAuto, countdownStr } = useAutoRefresh(fetchData, 5 * 60 * 1000, true)
 
-  const atm = data?.chain.find(r => r.is_atm)
+  const atm = (data?.chain ?? []).find(r => r.is_atm)
 
   // IV skew: plot each strike's CE/PE IV so the "smile/skew" shape is visible
   // directly -- OTM puts normally pricing richer than OTM calls (equity skew)
@@ -224,9 +234,9 @@ export default function OptionChain() {
 
   function volSpike(chain: ChainRow[], idx: number, side: 'ce' | 'pe'): boolean {
     const g = chain[idx][side]
-    if (g.volume < MIN_VOL_FOR_SPIKE) return false
+    if ((g.volume ?? 0) < MIN_VOL_FOR_SPIKE) return false
     const avg = localAvg(chain, idx, side, (x) => x.volume ?? null)
-    return avg != null && avg >= MIN_VOL_BASELINE_FOR_SPIKE && g.volume >= avg * VOL_SPIKE_THRESHOLD
+    return avg != null && avg >= MIN_VOL_BASELINE_FOR_SPIKE && (g.volume ?? 0) >= avg * VOL_SPIKE_THRESHOLD
   }
 
   // Magnitude-based color grading for the Greeks columns, instead of one
@@ -264,10 +274,10 @@ export default function OptionChain() {
   // OUTSIDE either wall means that wall is being tested/broken and
   // writing against it is the riskier trade, not the safer one.
   const callWallRow = (data?.chain ?? []).reduce<ChainRow | null>(
-    (best, r) => (!best || r.ce.oi > best.ce.oi ? r : best), null
+    (best, r) => (!best || (r.ce.oi ?? 0) > (best.ce.oi ?? 0) ? r : best), null
   )
   const putWallRow = (data?.chain ?? []).reduce<ChainRow | null>(
-    (best, r) => (!best || r.pe.oi > best.pe.oi ? r : best), null
+    (best, r) => (!best || (r.pe.oi ?? 0) > (best.pe.oi ?? 0) ? r : best), null
   )
   const callWallStrike = callWallRow?.strike
   const putWallStrike = putWallRow?.strike
@@ -406,11 +416,11 @@ export default function OptionChain() {
           <div className="grid grid-cols-5 gap-3 mb-6">
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Spot</p>
-              <p className="text-xl font-black text-white">{data.spot.toLocaleString()}</p>
+              <p className="text-xl font-black text-white">{data.spot?.toLocaleString() ?? '—'}</p>
             </div>
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">ATM Strike</p>
-              <p className="text-xl font-black text-amber-400">{atm?.strike.toLocaleString() ?? '—'}</p>
+              <p className="text-xl font-black text-amber-400">{atm?.strike?.toLocaleString() ?? '—'}</p>
             </div>
             <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">Days to Expiry</p>
@@ -609,7 +619,7 @@ export default function OptionChain() {
           <div className="h-64 flex items-center justify-center">
             <RefreshCw size={24} className="text-gray-600 animate-spin"/>
           </div>
-        ) : !data?.chain.length ? (
+        ) : !data?.chain?.length ? (
           <div className="h-64 flex items-center justify-center flex-col gap-3">
             <div className="text-4xl">🔗</div>
             <p className="text-gray-500 text-sm">No data yet — snapshots build up during market hours</p>
@@ -665,11 +675,11 @@ export default function OptionChain() {
                     <td className="py-2 px-2 text-right font-medium" style={{ color: deltaColor(row.ce.delta) }}>{fmt(row.ce.delta, 3)}</td>
                     <td className="py-2 px-2 text-right font-medium" style={{ color: thetaColor(row.ce.theta, maxAbsTheta) }}>{fmt(row.ce.theta)}</td>
                     <td className={`py-2 px-3 text-right font-bold border-r border-gray-800 ${row.is_atm ? 'text-amber-300' : 'text-red-400'}`}>
-                      {row.ce.ltp.toFixed(2)}
+                      {fmt(row.ce.ltp)}
                     </td>
                     {/* Strike */}
                     <td className={`py-2 px-4 text-center font-black ${row.is_atm ? 'text-amber-400 text-sm' : 'text-gray-300'} ${(isCallWall || isPutWall) ? 'bg-stone-500/10' : ''}`}>
-                      {row.strike.toLocaleString()}
+                      {row.strike?.toLocaleString()}
                       {row.is_atm && <span className="ml-1 text-[9px] text-amber-600">ATM</span>}
                       {writerWatch && (
                         <span className="block text-[9px] text-orange-400 font-bold" title="IV and volume both spiking on this strike — the clearest writer signal">🔥 Writer Watch</span>
@@ -679,7 +689,7 @@ export default function OptionChain() {
                     </td>
                     {/* PE side */}
                     <td className={`py-2 px-3 text-left font-bold border-l border-gray-800 ${row.is_atm ? 'text-amber-300' : 'text-emerald-400'}`}>
-                      {row.pe.ltp.toFixed(2)}
+                      {fmt(row.pe.ltp)}
                     </td>
                     <td className="py-2 px-2 text-left font-medium" style={{ color: thetaColor(row.pe.theta, maxAbsTheta) }}>{fmt(row.pe.theta)}</td>
                     <td className="py-2 px-2 text-left font-medium" style={{ color: deltaColor(row.pe.delta) }}>{fmt(row.pe.delta, 3)}</td>

@@ -93,7 +93,9 @@ export default function OptionChain() {
     return spikeSortDir === 'asc' ? ' ▲' : ' ▼'
   }
 
+  const reqId = useRef(0)
   const fetchData = useCallback(async () => {
+    const myReq = ++reqId.current
     setLoading(true)
     try {
       const url = expiry
@@ -101,6 +103,7 @@ export default function OptionChain() {
         : `${API}/option-chain/${symbol}`
       const res  = await fetch(url)
       const json = await res.json()
+      if (myReq !== reqId.current) return  // a newer request replaced this one
       // A server error or unexpected reply has no chain -- show "no data"
       // instead of crashing the page.
       if (!res.ok || !json || !Array.isArray(json.chain)) {
@@ -154,6 +157,7 @@ export default function OptionChain() {
 
   function pickSymbol(s: string) {
     setSymbolInput(s)
+    setExpiry('')
     setSymbol(s)
     setShowDropdown(false)
   }
@@ -357,7 +361,7 @@ export default function OptionChain() {
         {/* Index selector + stock search */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {INDICES.map(idx => (
-            <button key={idx} onClick={() => { setSymbol(idx); setSymbolInput(idx) }}
+            <button key={idx} onClick={() => { setExpiry(''); setSymbol(idx); setSymbolInput(idx) }}
               className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${symbol === idx ? 'bg-white text-gray-900 border-white' : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'}`}>
               {idx}
             </button>

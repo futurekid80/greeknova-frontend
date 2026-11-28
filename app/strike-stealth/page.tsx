@@ -624,6 +624,7 @@ export default function StrikeStealthBuildup() {
             showSince={shortlist}
             adxDirs={adxDirs}
             foldSliders={prev}
+            greeks={greeksOn ? gk : null}
             unclearKeys={nbKeys}
             loading={loading}
             error={data?.error}

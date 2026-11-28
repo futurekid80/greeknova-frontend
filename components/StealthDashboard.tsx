@@ -153,7 +153,7 @@ function Slider({ label, value, steps, fmt, onIdx, active = true, icon }: {
 }
 
 export default function StealthDashboard({
-  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort, showSince, foldSliders, adxDirs,
+  hits, loading, error, emptyHint, onDownload, unclearKeys, initialSort, showSince, foldSliders, adxDirs, greeks,
 }: {
   hits: DashHit[]
   loading: boolean
@@ -165,6 +165,7 @@ export default function StealthDashboard({
   showSince?: boolean
   adxDirs?: AdxDirs
   foldSliders?: boolean
+  greeks?: Record<string, any> | null   // Nov 28 2026 PREVIEW (?v=greeks): extra column built from the option's Greeks, keyed by event_key
 }) {
   const [slidersOpen, setSlidersOpen] = useState(false)
   const maxSeen = showSince ? Math.max(1, ...hits.map(x => x.times_seen ?? 1)) : 1
@@ -566,7 +567,7 @@ export default function StealthDashboard({
                 <th className="px-3 py-2">Symbol</th><th className="px-2 py-2 text-right">Strike</th><th className="px-2 py-2">Type</th>
                 <th className="px-2 py-2">Moneyness</th><th className="px-2 py-2" title="How is this decided? OI must be rising. EOD window: judged on implied volatility versus yesterday's official close — IV down = Writing, IV up = Buying, within about 3% = Quiet, so the stock's move and time decay don't count. Other windows: premium up 1%+ = Buying, down 1%+ = Writing. Inferred, not seen in actual trades.">Activity <span className="text-gray-500 cursor-help">ⓘ</span></th><th className="px-2 py-2 text-right">OI% Increase</th>
                 <th className="px-2 py-2 text-right">New OI</th><th className="px-2 py-2 text-right bg-emerald-950/20">Premium % Move</th>
-                <th className="px-2 py-2 text-right" title="Last traded prices: the previous session's last reading vs now. Kite's own close for options is an average of the last 30 minutes, so its % change can differ.">Old → New Prem <span className="text-gray-500 cursor-help">ⓘ</span></th><th className="px-2 py-2 text-right">CMP</th><th className="px-2 py-2">Tier</th>
+                <th className="px-2 py-2 text-right" title="Last traded prices: the previous session's last reading vs now. Kite's own close for options is an average of the last 30 minutes, so its % change can differ.">Old → New Prem <span className="text-gray-500 cursor-help">ⓘ</span></th><th className="px-2 py-2 text-right">CMP</th><th className="px-2 py-2">Tier</th>{greeks && <th className="px-2 py-2" title="Size, option cost and the move needed, read from the option's Greeks (preview)">Greeks read</th>}
               </tr>
             </thead>
             <tbody>
@@ -659,11 +660,40 @@ export default function StealthDashboard({
                         <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap" title="The best grade this contract reached earlier today, when its premium was quieter">Best today: {(h as any).best_tier.charAt(0) + (h as any).best_tier.slice(1).toLowerCase()}</div>
                       )}
                     </td>
+                    {greeks && (() => {
+                      const g = greeks[(h as any).event_key]
+                      return (
+                        <td className="px-2 py-2 align-top">
+                          {!g ? <span className="text-[10px] text-gray-600">—</span> : (
+                            <div className="flex flex-col gap-1 items-start">
+                              {g.size_rs != null && (
+                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap ${g.size_tag ? 'text-amber-300 border-amber-700/50 bg-amber-950/30' : 'text-gray-400 border-gray-700'}`}
+                                  title="Added open interest valued as if held in the stock itself (adjusted for how much the option moves with the stock)">
+                                  Size {fmtRs(g.size_rs)}{g.size_tag === 'very_large' ? ' · Very large for this stock' : g.size_tag === 'large' ? ' · Large for this stock' : ''}
+                                </span>
+                              )}
+                              {g.iv_tag && (
+                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap ${g.iv_tag === 'low' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : g.iv_tag === 'high' ? 'text-rose-300 border-rose-700/50 bg-rose-950/30' : 'text-gray-400 border-gray-700'}`}
+                                  title="This stock's option prices today, compared with its own last six months">
+                                  {g.iv_tag === 'low' ? 'Options cheap for this stock' : g.iv_tag === 'high' ? 'Options expensive for this stock' : 'Option prices normal for this stock'}
+                                </span>
+                              )}
+                              {g.move_needed_pct != null && g.normal_move_pct != null && (
+                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap ${g.move_tag === 'easy' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : g.move_tag === 'hard' ? 'text-rose-300 border-rose-700/50 bg-rose-950/30' : 'text-gray-300 border-gray-600'}`}
+                                  title="Move needed for a buyer at today's price to break even at expiry, against the stock's normal move to expiry">
+                                  Needs {g.move_needed_pct >= 0 ? '+' : ''}{g.move_needed_pct}% · normal ±{g.normal_move_pct}%
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      )
+                    })()}
                   </tr>
                 )
               })}
               {pageRows.length === 0 && (
-                <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-500">
+                <tr><td colSpan={greeks ? 12 : 11} className="px-3 py-8 text-center text-gray-500">
                   {loading ? 'Scanning the market… (EOD can take up to ~40 seconds)'
                     : hits.length === 0 ? (emptyHint || 'No hits to show yet.')
                     : `None of the ${hits.length} scanned contracts match these filters — try a different preset or Reset Filters.`}

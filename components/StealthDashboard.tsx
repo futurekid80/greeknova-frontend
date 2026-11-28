@@ -130,7 +130,7 @@ const CE_COL = '#10b981'
 const PE_COL = '#f43f5e'
 
 function Chip({ cls, children }: { cls: string; children: React.ReactNode }) {
-  return <span className={`inline-block text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap ${cls}`}>{children}</span>
+  return <span className={`inline-block text-[10px] font-bold border rounded px-1.5 py-0.5 leading-tight max-w-[200px] ${cls}`}>{children}</span>
 }
 
 function Slider({ label, value, steps, fmt, onIdx, active = true, icon }: {
@@ -667,19 +667,19 @@ export default function StealthDashboard({
                           {!g ? <span className="text-[10px] text-gray-600">—</span> : (
                             <div className="flex flex-col gap-1 items-start">
                               {g.size_rs != null && (
-                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap ${g.size_tag ? 'text-amber-300 border-amber-700/50 bg-amber-950/30' : 'text-gray-400 border-gray-700'}`}
+                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 leading-tight max-w-[200px] ${g.size_tag ? 'text-amber-300 border-amber-700/50 bg-amber-950/30' : 'text-gray-400 border-gray-700'}`}
                                   title="Added open interest valued as if held in the stock itself (adjusted for how much the option moves with the stock)">
                                   Size {fmtRs(g.size_rs)}{g.size_tag === 'very_large' ? ' · Very large for this stock' : g.size_tag === 'large' ? ' · Large for this stock' : ''}
                                 </span>
                               )}
                               {g.iv_tag && (
-                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap ${g.iv_tag === 'low' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : g.iv_tag === 'high' ? 'text-rose-300 border-rose-700/50 bg-rose-950/30' : 'text-gray-400 border-gray-700'}`}
+                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 leading-tight max-w-[200px] ${g.iv_tag === 'low' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : g.iv_tag === 'high' ? 'text-rose-300 border-rose-700/50 bg-rose-950/30' : 'text-gray-400 border-gray-700'}`}
                                   title="This stock's option prices today, compared with its own last six months">
                                   {g.iv_tag === 'low' ? 'Options cheap for this stock' : g.iv_tag === 'high' ? 'Options expensive for this stock' : 'Option prices normal for this stock'}
                                 </span>
                               )}
                               {g.move_needed_pct != null && g.normal_move_pct != null && (
-                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 whitespace-nowrap ${g.move_tag === 'easy' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : g.move_tag === 'hard' ? 'text-rose-300 border-rose-700/50 bg-rose-950/30' : 'text-gray-300 border-gray-600'}`}
+                                <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 leading-tight max-w-[200px] ${g.move_tag === 'easy' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : g.move_tag === 'hard' ? 'text-rose-300 border-rose-700/50 bg-rose-950/30' : 'text-gray-300 border-gray-600'}`}
                                   title="Move needed for a buyer at today's price to break even at expiry, against the stock's normal move to expiry">
                                   Needs {g.move_needed_pct >= 0 ? '+' : ''}{g.move_needed_pct}% · normal ±{g.normal_move_pct}%
                                 </span>

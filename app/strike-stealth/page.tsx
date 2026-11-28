@@ -196,6 +196,10 @@ export default function StrikeStealthBuildup() {
   const [simple, setSimple] = useState(true)
   const [advOpen, setAdvOpen] = useState(false)
   const [biasOpen, setBiasOpen] = useState(false) // Bias chips start folded while the shortlist is on, so the table comes first
+  // Nov 28 2026 PREVIEW (?v=greeks): three extra reads per saved EOD hit from the option's Greeks -- size in rupees,
+  // whether the stock's IV is cheap or rich for itself, and the move a buyer needs. Preview only; nothing else changes.
+  const [greeksOn, setGreeksOn] = useState(false)
+  const [gk, setGk] = useState<Record<string, any>>({})
   const [prev, setPrev] = useState(false) // Nov 7 2026 PREVIEW (?v=simple): simpler top-of-page layout, for Manish's review only
   useEffect(() => {
     try {
@@ -203,6 +207,7 @@ export default function StrikeStealthBuildup() {
       if (vq === 'adj') { adjRef.current = true; setAdjMode(true); setSimple(true); setView('live'); setTimeWindow('eod'); setBestOfDay(false) }
       else if (vq === 'nb') { setNbMode(true); setSimple(true); setView('saved'); setTimeWindow('eod') }
       else if (vq === 'simple') { setPrev(true); setShortlist(true); setSimple(true); setView('saved'); setTimeWindow('eod') }
+      else if (vq === 'greeks') { setGreeksOn(true); setSimple(true); setView('saved'); setTimeWindow('eod') }
       else if (vq === 'old') setSimple(false)
       else { setSimple(true); setView('saved'); setTimeWindow('eod') }
     } catch {}
@@ -285,6 +290,14 @@ export default function StrikeStealthBuildup() {
       .then(r => r.json()).then(j => { if (live) setIntraday(j?.data || {}) }).catch(() => {})
     return () => { live = false }
   }, [shortlist, view, timeWindow, savedDate, data])
+
+  useEffect(() => {
+    if (!greeksOn || view !== 'saved' || timeWindow !== 'eod' || !savedDate) { setGk({}); return }
+    let live = true
+    fetch(`${API}/option-stealth-buildup/greeks?date=${encodeURIComponent(savedDate)}&window=eod`)
+      .then(r => r.json()).then(j => { if (live) setGk(j?.rows || {}) }).catch(() => {})
+    return () => { live = false }
+  }, [greeksOn, view, timeWindow, savedDate])
 
   // Auto-refresh every 60s while the market is open and the tab is visible.
   // Nov 14 2026: a 15-second check compares against the real clock instead of trusting one 60s timer
@@ -755,6 +768,33 @@ export default function StrikeStealthBuildup() {
                     OI +{h.oi_pct}% ({fmtOI(h.old_oi)} → {fmtOI(h.new_oi)}) · Premium {h.premium_pct >= 0 ? '+' : ''}{h.premium_pct}%
                     (₹{h.old_premium} → ₹{h.new_premium}) · CMP ₹{h.cmp}
                   </p>
+                  {greeksOn && (() => {
+                    const g = gk[(h as any).event_key]
+                    if (!g) return null
+                    const rs = (n: number) => n >= 10000000 ? `₹${(n / 10000000).toFixed(1)} Cr` : n >= 100000 ? `₹${(n / 100000).toFixed(1)} L` : `₹${Math.round(n).toLocaleString('en-IN')}`
+                    return (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {g.size_rs != null && (
+                          <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${g.size_tag ? 'text-amber-300 border-amber-700/50 bg-amber-950/30' : 'text-gray-400 border-gray-700'}`}
+                            title="Added OI valued as if held in the stock itself (adjusted for how much the option moves with the stock)">
+                            Size {rs(g.size_rs)}{g.size_tag === 'very_large' ? ' · Very large for this stock' : g.size_tag === 'large' ? ' · Large for this stock' : ''}
+                          </span>
+                        )}
+                        {g.iv_tag && (
+                          <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${g.iv_tag === 'low' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : g.iv_tag === 'high' ? 'text-rose-300 border-rose-700/50 bg-rose-950/30' : 'text-gray-400 border-gray-700'}`}
+                            title="This stock's option prices today, compared with its own last six months">
+                            {g.iv_tag === 'low' ? 'Options cheap for this stock' : g.iv_tag === 'high' ? 'Options expensive for this stock' : 'Option prices normal for this stock'}
+                          </span>
+                        )}
+                        {g.move_needed_pct != null && g.normal_move_pct != null && (
+                          <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${g.move_tag === 'easy' ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/30' : g.move_tag === 'hard' ? 'text-rose-300 border-rose-700/50 bg-rose-950/30' : 'text-gray-300 border-gray-600'}`}
+                            title="Move needed for a buyer at today's price to break even at expiry, against the stock's normal move to expiry">
+                            Needs {g.move_needed_pct >= 0 ? '+' : ''}{g.move_needed_pct}% by expiry · normal range ±{g.normal_move_pct}%
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
                   {h.first_seen && (
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       First seen {fmtTime(h.first_seen)} · last {fmtTime(h.last_seen)} · caught {h.times_seen ?? 1}× · peak OI +{h.peak_oi_pct}%
